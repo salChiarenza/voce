@@ -1,0 +1,19 @@
+{
+  "hotkey": "ctrl_r",
+  "tasto_voce": "menu",
+  "invio_automatico": true,
+  "voce_rate": 0,
+  "model": "medium",
+  "language": "it",
+  "device": "cpu",
+  "compute_type": "int8",
+  "sample_rate": 16000,
+  "voice_threshold": 0.004,
+  "min_recording_sec": 0.4,
+  "max_recording_sec": 90,
+  "sounds": true,
+  "brand": "salchiarenza.ai",
+  "colore": "#7ED321",
+  "barre": 18,
+  "scala_volume": 200
+}

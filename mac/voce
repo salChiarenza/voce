@@ -1,0 +1,11 @@
+#!/bin/bash
+# Interruttore voce in uscita: voce on | voce off | voce (stato)
+DIR="$(cd "$(dirname "$0")" && pwd)"
+PY="$DIR/.venv/bin/python"
+case "$1" in
+  on)  touch "$DIR/VOICE_ON"; echo "Voce: ACCESA" ;;
+  off) rm -f "$DIR/VOICE_ON"
+       "$PY" "$DIR/parla.py" --stop
+       echo "Voce: SPENTA" ;;
+  *)   [ -f "$DIR/VOICE_ON" ] && echo "Voce: ACCESA" || echo "Voce: SPENTA" ;;
+esac

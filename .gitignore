@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+voice.log
+voce.log
+VOICE_ON
+voce_pid

@@ -1,0 +1,13 @@
+{
+  "hotkey": "cmd_r",
+  "tasto_voce": "alt_r",
+  "modello": "mlx-community/whisper-large-v3-turbo",
+  "lingua": "it",
+  "voce": "Alice",
+  "comando_voce": "Voce Siri",
+  "suoni": true,
+  "colore": "#7ED321",
+  "invio_automatico": true,
+  "velocita": 195,
+  "max_registrazione_sec": 90
+}
