@@ -31,10 +31,10 @@ Apri Claude Code o Codex sul Mac e incolla il prompt che trovi qui:
 INSTALLA_CON_AI.md
 ```
 
-Oppure passa direttamente questo link all'agente:
+Oppure passa direttamente questo link all'agente (l'app è nella cartella mac/):
 
 ```text
-https://github.com/salChiarenza/voice-dettatura-mac
+https://github.com/salChiarenza/voce
 ```
 
 L'agente ti guidera' passo passo: controllo Mac, download, installazione, permessi e prova finale.

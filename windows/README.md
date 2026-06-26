@@ -1,6 +1,6 @@
 # Voice Dettatura Windows v1.1
 
-Dettatura locale per Windows: tieni premuto `F8`, parli, rilasci, e il testo viene scritto dove hai il cursore.
+Dettatura locale per Windows: tieni premuto `Ctrl destro`, parli, rilasci, e il testo viene scritto dove hai il cursore.
 
 Mentre parli, in basso al centro compare la pill **salchiarenza.ai** con la barra di lineette verdi ad arco "a sorriso" che si muovono col volume. L'overlay non ruba il focus: continui a scrivere dove sei.
 
@@ -15,13 +15,13 @@ Versione Windows brandizzata, allineata nell'aspetto alla versione Mac (pill + m
 Apri Claude Code o Codex sul PC Windows e incolla questo link:
 
 ```text
-https://github.com/salChiarenza/voice-dettatura-windows
+https://github.com/salChiarenza/voce
 ```
 
 Poi scrivi:
 
 ```text
-Guidami passo passo per installare Voice Dettatura Windows v1.0 beta.
+Guidami passo passo per installare Voce Dettatura per Windows (cartella windows/).
 ```
 
 L'agente ti guidera' in controllo PC, download, installazione, permessi microfono e prova finale.
@@ -44,9 +44,9 @@ e un'icona cliccabile **Voce Dettatura** sulla Scrivania e nel Menu Start.
 ## Uso
 
 1. Clicca l'icona **Voce Dettatura** (Scrivania o Menu Start). Si apre una piccola finestra: la Voce e' accesa.
-2. In qualsiasi programma tieni premuto `F8`.
+2. In qualsiasi programma tieni premuto `Ctrl destro`.
 3. Parla.
-4. Rilascia `F8`.
+4. Rilascia `Ctrl destro`.
 
 In basso compare la pill **salchiarenza.ai** con la barra verde a sorriso e il testo viene scritto dove hai il cursore. Per spegnerla, chiudi quella finestra.
 

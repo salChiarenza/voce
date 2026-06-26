@@ -12,8 +12,8 @@ Questa e' la strada piu' semplice.
 ## Prompt da copiare
 
 ```text
-Voglio installare Voice Dettatura Mac v1.0 da questo repository:
-https://github.com/salChiarenza/voice-dettatura-mac
+Voglio installare Voce Dettatura per Mac da questo repository, cartella mac/:
+https://github.com/salChiarenza/voce
 
 Guidami passo passo.
 
