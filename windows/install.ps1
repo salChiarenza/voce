@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-Write-Host "Voice Dettatura Windows v1.1"
+Write-Host "Voice Dettatura Windows v1.2"
 Write-Host ""
 
 if ($env:OS -ne "Windows_NT") {
@@ -52,7 +52,7 @@ function New-VoceShortcut($Path) {
     $lnk.TargetPath = $LauncherBat
     $lnk.WorkingDirectory = $AppDir
     $lnk.IconLocation = $IconSource
-    $lnk.Description = "Voce Dettatura - tieni premuto F8 e parla"
+    $lnk.Description = "Voce Dettatura - tieni premuto Ctrl destro e parla"
     $lnk.Save()
 }
 
@@ -72,6 +72,7 @@ Write-Host ""
 Write-Host "Uso:"
 Write-Host "1. Clicca l'icona 'Voce Dettatura' (Scrivania o Menu Start)."
 Write-Host "2. Si apre una piccola finestra: la Voce e' accesa."
-Write-Host "3. In qualsiasi programma, tieni premuto F8, parla, rilascia."
+Write-Host "3. In qualsiasi programma, tieni premuto Ctrl destro, parla, rilascia."
 Write-Host "4. Compare in basso la pill 'salchiarenza.ai' col sorriso verde; il testo viene scritto dove hai il cursore."
-Write-Host "5. Per spegnerla: chiudi quella finestra."
+Write-Host "5. Tasto Menu: accende/spegne la voce agenti, se configurata."
+Write-Host "6. Per spegnerla: chiudi quella finestra."

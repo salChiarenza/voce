@@ -25,7 +25,7 @@ Il primo download puo' essere pesante: il modello Whisper viene scaricato una vo
 
 ### Metodo consigliato: installa con Claude Code o Codex
 
-Apri Claude Code o Codex sul Mac e incolla il prompt che trovi qui:
+Apri Claude Code o Codex sul Mac e incolla il testo-istruzioni che trovi qui:
 
 ```text
 INSTALLA_CON_AI.md
@@ -37,7 +37,7 @@ Oppure passa direttamente questo link all'agente (l'app è nella cartella mac/):
 https://github.com/salChiarenza/voce
 ```
 
-L'agente ti guidera' passo passo: controllo Mac, download, installazione, permessi e prova finale.
+L'agente controlla il Mac, installa o ripara cio' che manca, ti chiede solo i permessi che devi concedere tu e chiude con una prova finale.
 
 ### Metodo manuale
 

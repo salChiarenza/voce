@@ -37,9 +37,27 @@ Due versioni, **stessa anima**:
 
 ## CONSEGNA AL CLIENTE
 
-- Si consegna come **UNA email** il cui corpo è il **prompt** per il Claude/Codex del cliente. Niente allegati, niente istruzioni tecniche a mano.
+- Si consegna come **UNA email** il cui corpo è il **testo-istruzioni** per il Claude/Codex del cliente. Niente allegati, niente istruzioni tecniche a mano.
 - Scegliere prima la versione: **Mac** o **Windows** secondo il sistema del cliente.
-- L'aggiornamento NON è "reinstalla da zero": il prompt dice di **aggiornare** quella già installata e aggiungere ciò che manca.
+- L'aggiornamento NON è "reinstalla da zero": il testo-istruzioni dice di **aggiornare** quella già installata e aggiungere ciò che manca.
+
+## GOAL OPERATIVO — installazione sul computer del cliente
+
+Quando questa repo viene data a un cliente, il suo agente deve portare a termine questa missione:
+
+> Installa o aggiorna Voce sul sistema giusto, ripara da solo tutto cio' che e' recuperabile, crea il modo semplice per avviarla e chiudi solo dopo una prova reale di dettatura.
+
+`/goal` puo' essere usato dal cliente se Claude Code o Codex lo supportano, ma non e' la fonte di verita'. Se il cliente non usa `/goal`, questa sezione vale comunque come goal operativo. Non creare una skill o un comando chiamato `goal`: rischia collisione con i comandi nativi degli agenti.
+
+Ordine obbligatorio per l'agente del cliente:
+
+1. **Autodiagnosi:** identifica Mac o Windows, cartella corretta (`mac/` o `windows/`), versione del sistema, Python/runtime, microfono, tasti disponibili, permessi, rete e spazio disco.
+2. **Auto-riparazione:** installa o sistema tutto cio' che e' software recuperabile: runtime, dipendenze, venv, modello di trascrizione, launcher/icona, configurazione e aggiornamento di una installazione gia' presente.
+3. **Chiedi al cliente solo azioni umane vere:** clic su permessi macOS/Windows, conferme SmartScreen/admin, scelta se serve, prova fisica di parlare e premere il tasto.
+4. **Non fermarti al primo errore:** prova una strada alternativa ragionevole, leggi gli errori, correggi e riprova. Se un modulo non passa ma l'altro puo' funzionare, monta quello che puo' funzionare.
+5. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
+6. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase, verifica che il testo compaia dove sta il cursore e che il pannello `salchiarenza.ai` si veda. Se la voce agenti e' configurata, verifica anche l'accensione/spegnimento.
+7. **Report finale breve:** installata si/no, dettatura si/no, voce agenti si/no, launcher creato si/no, problemi non recuperabili.
 
 ## DIVIETI (qui è dove un agente "crea a cazzo" — NON farlo)
 

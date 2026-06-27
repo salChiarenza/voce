@@ -1,4 +1,4 @@
-# Voice Dettatura Windows v1.1
+# Voice Dettatura Windows v1.2
 
 Dettatura locale per Windows: tieni premuto `Ctrl destro`, parli, rilasci, e il testo viene scritto dove hai il cursore.
 
@@ -8,23 +8,23 @@ Risorsa gratuita per la community **AI con Sal**.
 
 ## Stato
 
-Versione Windows brandizzata, allineata nell'aspetto alla versione Mac (pill + marchio + sorriso). Va provata su un PC Windows reale prima di considerarla stabile.
+Versione Windows brandizzata, allineata nell'aspetto e nel comportamento alla versione Mac (pill + marchio + sorriso, due tasti, voce agenti). Va provata su un PC Windows reale prima di considerarla stabile.
 
 ## Metodo consigliato: installa con Claude Code o Codex
 
-Apri Claude Code o Codex sul PC Windows e incolla questo link:
+Apri Claude Code o Codex sul PC Windows e incolla il testo-istruzioni che trovi qui:
+
+```text
+INSTALLA_CON_AI.md
+```
+
+Oppure passa direttamente questo link all'agente e digli di lavorare nella cartella `windows/`:
 
 ```text
 https://github.com/salChiarenza/voce
 ```
 
-Poi scrivi:
-
-```text
-Guidami passo passo per installare Voce Dettatura per Windows (cartella windows/).
-```
-
-L'agente ti guidera' in controllo PC, download, installazione, permessi microfono e prova finale.
+L'agente controlla il PC, installa o ripara cio' che manca, ti chiede solo i permessi che devi concedere tu e chiude con una prova finale.
 
 ## Installazione manuale
 
@@ -47,6 +47,7 @@ e un'icona cliccabile **Voce Dettatura** sulla Scrivania e nel Menu Start.
 2. In qualsiasi programma tieni premuto `Ctrl destro`.
 3. Parla.
 4. Rilascia `Ctrl destro`.
+5. Usa il tasto `Menu` per accendere o spegnere la voce agenti, se configurata.
 
 In basso compare la pill **salchiarenza.ai** con la barra verde a sorriso e il testo viene scritto dove hai il cursore. Per spegnerla, chiudi quella finestra.
 
