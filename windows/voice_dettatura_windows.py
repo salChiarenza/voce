@@ -129,9 +129,18 @@ def prompt_pulizia(testo: str, glossario=()) -> str:
 
 def comando_agente() -> list | None:
     """L'agente gia' presente sul PC che fa la pulizia: Claude Code prima,
-    Codex come riserva. Nessuno dei due installato -> niente pulizia."""
+    Codex come riserva. Nessuno dei due installato -> niente pulizia.
+
+    Avvio "spoglio" (misurato: ~2-3s in meno a chiamata): la pulizia non deve
+    caricare MCP, tool, settings ne' salvare la sessione su disco."""
     if shutil.which("claude"):
-        return ["claude", "--model", "haiku", "-p"]
+        return [
+            "claude", "--model", "haiku", "-p",
+            "--tools", "",              # nessun tool built-in
+            "--strict-mcp-config",      # senza --mcp-config = zero server MCP
+            "--setting-sources", "",    # niente settings utente/progetto
+            "--no-session-persistence", # niente sessione salvata su disco
+        ]
     if shutil.which("codex"):
         return ["codex", "exec"]
     return None

@@ -25,5 +25,5 @@
   "sostituzioni": {},
   "detta_pulito": true,
   "pulizia_min_parole": 15,
-  "pulizia_timeout_sec": 10
+  "pulizia_timeout_sec": 20
 }
