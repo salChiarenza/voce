@@ -311,7 +311,14 @@ def _trascrivi_e_incolla(audio):
             testo = ""
         if testo and (SHORTCUT_PULIZIA or COMANDO_PULIZIA) and serve_pulizia(testo, cfg):
             eventi.put("sistemo")
+            log = logging.getLogger("voce")
+            # i TESTI si loggano solo col flag debug (la privacy promette
+            # "nessun archivio delle dettature"); tempi ed esiti sempre.
+            debug = cfg.get("debug_dettature", False)
+            if debug:
+                log.info("grezzo: %s", testo)
             glossario = cfg.get("glossario", [])
+            inizio_pulizia = time.monotonic()
             pulito = None
             if SHORTCUT_PULIZIA:  # corsia veloce: modello Apple on-device (~1s)
                 pulito = pulisci_con_shortcut(
@@ -319,12 +326,19 @@ def _trascrivi_e_incolla(audio):
                     timeout=float(cfg.get("pulizia_timeout_shortcut_sec", 10)),
                     glossario=glossario,
                 )
+                log.info("pulizia shortcut %.1fs: %s", time.monotonic() - inizio_pulizia,
+                         "ok" if pulito else "FALLITA")
+                if debug and pulito:
+                    log.info("pulito: %s", pulito)
             if pulito is None and COMANDO_PULIZIA:  # riserva: agente locale
                 pulito = pulisci_con_agente(
                     testo, COMANDO_PULIZIA,
                     timeout=float(cfg.get("pulizia_timeout_sec", 20)),
                     glossario=glossario,
                 )
+                log.info("pulizia agente %.1fs", time.monotonic() - inizio_pulizia)
+                if debug:
+                    log.info("pulito: %s", pulito)
             testo = pulito or testo
         eventi.put("nascosto")
         if testo:
@@ -370,7 +384,10 @@ def ferma_e_trascrivi():
     if len(audio) < FREQ * 0.4:  # sotto 0,4 s: pressione accidentale
         eventi.put("nascosto")
         return
+    rms = float(np.sqrt(np.mean(audio ** 2)))
+    logging.getLogger("voce").info("audio: %.1fs, volume rms %.4f", len(audio) / FREQ, rms)
     if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
+        logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
         eventi.put("nascosto")
         return
     threading.Thread(target=_trascrivi_e_incolla, args=(audio,), daemon=True).start()
