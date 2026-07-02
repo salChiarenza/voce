@@ -28,6 +28,7 @@ from voce_lib import (
     c_e_voce, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
+    shortcut_pulizia_disponibile, pulisci_con_shortcut,
 )
 from parla import ferma as ferma_voce, parla as pronuncia
 
@@ -243,10 +244,15 @@ def suono(nome):
 
 
 GLOSSARIO_PROMPT = glossario_iniziale(cfg)  # nomi/brand scritti giusti da Whisper
-# agente locale per "detta pulito": cercato una volta all'avvio
+# detta pulito, cercato una volta all'avvio: prima il modello Apple on-device
+# via Comando Rapido (~1s, zero cloud), poi l'agente locale come riserva.
+SHORTCUT_PULIZIA = cfg.get("pulizia_shortcut", "Voce Pulita")
+if not (cfg.get("detta_pulito", False) and shortcut_pulizia_disponibile(SHORTCUT_PULIZIA)):
+    SHORTCUT_PULIZIA = None
 COMANDO_PULIZIA = comando_agente() if cfg.get("detta_pulito", False) else None
-if cfg.get("detta_pulito", False) and COMANDO_PULIZIA is None:
-    logging.getLogger("voce").warning("detta_pulito attivo ma nessun agente (claude/codex) nel PATH")
+if cfg.get("detta_pulito", False) and SHORTCUT_PULIZIA is None and COMANDO_PULIZIA is None:
+    logging.getLogger("voce").warning(
+        "detta_pulito attivo ma niente Comando Rapido ne' agente (claude/codex) nel PATH")
 
 
 def trascrivi(audio):
@@ -303,13 +309,23 @@ def _trascrivi_e_incolla(audio):
             testo = trascrivi(audio)
         if e_allucinazione(testo):  # frase-fantasma di Whisper sul non-parlato: scarta
             testo = ""
-        if testo and COMANDO_PULIZIA and serve_pulizia(testo, cfg):
+        if testo and (SHORTCUT_PULIZIA or COMANDO_PULIZIA) and serve_pulizia(testo, cfg):
             eventi.put("sistemo")
-            testo = pulisci_con_agente(
-                testo, COMANDO_PULIZIA,
-                timeout=float(cfg.get("pulizia_timeout_sec", 10)),
-                glossario=cfg.get("glossario", []),
-            )
+            glossario = cfg.get("glossario", [])
+            pulito = None
+            if SHORTCUT_PULIZIA:  # corsia veloce: modello Apple on-device (~1s)
+                pulito = pulisci_con_shortcut(
+                    testo, SHORTCUT_PULIZIA,
+                    timeout=float(cfg.get("pulizia_timeout_shortcut_sec", 10)),
+                    glossario=glossario,
+                )
+            if pulito is None and COMANDO_PULIZIA:  # riserva: agente locale
+                pulito = pulisci_con_agente(
+                    testo, COMANDO_PULIZIA,
+                    timeout=float(cfg.get("pulizia_timeout_sec", 20)),
+                    glossario=glossario,
+                )
+            testo = pulito or testo
         eventi.put("nascosto")
         if testo:
             incolla(testo)

@@ -28,7 +28,7 @@ Due versioni, **stessa anima**:
 6. Trascrizione locale in italiano, niente cloud.
 7. Marchio, colore, forma pill in `config.json` con gli **stessi valori**.
 8. **Glossario**: chiavi `glossario` (initial_prompt di Whisper) e `sostituzioni` in `config.json` — nomi propri e brand scritti giusti. Stessi nomi-chiave sulle due app.
-9. **Detta pulito**: chiavi `detta_pulito`, `pulizia_min_parole`, `pulizia_timeout_sec`. Le dettature lunghe passano dall'agente locale (`claude -p`, riserva `codex exec`) che toglie ripetizioni/ripensamenti e sistema la punteggiatura; la pill mostra lo stato "Sistemo…". Qualsiasi problema (niente agente, errore, timeout) → si incolla il grezzo: la dettatura non si perde MAI.
+9. **Detta pulito**: chiavi `detta_pulito`, `pulizia_min_parole`, `pulizia_timeout_sec`, `pulizia_shortcut`, `pulizia_timeout_shortcut_sec`. Le dettature lunghe si ripuliscono (via ripetizioni/ripensamenti, punteggiatura sistemata); la pill mostra "Sistemo…". Catena: **Mac** prima il modello Apple on-device via Comando Rapido "Voce Pulita" (~1s, zero cloud; differenza obbligata: su Windows non esiste) → agente locale (`claude -p` spoglio, riserva `codex exec`) → grezzo. **Windows**: solo agente → grezzo. Qualsiasi problema → si incolla il grezzo: la dettatura non si perde MAI. Il prompt di pulizia è UNO (`prompt_pulizia`, regole numerate su riga singola): stesso testo su entrambe.
 
 ## COSA PUÒ DIFFERIRE (obbligato dal sistema, non forzarlo uguale)
 

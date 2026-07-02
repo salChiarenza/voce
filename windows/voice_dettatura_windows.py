@@ -112,17 +112,20 @@ def serve_pulizia(testo: str, cfg) -> bool:
 
 
 def prompt_pulizia(testo: str, glossario=()) -> str:
-    """Istruzioni per l'agente che sistema il dettato."""
+    """Istruzioni per chi sistema il dettato (stessa formulazione del Mac:
+    regole numerate su UNA riga ciascuna, collaudata il 02/07)."""
     righe = [
-        "Sei il correttore di una dettatura vocale. Sistema il testo qui sotto:",
-        "togli ripetizioni, ripensamenti (tieni solo la versione finale) e intercalari,",
-        "sistema punteggiatura e maiuscole, dividi in paragrafi se serve.",
-        "NON riassumere, NON aggiungere nulla, NON cambiare la lingua.",
-        "Rispondi SOLO col testo sistemato, senza commenti ne' virgolette.",
+        "Correggi questa dettatura vocale seguendo le regole nell'ordine:",
+        '1. Quando chi parla si corregge, vale SOLO l\'ultima versione detta. "martedì anzi no facciamo mercoledì" significa MERCOLEDÌ: scrivi solo "mercoledì" e cancella "martedì" e "anzi no facciamo".',
+        "2. Cancella gli intercalari: ehm, cioè, ecco.",
+        "3. Sistema punteggiatura e maiuscole.",
+        "4. Non riassumere, non aggiungere niente, non tradurre.",
     ]
     if glossario:
-        righe.append("Scrivi correttamente questi nomi: " + ", ".join(glossario) + ".")
+        righe.append("5. Scrivi correttamente questi nomi: " + ", ".join(glossario) + ".")
+    righe.append("Rispondi SOLO col testo corretto, senza commenti ne' virgolette.")
     righe.append("")
+    righe.append("TESTO DA SISTEMARE:")
     righe.append(testo)
     return "\n".join(righe)
 

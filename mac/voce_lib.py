@@ -122,19 +122,62 @@ def serve_pulizia(testo, cfg):
 
 
 def prompt_pulizia(testo, glossario=()):
-    """Istruzioni per l'agente che sistema il dettato."""
+    """Istruzioni per chi sistema il dettato (modello locale o agente).
+    Formulazione numerata con esempio esplicito: e' quella che fa risolvere
+    bene i ripensamenti anche al modello Apple on-device (collaudata 02/07)."""
     righe = [
-        "Sei il correttore di una dettatura vocale. Sistema il testo qui sotto:",
-        "togli ripetizioni, ripensamenti (tieni solo la versione finale) e intercalari,",
-        "sistema punteggiatura e maiuscole, dividi in paragrafi se serve.",
-        "NON riassumere, NON aggiungere nulla, NON cambiare la lingua.",
-        "Rispondi SOLO col testo sistemato, senza commenti ne' virgolette.",
+        "Correggi questa dettatura vocale seguendo le regole nell'ordine:",
+        # ogni regola su UNA riga sola: spezzarle fa perdere la regola al modello on-device
+        '1. Quando chi parla si corregge, vale SOLO l\'ultima versione detta. "martedì anzi no facciamo mercoledì" significa MERCOLEDÌ: scrivi solo "mercoledì" e cancella "martedì" e "anzi no facciamo".',
+        "2. Cancella gli intercalari: ehm, cioè, ecco.",
+        "3. Sistema punteggiatura e maiuscole.",
+        "4. Non riassumere, non aggiungere niente, non tradurre.",
     ]
     if glossario:
-        righe.append("Scrivi correttamente questi nomi: " + ", ".join(glossario) + ".")
+        righe.append("5. Scrivi correttamente questi nomi: " + ", ".join(glossario) + ".")
+    righe.append("Rispondi SOLO col testo corretto, senza commenti ne' virgolette.")
     righe.append("")
+    righe.append("TESTO DA SISTEMARE:")
     righe.append(testo)
     return "\n".join(righe)
+
+
+def shortcut_pulizia_disponibile(nome):
+    """True se il Comando Rapido del modello Apple on-device esiste su questo
+    computer (solo macOS: altrove la CLI `shortcuts` non c'e')."""
+    if not shutil.which("shortcuts"):
+        return False
+    try:
+        esito = subprocess.run(
+            ["shortcuts", "list"], capture_output=True, text=True, timeout=10
+        )
+        return nome in (esito.stdout or "").splitlines()
+    except Exception:
+        return False
+
+
+def pulisci_con_shortcut(testo, nome, timeout=10, glossario=()):
+    """Corsia veloce: modello Apple on-device via Comando Rapido (~1s, zero
+    cloud). Torna il testo sistemato, o None se qualcosa va storto: il
+    chiamante allora ripiega sull'agente o sul grezzo."""
+    import tempfile
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            ingresso = Path(d) / "in.txt"
+            uscita = Path(d) / "out.txt"
+            ingresso.write_text(prompt_pulizia(testo, glossario))
+            esito = subprocess.run(
+                ["shortcuts", "run", nome, "-i", str(ingresso),
+                 "-o", str(uscita), "--output-type", "public.plain-text"],
+                capture_output=True, timeout=timeout,
+            )
+            if esito.returncode != 0 or not uscita.exists():
+                return None
+            pulito = uscita.read_text().strip()
+            return pulito or None
+    except Exception:
+        logging.getLogger("voce").exception("pulizia con Comando Rapido fallita")
+        return None
 
 
 def comando_agente(_quale=None):
