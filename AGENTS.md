@@ -27,6 +27,8 @@ Due versioni, **stessa anima**:
 5. Voce agenti opzionale: legge ad alta voce le risposte dell'agente (hook `voce_hook.py`).
 6. Trascrizione locale in italiano, niente cloud.
 7. Marchio, colore, forma pill in `config.json` con gli **stessi valori**.
+8. **Glossario**: chiavi `glossario` (initial_prompt di Whisper) e `sostituzioni` in `config.json` — nomi propri e brand scritti giusti. Stessi nomi-chiave sulle due app.
+9. **Detta pulito**: chiavi `detta_pulito`, `pulizia_min_parole`, `pulizia_timeout_sec`. Le dettature lunghe passano dall'agente locale (`claude -p`, riserva `codex exec`) che toglie ripetizioni/ripensamenti e sistema la punteggiatura; la pill mostra lo stato "Sistemo…". Qualsiasi problema (niente agente, errore, timeout) → si incolla il grezzo: la dettatura non si perde MAI.
 
 ## COSA PUÒ DIFFERIRE (obbligato dal sistema, non forzarlo uguale)
 

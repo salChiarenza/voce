@@ -51,9 +51,11 @@ e un'icona cliccabile **Voce Dettatura** sulla Scrivania e nel Menu Start.
 
 In basso compare la pill **salchiarenza.ai** con la barra verde a sorriso e il testo viene scritto dove hai il cursore. Per spegnerla, chiudi quella finestra.
 
+In piu': glossario personale (`glossario` in `config.json`, i tuoi nomi e brand scritti giusti) e detta pulito opzionale (le dettature lunghe passano dal tuo agente AI, Claude Code o Codex, che toglie ripetizioni e sistema la punteggiatura; si spegne con `"detta_pulito": false`).
+
 ## Privacy
 
-La dettatura gira localmente sul PC. Il progetto non invia le tue dettature a Sal Chiarenza, LeaderAI o server esterni di questo progetto.
+La dettatura gira localmente sul PC. Il progetto non invia le tue dettature a Sal Chiarenza, LeaderAI o server esterni di questo progetto. Col detta pulito attivo, il testo passa dal TUO agente AI (vedi `PRIVACY.md`).
 
 Leggi `PRIVACY.md`.
 

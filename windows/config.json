@@ -15,5 +15,15 @@
   "brand": "salchiarenza.ai",
   "colore": "#7ED321",
   "barre": 18,
-  "scala_volume": 200
+  "scala_volume": 200,
+  "glossario": [
+    "Claude Code",
+    "Codex",
+    "LeaderAI",
+    "salchiarenza.ai"
+  ],
+  "sostituzioni": {},
+  "detta_pulito": true,
+  "pulizia_min_parole": 15,
+  "pulizia_timeout_sec": 10
 }

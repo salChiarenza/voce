@@ -9,5 +9,15 @@
   "colore": "#7ED321",
   "invio_automatico": true,
   "velocita": 195,
-  "max_registrazione_sec": 90
+  "max_registrazione_sec": 90,
+  "glossario": [
+    "Claude Code",
+    "Codex",
+    "LeaderAI",
+    "salchiarenza.ai"
+  ],
+  "sostituzioni": {},
+  "detta_pulito": true,
+  "pulizia_min_parole": 15,
+  "pulizia_timeout_sec": 10
 }

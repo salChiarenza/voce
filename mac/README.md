@@ -9,6 +9,8 @@ Risorsa gratuita per la community **AI con Sal**.
 - Detti testo in email, documenti, browser, ChatGPT, Claude, Codex e app simili.
 - Usa una piccola barra verde mentre ascolta.
 - Gira sul Mac con trascrizione locale.
+- Glossario personale: i tuoi nomi e brand escono scritti giusti (`glossario` in `config.json`).
+- Detta pulito (opzionale): le dettature lunghe passano dal tuo agente AI (Claude Code o Codex) che toglie ripetizioni e ripensamenti e sistema la punteggiatura. Si spegne con `"detta_pulito": false`.
 - Include un installer guidato.
 - Se macOS resta bloccato mentre chiude il microfono, prova a riavviare da sola la dettatura invece di restare incastrata.
 
@@ -82,7 +84,7 @@ Sono permessi necessari per ascoltare la voce, leggere la scorciatoia da tastier
 
 ## Privacy
 
-La dettatura gira localmente sul Mac. Il progetto non invia le tue dettature a Sal Chiarenza, LeaderAI o server esterni di questo progetto.
+La dettatura gira localmente sul Mac. Il progetto non invia le tue dettature a Sal Chiarenza, LeaderAI o server esterni di questo progetto. Col detta pulito attivo, il testo passa dal TUO agente AI (vedi `PRIVACY.md`).
 
 Leggi anche `PRIVACY.md`.
 

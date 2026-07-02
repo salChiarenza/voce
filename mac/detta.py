@@ -26,7 +26,8 @@ from pynput.keyboard import Controller, Key
 from voce_lib import (
     carica_config, voce_attiva, FLAG_VOICE_ON,
     c_e_voce, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
-    timeout_scaduto,
+    timeout_scaduto, glossario_iniziale, applica_sostituzioni,
+    serve_pulizia, comando_agente, pulisci_con_agente,
 )
 from parla import ferma as ferma_voce, parla as pronuncia
 
@@ -213,6 +214,9 @@ class GestorePannello(AppKit.NSObject):
                     brand.setHidden_(False)
                     etichetta.setStringValue_("⏳ Trascrivo…")
                     etichetta.setHidden_(False)
+                elif nuovo == "sistemo":
+                    etichetta.setStringValue_("✨ Sistemo…")
+                    etichetta.setHidden_(False)
                 elif nuovo == "nascosto":
                     pannello.orderOut_(None)
         except queue.Empty:
@@ -238,11 +242,19 @@ def suono(nome):
         subprocess.Popen(["afplay", f"/System/Library/Sounds/{nome}.aiff"])
 
 
+GLOSSARIO_PROMPT = glossario_iniziale(cfg)  # nomi/brand scritti giusti da Whisper
+# agente locale per "detta pulito": cercato una volta all'avvio
+COMANDO_PULIZIA = comando_agente() if cfg.get("detta_pulito", False) else None
+if cfg.get("detta_pulito", False) and COMANDO_PULIZIA is None:
+    logging.getLogger("voce").warning("detta_pulito attivo ma nessun agente (claude/codex) nel PATH")
+
+
 def trascrivi(audio):
     esito = mlx_whisper.transcribe(
-        audio, path_or_hf_repo=cfg["modello"], language=cfg["lingua"]
+        audio, path_or_hf_repo=cfg["modello"], language=cfg["lingua"],
+        initial_prompt=GLOSSARIO_PROMPT,
     )
-    return esito["text"].strip()
+    return applica_sostituzioni(esito["text"].strip(), cfg.get("sostituzioni", {}))
 
 
 def incolla(testo):
@@ -291,6 +303,13 @@ def _trascrivi_e_incolla(audio):
             testo = trascrivi(audio)
         if e_allucinazione(testo):  # frase-fantasma di Whisper sul non-parlato: scarta
             testo = ""
+        if testo and COMANDO_PULIZIA and serve_pulizia(testo, cfg):
+            eventi.put("sistemo")
+            testo = pulisci_con_agente(
+                testo, COMANDO_PULIZIA,
+                timeout=float(cfg.get("pulizia_timeout_sec", 10)),
+                glossario=cfg.get("glossario", []),
+            )
         eventi.put("nascosto")
         if testo:
             incolla(testo)

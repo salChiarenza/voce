@@ -6,6 +6,8 @@ qui solo logica testabile senza hardware.
 import json
 import logging
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 BASE = Path(__file__).parent
@@ -87,6 +89,80 @@ def esegui_sicuro(fn, *args):
         return fn(*args)
     except Exception:
         logging.getLogger("voce").exception("errore in callback voce")
+
+
+# --- glossario e detta pulito: la trascrizione grezza diventa testo curato ---
+
+def glossario_iniziale(cfg):
+    """Prompt iniziale per Whisper coi termini del mestiere: cosi' nomi propri
+    e brand (LeaderAI, Systeme.io, nomi clienti) escono scritti giusti."""
+    voci = [v for v in cfg.get("glossario", []) if v.strip()]
+    if not voci:
+        return None
+    return "Glossario: " + ", ".join(voci) + "."
+
+
+def applica_sostituzioni(testo, sostituzioni):
+    """Correzioni ricorrenti 'sbagliato -> giusto', a parola intera e senza
+    distinguere maiuscole: quello che il glossario non basta a fissare."""
+    for sbagliato, giusto in sostituzioni.items():
+        testo = re.sub(
+            r"\b" + re.escape(sbagliato) + r"\b", giusto, testo, flags=re.IGNORECASE
+        )
+    return testo
+
+
+def serve_pulizia(testo, cfg):
+    """Detta pulito solo se attivo in config e la dettatura e' lunga: le
+    dettature corte (comandi rapidi) devono incollare subito, senza attese."""
+    if not cfg.get("detta_pulito", False):
+        return False
+    minimo = int(cfg.get("pulizia_min_parole", 15))
+    return len(testo.split()) >= minimo
+
+
+def prompt_pulizia(testo, glossario=()):
+    """Istruzioni per l'agente che sistema il dettato."""
+    righe = [
+        "Sei il correttore di una dettatura vocale. Sistema il testo qui sotto:",
+        "togli ripetizioni, ripensamenti (tieni solo la versione finale) e intercalari,",
+        "sistema punteggiatura e maiuscole, dividi in paragrafi se serve.",
+        "NON riassumere, NON aggiungere nulla, NON cambiare la lingua.",
+        "Rispondi SOLO col testo sistemato, senza commenti ne' virgolette.",
+    ]
+    if glossario:
+        righe.append("Scrivi correttamente questi nomi: " + ", ".join(glossario) + ".")
+    righe.append("")
+    righe.append(testo)
+    return "\n".join(righe)
+
+
+def comando_agente(_quale=None):
+    """L'agente gia' presente sul PC che fa la pulizia: Claude Code prima,
+    Codex come riserva. Nessuno dei due installato -> niente pulizia."""
+    if shutil.which("claude"):
+        return ["claude", "--model", "haiku", "-p"]
+    if shutil.which("codex"):
+        return ["codex", "exec"]
+    return None
+
+
+def pulisci_con_agente(testo, comando, timeout=10, glossario=()):
+    """Passa il dettato all'agente locale e torna il testo sistemato.
+    Qualsiasi problema (errore, output vuoto, timeout) -> testo originale:
+    la dettatura non deve MAI perdersi per colpa della pulizia."""
+    try:
+        esito = subprocess.run(
+            comando + [prompt_pulizia(testo, glossario)],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        pulito = (esito.stdout or "").strip()
+        if esito.returncode != 0 or not pulito:
+            return testo
+        return pulito
+    except Exception:
+        logging.getLogger("voce").exception("pulizia con agente fallita: tengo il grezzo")
+        return testo
 
 
 def pulisci_per_voce(testo):

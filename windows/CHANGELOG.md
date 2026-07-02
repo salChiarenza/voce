@@ -1,5 +1,11 @@
 # Changelog
 
+## Non rilasciato - 02/07/2026
+
+- **Glossario**: nuova chiave `glossario` in `config.json`, passata a faster-whisper come `initial_prompt` — nomi propri e brand scritti giusti. Più mappa `sostituzioni` ("sbagliato → giusto", parola intera, case-insensitive).
+- **Detta pulito**: le dettature lunghe (≥ `pulizia_min_parole`, default 15) passano dall'agente già sul PC (`claude -p --model haiku`, riserva `codex exec`) che toglie ripetizioni, ripensamenti e intercalari e sistema la punteggiatura. Stato "Sistemo..." sulla pill. Fallback totale: se l'agente manca, sbaglia o supera `pulizia_timeout_sec` (10s), si incolla il testo grezzo.
+- Specchio della versione Mac dello stesso giorno (regola gemelle). **Da collaudare su PC Windows reale.**
+
 ## Non rilasciato - 27/06/2026
 
 - Istruzioni `INSTALLA_CON_AI.md` riscritte come missione autonoma: l'agente del cliente fa autodiagnosi, auto-riparazione e prova reale, con `/goal` come aiuto opzionale.

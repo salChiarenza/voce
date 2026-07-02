@@ -16,6 +16,7 @@ import json
 import logging
 import queue
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -58,7 +59,7 @@ TRASPARENTE = "magenta"                       # colore reso invisibile dalla fin
 
 keyboard_controller = Controller()
 commands: queue.Queue[str] = queue.Queue()    # "start"/"stop" dal thread tastiera al worker audio
-eventi: queue.Queue[str] = queue.Queue()      # "ascolto"/"trascrivo"/"nascosto" verso l'overlay
+eventi: queue.Queue[str] = queue.Queue()      # "ascolto"/"trascrivo"/"sistemo"/"nascosto" verso l'overlay
 livelli = collections.deque([0.0] * N_BARRE, maxlen=N_BARRE)
 blocks: list[np.ndarray] = []
 stream = None
@@ -77,6 +78,86 @@ VOCE_RATE = int(CFG.get("voce_rate", 0))   # System.Speech: da -10 (lenta) a +10
 
 def voce_attiva() -> bool:
     return FLAG_VOICE_ON.exists()
+
+
+# --- glossario e detta pulito: la trascrizione grezza diventa testo curato ---
+# (gemelli delle funzioni in mac/voce_lib.py: stessi nomi, stesso contratto)
+
+def glossario_iniziale(cfg) -> str | None:
+    """Prompt iniziale per Whisper coi termini del mestiere: cosi' nomi propri
+    e brand (LeaderAI, nomi clienti) escono scritti giusti."""
+    voci = [v for v in cfg.get("glossario", []) if v.strip()]
+    if not voci:
+        return None
+    return "Glossario: " + ", ".join(voci) + "."
+
+
+def applica_sostituzioni(testo: str, sostituzioni: dict) -> str:
+    """Correzioni ricorrenti 'sbagliato -> giusto', a parola intera e senza
+    distinguere maiuscole: quello che il glossario non basta a fissare."""
+    for sbagliato, giusto in sostituzioni.items():
+        testo = re.sub(
+            r"\b" + re.escape(sbagliato) + r"\b", giusto, testo, flags=re.IGNORECASE
+        )
+    return testo
+
+
+def serve_pulizia(testo: str, cfg) -> bool:
+    """Detta pulito solo se attivo in config e la dettatura e' lunga: le
+    dettature corte (comandi rapidi) devono incollare subito, senza attese."""
+    if not cfg.get("detta_pulito", False):
+        return False
+    minimo = int(cfg.get("pulizia_min_parole", 15))
+    return len(testo.split()) >= minimo
+
+
+def prompt_pulizia(testo: str, glossario=()) -> str:
+    """Istruzioni per l'agente che sistema il dettato."""
+    righe = [
+        "Sei il correttore di una dettatura vocale. Sistema il testo qui sotto:",
+        "togli ripetizioni, ripensamenti (tieni solo la versione finale) e intercalari,",
+        "sistema punteggiatura e maiuscole, dividi in paragrafi se serve.",
+        "NON riassumere, NON aggiungere nulla, NON cambiare la lingua.",
+        "Rispondi SOLO col testo sistemato, senza commenti ne' virgolette.",
+    ]
+    if glossario:
+        righe.append("Scrivi correttamente questi nomi: " + ", ".join(glossario) + ".")
+    righe.append("")
+    righe.append(testo)
+    return "\n".join(righe)
+
+
+def comando_agente() -> list | None:
+    """L'agente gia' presente sul PC che fa la pulizia: Claude Code prima,
+    Codex come riserva. Nessuno dei due installato -> niente pulizia."""
+    if shutil.which("claude"):
+        return ["claude", "--model", "haiku", "-p"]
+    if shutil.which("codex"):
+        return ["codex", "exec"]
+    return None
+
+
+def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()) -> str:
+    """Passa il dettato all'agente locale e torna il testo sistemato.
+    Qualsiasi problema (errore, output vuoto, timeout) -> testo originale:
+    la dettatura non deve MAI perdersi per colpa della pulizia."""
+    try:
+        esito = subprocess.run(
+            comando + [prompt_pulizia(testo, glossario)],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        pulito = (esito.stdout or "").strip()
+        if esito.returncode != 0 or not pulito:
+            return testo
+        return pulito
+    except Exception:
+        logging.exception("pulizia con agente fallita: tengo il grezzo")
+        return testo
+
+
+GLOSSARIO_PROMPT = glossario_iniziale(CFG)  # nomi/brand scritti giusti da Whisper
+# agente locale per "detta pulito": cercato una volta all'avvio
+COMANDO_PULIZIA = comando_agente() if CFG.get("detta_pulito", False) else None
 
 
 def pulisci_per_voce(testo: str) -> str:
@@ -240,8 +321,17 @@ def transcribe_and_paste(audio: np.ndarray) -> None:
             audio,
             language=CFG.get("language", "it"),
             vad_filter=True,
+            initial_prompt=GLOSSARIO_PROMPT,
         )
         text = " ".join(segment.text.strip() for segment in segments).strip()
+        text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
+        if text and COMANDO_PULIZIA and serve_pulizia(text, CFG):
+            eventi.put("sistemo")
+            text = pulisci_con_agente(
+                text, COMANDO_PULIZIA,
+                timeout=float(CFG.get("pulizia_timeout_sec", 10)),
+                glossario=CFG.get("glossario", []),
+            )
         eventi.put("nascosto")
         if not text:
             return
@@ -416,7 +506,7 @@ class Pannello:
                 fill=COLORE, outline=COLORE,
             )
 
-    def _disegna_trascrivo(self) -> None:
+    def _disegna_trascrivo(self, testo: str = "Trascrivo...") -> None:
         self.canvas.delete("all")
         self._pill()
         self.canvas.create_text(
@@ -424,7 +514,7 @@ class Pannello:
             font=("Segoe UI", 11, "normal"),
         )
         self.canvas.create_text(
-            LARGHEZZA / 2, 44, text="Trascrivo...", fill="#FFFFFF",
+            LARGHEZZA / 2, 44, text=testo, fill="#FFFFFF",
             font=("Consolas", 13, "normal"),
         )
 
@@ -442,6 +532,8 @@ class Pannello:
             self._disegna_ascolto()
         elif self.stato == "trascrivo":
             self._disegna_trascrivo()
+        elif self.stato == "sistemo":
+            self._disegna_trascrivo("Sistemo...")
         self.root.after(60, self.tick)
 
     def run(self) -> None:
