@@ -250,6 +250,7 @@ GLOSSARIO_PROMPT = glossario_iniziale(cfg)  # nomi/brand scritti giusti da Whisp
 SHORTCUT_PULIZIA = cfg.get("pulizia_shortcut", "Voce Pulita")
 if not (cfg.get("detta_pulito", False) and shortcut_pulizia_disponibile(SHORTCUT_PULIZIA)):
     SHORTCUT_PULIZIA = None
+_guasti_shortcut = 0  # fallimenti consecutivi della corsia veloce (interruttore)
 COMANDO_PULIZIA = comando_agente() if cfg.get("detta_pulito", False) else None
 if cfg.get("detta_pulito", False) and SHORTCUT_PULIZIA is None and COMANDO_PULIZIA is None:
     logging.getLogger("voce").warning(
@@ -321,7 +322,8 @@ def _trascrivi_e_incolla(audio):
             glossario = cfg.get("glossario", [])
             inizio_pulizia = time.monotonic()
             pulito = None
-            if SHORTCUT_PULIZIA:  # corsia veloce: modello Apple on-device (~1s)
+            global _guasti_shortcut
+            if SHORTCUT_PULIZIA and _guasti_shortcut < 2:  # corsia veloce Apple (~1s)
                 pulito = pulisci_con_shortcut(
                     testo, SHORTCUT_PULIZIA,
                     timeout=float(cfg.get("pulizia_timeout_shortcut_sec", 10)),
@@ -329,6 +331,11 @@ def _trascrivi_e_incolla(audio):
                 )
                 log.info("pulizia shortcut %.1fs: %s", time.monotonic() - inizio_pulizia,
                          "ok" if pulito else "FALLITA")
+                # interruttore: 2 incanti di fila = basta provarci fino al riavvio
+                # (Apple Intelligence appeso non deve regalare 10s morti a ogni dettatura)
+                _guasti_shortcut = 0 if pulito else _guasti_shortcut + 1
+                if _guasti_shortcut >= 2:
+                    log.warning("corsia veloce disattivata (2 fallimenti di fila)")
                 if debug and pulito:
                     log.info("pulito: %s", pulito)
             if pulito is None and COMANDO_PULIZIA:  # riserva: agente locale

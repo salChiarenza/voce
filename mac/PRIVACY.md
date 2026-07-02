@@ -17,7 +17,7 @@ L'audio viene passato al motore di trascrizione locale installato sul Mac. Il te
 
 ## Detta pulito (opzionale)
 
-Se in `config.json` c'e' `"detta_pulito": true`, le dettature lunghe vengono passate all'agente AI gia' installato dal proprietario (Claude Code o Codex) per togliere ripetizioni e sistemare la punteggiatura. In quel caso il testo viaggia verso il servizio del TUO agente, col TUO account e le sue condizioni — non verso server di Sal Chiarenza o LeaderAI. Per una dettatura al 100% locale: `"detta_pulito": false`.
+Se in `config.json` c'e' `"detta_pulito": true`, le dettature lunghe vengono passate all'agente AI gia' installato dal proprietario (Claude Code o Codex) per togliere ripetizioni e sistemare la punteggiatura. Sul Mac, se esiste il Comando Rapido "Voce Pulita", la pulizia usa prima Apple Intelligence: di default il testo va a **Private Cloud Compute** (cloud privato Apple, dati non conservati da Apple); scegliendo "Su dispositivo" nel comando resta tutto sul Mac. In riserva il testo viaggia verso il servizio del TUO agente, col TUO account e le sue condizioni — non verso server di Sal Chiarenza o LeaderAI. Per una dettatura al 100% locale: `"detta_pulito": false`.
 
 ## Permessi richiesti
 

@@ -157,8 +157,8 @@ def shortcut_pulizia_disponibile(nome):
 
 
 def pulisci_con_shortcut(testo, nome, timeout=10, glossario=()):
-    """Corsia veloce: modello Apple on-device via Comando Rapido (~1s, zero
-    cloud). Torna il testo sistemato, o None se qualcosa va storto: il
+    """Corsia veloce: Apple Intelligence via Comando Rapido (~1s, niente
+    token; di default Private Cloud Compute, "Su dispositivo" per il 100% locale). Torna il testo sistemato, o None se qualcosa va storto: il
     chiamante allora ripiega sull'agente o sul grezzo."""
     import tempfile
     try:
