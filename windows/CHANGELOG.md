@@ -2,6 +2,8 @@
 
 ## Non rilasciato - 02/07/2026
 
+- **Apprendimento automatico** (gemello Mac): log testi opzionale con `debug_dettature`, giro giornaliero che impara le `sostituzioni` dagli errori ricorrenti. Da collaudare su PC reale.
+
 - Prompt di pulizia allineato al Mac (regole numerate su riga singola). La corsia on-device resta solo-Mac (su Windows non esiste equivalente di serie): qui la catena è agente -> grezzo.
 
 - **Glossario**: nuova chiave `glossario` in `config.json`, passata a faster-whisper come `initial_prompt` — nomi propri e brand scritti giusti. Più mappa `sostituzioni` ("sbagliato → giusto", parola intera, case-insensitive).

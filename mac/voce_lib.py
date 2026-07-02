@@ -217,6 +217,90 @@ def pulisci_con_agente(testo, comando, timeout=10, glossario=()):
         return testo
 
 
+# --- apprendimento automatico: Voce impara le parole che sbaglia sempre ---
+
+def estrai_grezzi_dal_log(log_path, massimo=50):
+    """Ultime dettature grezze dal log (righe 'INFO grezzo: ...')."""
+    try:
+        righe = Path(log_path).read_text().splitlines()
+    except OSError:
+        return []
+    grezzi = [r.split("INFO grezzo: ", 1)[1] for r in righe if "INFO grezzo: " in r]
+    return grezzi[-massimo:]
+
+
+def unisci_sostituzioni(attuali, nuove):
+    """Solo coppie nuove e sensate: mai sovrascrivere quelle esistenti (che
+    Sal o il cliente possono aver messo a mano), mai identita' o spazzatura."""
+    buone = {}
+    for sbagliato, giusto in nuove.items():
+        sbagliato, giusto = str(sbagliato).strip(), str(giusto).strip()
+        if not sbagliato or not giusto:
+            continue
+        if sbagliato.lower() == giusto.lower():
+            continue
+        if len(sbagliato) > 40 or len(giusto) > 40:
+            continue
+        if sbagliato.lower() in (k.lower() for k in attuali):
+            continue
+        buone[sbagliato] = giusto
+    return buone
+
+
+def estrai_json(testo):
+    """Primo oggetto JSON piatto trovato nella risposta dell'agente."""
+    inizio = testo.find("{")
+    fine = testo.rfind("}")
+    if inizio == -1 or fine <= inizio:
+        return {}
+    try:
+        esito = json.loads(testo[inizio:fine + 1])
+        return esito if isinstance(esito, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def prompt_apprendimento(grezzi):
+    righe = [
+        "Queste sono dettature vocali trascritte da Whisper in italiano.",
+        "Trova SOLO le parole chiaramente trascritte male (non esistono o non",
+        "hanno senso nel contesto) di cui sei SICURO della parola intesa.",
+        'Rispondi SOLO con un oggetto JSON piatto {"sbagliata": "giusta"}.',
+        "Se non trovi errori sicuri, rispondi {}.",
+        "",
+        "DETTATURE:",
+    ]
+    righe += ["- " + g for g in grezzi]
+    return "\n".join(righe)
+
+
+def impara_sostituzioni(log_path, config_path, comando, timeout=60):
+    """Legge le ultime dettature grezze, chiede all'agente le correzioni
+    ricorrenti sicure e le aggiunge alle sostituzioni del config.
+    Torna le coppie nuove imparate ({} se niente o se qualcosa va storto)."""
+    grezzi = estrai_grezzi_dal_log(log_path)
+    if not grezzi:
+        return {}
+    try:
+        esito = subprocess.run(
+            comando + [prompt_apprendimento(grezzi)],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        proposte = estrai_json(esito.stdout or "")
+        with open(config_path) as f:
+            cfg = json.load(f)
+        nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
+        if nuove:
+            cfg.setdefault("sostituzioni", {}).update(nuove)
+            with open(config_path, "w") as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+        return nuove
+    except Exception:
+        logging.getLogger("voce").exception("apprendimento sostituzioni fallito")
+        return {}
+
+
 def pulisci_per_voce(testo):
     """Trasforma il markdown in testo piano leggibile a voce."""
     testo = re.sub(r"```.*?```", " codice omesso. ", testo, flags=re.DOTALL)

@@ -149,6 +149,106 @@ def comando_agente() -> list | None:
     return None
 
 
+def estrai_grezzi_dal_log(log_path, massimo=50) -> list:
+    """Ultime dettature grezze dal log (righe 'INFO grezzo: ...')."""
+    try:
+        righe = Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    grezzi = [r.split("INFO grezzo: ", 1)[1] for r in righe if "INFO grezzo: " in r]
+    return grezzi[-massimo:]
+
+
+def unisci_sostituzioni(attuali: dict, nuove: dict) -> dict:
+    """Solo coppie nuove e sensate: mai sovrascrivere quelle esistenti,
+    mai identita' o spazzatura."""
+    buone = {}
+    for sbagliato, giusto in nuove.items():
+        sbagliato, giusto = str(sbagliato).strip(), str(giusto).strip()
+        if not sbagliato or not giusto:
+            continue
+        if sbagliato.lower() == giusto.lower():
+            continue
+        if len(sbagliato) > 40 or len(giusto) > 40:
+            continue
+        if sbagliato.lower() in (k.lower() for k in attuali):
+            continue
+        buone[sbagliato] = giusto
+    return buone
+
+
+def estrai_json(testo: str) -> dict:
+    """Primo oggetto JSON piatto trovato nella risposta dell'agente."""
+    inizio, fine = testo.find("{"), testo.rfind("}")
+    if inizio == -1 or fine <= inizio:
+        return {}
+    try:
+        esito = json.loads(testo[inizio:fine + 1])
+        return esito if isinstance(esito, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def prompt_apprendimento(grezzi) -> str:
+    righe = [
+        "Queste sono dettature vocali trascritte da Whisper in italiano.",
+        "Trova SOLO le parole chiaramente trascritte male (non esistono o non",
+        "hanno senso nel contesto) di cui sei SICURO della parola intesa.",
+        'Rispondi SOLO con un oggetto JSON piatto {"sbagliata": "giusta"}.',
+        "Se non trovi errori sicuri, rispondi {}.",
+        "",
+        "DETTATURE:",
+    ]
+    righe += ["- " + g for g in grezzi]
+    return "\n".join(righe)
+
+
+def impara_sostituzioni(log_path, config_path, comando, timeout=60) -> dict:
+    """Legge le ultime dettature grezze, chiede all'agente le correzioni
+    ricorrenti sicure e le aggiunge alle sostituzioni del config."""
+    grezzi = estrai_grezzi_dal_log(log_path)
+    if not grezzi:
+        return {}
+    try:
+        esito = subprocess.run(
+            comando + [prompt_apprendimento(grezzi)],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        proposte = estrai_json(esito.stdout or "")
+        cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
+        if nuove:
+            cfg.setdefault("sostituzioni", {}).update(nuove)
+            Path(config_path).write_text(
+                json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        return nuove
+    except Exception:
+        logging.exception("apprendimento sostituzioni fallito")
+        return {}
+
+
+def impara_dagli_errori_giornaliero() -> None:
+    """Apprendimento automatico, una volta al giorno all'avvio (gemello Mac)."""
+    marcatore = BASE / "APPRENDIMENTO_ULTIMO"
+    oggi = time.strftime("%Y-%m-%d")
+    try:
+        if marcatore.read_text().strip() == oggi:
+            return
+    except OSError:
+        pass
+    if not CFG.get("debug_dettature", False):
+        return  # senza log dei testi non c'e' niente da cui imparare
+    comando = COMANDO_PULIZIA or comando_agente()
+    if not comando:
+        return
+    nuove = impara_sostituzioni(LOG, BASE / "config.json", comando)
+    if nuove:
+        CFG.setdefault("sostituzioni", {}).update(nuove)  # attive da subito
+        logging.info("imparate sostituzioni: %s", nuove)
+    marcatore.write_text(oggi)
+
+
 def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()) -> str:
     """Passa il dettato all'agente locale e torna il testo sistemato.
     Qualsiasi problema (errore, output vuoto, timeout) -> testo originale:
@@ -339,11 +439,19 @@ def transcribe_and_paste(audio: np.ndarray) -> None:
         text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
         if text and COMANDO_PULIZIA and serve_pulizia(text, CFG):
             eventi.put("sistemo")
+            # i TESTI si loggano solo col flag debug (privacy); tempi sempre
+            debug = CFG.get("debug_dettature", False)
+            if debug:
+                logging.info("grezzo: %s", text)
+            inizio_pulizia = time.monotonic()
             text = pulisci_con_agente(
                 text, COMANDO_PULIZIA,
-                timeout=float(CFG.get("pulizia_timeout_sec", 10)),
+                timeout=float(CFG.get("pulizia_timeout_sec", 20)),
                 glossario=CFG.get("glossario", []),
             )
+            logging.info("pulizia agente %.1fs", time.monotonic() - inizio_pulizia)
+            if debug:
+                logging.info("pulito: %s", text)
         eventi.put("nascosto")
         if not text:
             return
@@ -566,6 +674,7 @@ def main() -> None:
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=watchdog, daemon=True).start()
     threading.Thread(target=load_model, daemon=True).start()
+    threading.Thread(target=impara_dagli_errori_giornaliero, daemon=True).start()
     keyboard.Listener(on_press=on_press, on_release=on_release).start()
     Pannello().run()
 

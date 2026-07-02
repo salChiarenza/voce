@@ -29,6 +29,7 @@ from voce_lib import (
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
+    impara_sostituzioni,
 )
 from parla import ferma as ferma_voce, parla as pronuncia
 
@@ -529,6 +530,33 @@ def unica_istanza():
                 pass
 
 
+def _impara_dagli_errori():
+    """Apprendimento automatico, una volta al giorno all'avvio: rilegge le
+    ultime dettature grezze dal log, l'agente individua le parole trascritte
+    male in modo ricorrente e le aggiunge da solo alle sostituzioni."""
+    base = os.path.dirname(os.path.abspath(__file__))
+    marcatore = os.path.join(base, "APPRENDIMENTO_ULTIMO")
+    oggi = time.strftime("%Y-%m-%d")
+    try:
+        if open(marcatore).read().strip() == oggi:
+            return  # gia' fatto oggi
+    except OSError:
+        pass
+    if not cfg.get("debug_dettature", False):
+        return  # senza log dei testi non c'e' niente da cui imparare
+    comando = COMANDO_PULIZIA or comando_agente()
+    if not comando:
+        return
+    nuove = impara_sostituzioni(
+        os.path.join(base, "voce.log"), os.path.join(base, "config.json"), comando
+    )
+    if nuove:
+        cfg.setdefault("sostituzioni", {}).update(nuove)  # attive da subito
+        logging.getLogger("voce").info("imparate sostituzioni: %s", nuove)
+    with open(marcatore, "w") as f:
+        f.write(oggi)
+
+
 def _scalda_modello():
     """Scalda Whisper in background: cosi' l'hotkey e' attivo SUBITO e non dopo
     i ~10s di caricamento del modello (prima, in quei secondi, premere il tasto
@@ -571,6 +599,7 @@ if __name__ == "__main__":
     threading.Thread(target=watchdog_audio, daemon=True).start()  # recupera stop persi/CoreAudio bloccato
     listener = avvia_listener()  # hotkey attivo DA SUBITO
     threading.Thread(target=_scalda_modello, daemon=True).start()  # modello in sottofondo
+    threading.Thread(target=lambda: esegui_sicuro(_impara_dagli_errori), daemon=True).start()
     print(f"Voce — dettatura attiva (il modello si scalda in sottofondo). "
           f"Tieni premuto [{cfg['hotkey']}] e parla.")
     gestore = GestorePannello.alloc().init()
