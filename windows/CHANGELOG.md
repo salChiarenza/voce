@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 03/07/2026
+
+- **Fix eco glossario nel detta pulito** (gemello Mac): regola 5 del prompt riformulata (la vecchia "Scrivi correttamente questi nomi" faceva appendere il glossario al testo) + guardia `pulizia_sospetta`: scarta la pulizia se aggiunge ≥2 nomi mai dettati o collassa il testo sotto un terzo delle parole.
+
 ## Non rilasciato - 02/07/2026
 
 - **Apprendimento automatico** (gemello Mac): log testi opzionale con `debug_dettature`, giro giornaliero che impara le `sostituzioni` dagli errori ricorrenti. Da collaudare su PC reale.

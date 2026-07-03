@@ -122,7 +122,9 @@ def prompt_pulizia(testo: str, glossario=()) -> str:
         "4. Non riassumere, non aggiungere niente, non tradurre.",
     ]
     if glossario:
-        righe.append("5. Scrivi correttamente questi nomi: " + ", ".join(glossario) + ".")
+        # NON "scrivi questi nomi": il modellino lo eseguiva alla lettera
+        # e appendeva l'intero glossario in coda al testo (bug 03/07)
+        righe.append("5. Se nel testo compare uno di questi nomi, scrivilo esattamente così: " + ", ".join(glossario) + ". Non aggiungere mai nomi che chi parla non ha detto.")
     righe.append("Rispondi SOLO col testo corretto, senza commenti ne' virgolette.")
     righe.append("")
     righe.append("TESTO DA SISTEMARE:")
@@ -249,6 +251,25 @@ def impara_dagli_errori_giornaliero() -> None:
     marcatore.write_text(oggi)
 
 
+def pulizia_inventa_nomi(grezzo: str, pulito: str, glossario=()) -> bool:
+    """True se la pulizia ha aggiunto nomi del glossario mai dettati: il
+    modellino a volte rigurgita la lista della regola 5 in coda al testo.
+    Un nome solo puo' essere una correzione legittima di grafia: soglia 2."""
+    g = grezzo.lower()
+    p = pulito.lower()
+    aggiunti = [v for v in glossario if v.lower() in p and v.lower() not in g]
+    return len(aggiunti) >= 2
+
+
+def pulizia_sospetta(grezzo: str, pulito: str, glossario=()) -> bool:
+    """La pulizia va scartata (si tiene il grezzo) se inventa nomi mai dettati
+    o se collassa il testo: togliere intercalari e ripensamenti non puo'
+    mangiarsi oltre due terzi delle parole."""
+    if pulizia_inventa_nomi(grezzo, pulito, glossario):
+        return True
+    return len(pulito.split()) * 3 < len(grezzo.split())
+
+
 def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()) -> str:
     """Passa il dettato all'agente locale e torna il testo sistemato.
     Qualsiasi problema (errore, output vuoto, timeout) -> testo originale:
@@ -260,6 +281,8 @@ def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()) -> s
         )
         pulito = (esito.stdout or "").strip()
         if esito.returncode != 0 or not pulito:
+            return testo
+        if pulizia_sospetta(testo, pulito, glossario):
             return testo
         return pulito
     except Exception:
