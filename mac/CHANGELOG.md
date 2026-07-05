@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (8)
+
+- **Soglia d'innesco mani libere separata e più alta** (`mani_libere_soglia_voce`, default 0.012): il VAD usava la soglia-voce generale (0.004) e partiva sul rumore ambiente (caso reale: rms 0.0046 → Whisper allucinava "ARRAB ARRAB" sul nulla, incollato in chat). Il parlato vero sta a 0.02-0.06: con 0.012 il rumore non innesca più, la voce sì. Il gate finale sull'intero audio resta invariato.
+
 ## Non rilasciato - 06/07/2026 (7)
 
 - **Fix annuncio "Mani libere attivate" mai sentito**: all'accensione il flag si attivava PRIMA dell'annuncio; il VAD partiva sul rumore ambiente e `avvia_registrazione()` (che zittisce la voce come prima cosa) uccideva l'annuncio appena partito — Sal non sentiva mai la conferma e la coda audio diventava un "Yeah." allucinato incollato in chat. Ora: annuncio prima (crea `PARLANDO` in modo sincrono), flag dopo — il worker aspetta la fine dell'annuncio prima di armarsi.

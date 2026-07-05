@@ -620,7 +620,11 @@ def worker_mani_libere():
     stato = IDLE
     frame_sopra = frame_sotto = 0
     intervallo = 0.05
-    soglia = cfg.get("soglia_voce", SOGLIA_VOCE)
+    # Soglia d'innesco PIU' ALTA della soglia-voce generale: il rumore ambiente
+    # di Sal sta a rms 0.004-0.009 (caso reale "ARRAB ARRAB": innescato a
+    # 0.0046), il suo parlato vero a 0.02-0.06. Con la soglia base il VAD
+    # partiva sul rumore e Whisper allucinava sopra il nulla.
+    soglia = float(cfg.get("mani_libere_soglia_voce", 0.012))
     frame_attivazione = max(1, round(cfg.get("mani_libere_attivazione_sec", 0.3) / intervallo))
     frame_silenzio = max(1, round(cfg.get("mani_libere_silenzio_sec", 0.9) / intervallo))
     fine_voce = 0.0  # quando l'agente ha smesso di parlare: piccolo periodo di grazia
