@@ -1,5 +1,12 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (10) — non ancora collaudato da Sal con tasti reali
+
+- **Modalità mani libere (ascolto continuo)**: nuovo combo `Option+-` accende/spegne l'ascolto a soglia di volume, senza tenere premuto nessun tasto — parte da sola sopra soglia, si ferma da sola al silenzio, si mette in pausa mentre l'agente parla (flag `PARLANDO` condiviso con `parla.py`). Riusa tutta l'infrastruttura esistente (stream sempre aperto, `avvia_registrazione`/`ferma_e_trascrivi`, pill).
+- **Voce agenti ON/OFF ora è `Option+.`** (prima tasto singolo `alt_r`): stesso interruttore, cambiato solo il modo di premerlo. Nuove chiavi config: `tasto_voce_combo` (era `tasto_voce`), `tasto_mani_libere_combo`, `mani_libere_attivazione_sec`, `mani_libere_silenzio_sec`.
+- Verificato con eventi tastiera sintetici (CGEventPost): entrambi i combo commutano correttamente; trovato e corretto un bug reale nel farlo (pynput riporta `Key.alt` generico, non `Key.alt_l`/`Key.alt_r` — il controllo non scattava). **Non ancora provato da Sal con la pressione fisica dei tasti**: se Option+. o Option+- non rispondono, verificare `voce.log` e i codici vk in `detta.py` (`VK_TASTI_COMBO`).
+- Sensibile al rumore ambiente per costruzione (soglia di volume, non riconoscimento vocale): può accendersi da sola su rumori forti. Non ancora portato su Windows.
+
 ## Non rilasciato - 05/07/2026 (9)
 
 - **Pulizia saltata in conversazione**: misurato dal log che la trascrizione Whisper e' gia' velocissima nell'uso reale (0.6-1.3s per 10-25s di audio); il vero collo di bottiglia era "detta pulito" (1-3s extra su quasi ogni turno, perche' quasi tutto supera `pulizia_min_parole`). A voce ON (conversazione con l'agente) ora si salta: l'agente capisce benissimo il parlato grezzo, la velocita' conta più della forma. A voce OFF resta attiva. Nuova chiave `pulizia_in_conversazione` (default `false`) per chi la vuole comunque sempre attiva.

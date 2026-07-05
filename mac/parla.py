@@ -7,13 +7,24 @@ Uso:
 """
 import subprocess
 import sys
+import threading
 
-from voce_lib import carica_config, pulisci_per_voce
+from voce_lib import carica_config, pulisci_per_voce, FLAG_PARLANDO
 
 
 def ferma():
     subprocess.run(["pkill", "-x", "say"], check=False)
     subprocess.run(["pkill", "-f", "shortcuts run"], check=False)
+    FLAG_PARLANDO.unlink(missing_ok=True)  # anche se interrotta a meta', il segnale si toglie
+
+
+def _segna_fine_a_processo_finito(p):
+    """detta.py (processo separato) usa questo flag per mettere in pausa
+    l'ascolto mani-libere mentre l'agente sta parlando: senza, si sentirebbe
+    da solo e si inceppa. parla() non aspetta la fine (lo stop deve restare
+    possibile), quindi il togliere il flag lo fa questo thread a parte."""
+    p.wait()
+    FLAG_PARLANDO.unlink(missing_ok=True)
 
 
 def parla(testo):
@@ -22,6 +33,7 @@ def parla(testo):
         return
     ferma()  # una voce per volta
     cfg = carica_config()
+    FLAG_PARLANDO.touch()
     if cfg["voce"].lower().startswith("siri"):
         # le voci Siri non sono usabili dalle app: si passa dal comando rapido
         p = subprocess.Popen(
@@ -37,6 +49,7 @@ def parla(testo):
         )
     p.stdin.write(testo.encode())
     p.stdin.close()  # non aspettiamo la fine: lo stop resta possibile
+    threading.Thread(target=_segna_fine_a_processo_finito, args=(p,), daemon=True).start()
 
 
 if __name__ == "__main__":

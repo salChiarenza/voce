@@ -12,6 +12,7 @@ from pathlib import Path
 
 BASE = Path(__file__).parent
 FLAG_VOICE_ON = BASE / "VOICE_ON"
+FLAG_PARLANDO = BASE / "PARLANDO"  # esiste mentre l'agente sta leggendo una risposta ad alta voce
 
 
 def carica_config():

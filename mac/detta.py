@@ -25,7 +25,7 @@ from pynput import keyboard
 from pynput.keyboard import Controller, Key
 
 from voce_lib import (
-    carica_config, voce_attiva, FLAG_VOICE_ON,
+    carica_config, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
     c_e_voce, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
@@ -36,8 +36,15 @@ from parla import ferma as ferma_voce, parla as pronuncia
 
 cfg = carica_config()
 TASTO = getattr(Key, cfg["hotkey"])
-TASTO_VOCE = getattr(Key, cfg.get("tasto_voce", "alt_l"), None)  # on/off voce agenti
 FREQ = 16000  # Whisper lavora a 16 kHz
+
+# Option+tasto per i due interruttori "a distanza" (voce agenti, mani libere):
+# usiamo il codice FISICO del tasto (vk), non il carattere — Option su macOS
+# compone caratteri diversi (Option+. = "…") quindi tasto.char non e' affidabile.
+ALT_KEYS = (Key.alt, Key.alt_l, Key.alt_r)  # pynput a volte riporta il generico Key.alt, non _l/_r
+VK_TASTI_COMBO = {".": 47, "-": 27}  # kVK_ANSI_Period, kVK_ANSI_Minus (posizione fisica, stabili su Mac)
+COMBO_VOCE = cfg.get("tasto_voce_combo", ".")          # Option+. = voce agenti on/off
+COMBO_MANI_LIBERE = cfg.get("tasto_mani_libere_combo", "-")  # Option+- = mani libere on/off
 
 tastiera = Controller()
 registrando = False
@@ -47,8 +54,11 @@ listener = None  # listener globale della tastiera (ricreabile dal watchdog)
 eventi = queue.Queue()  # il thread tastiera manda qui i cambi di stato per il pannello
 comandi_audio = queue.Queue()  # il thread tastiera mette qui "start"/"stop": li esegue il worker audio
 tasto_premuto = False  # stato del tasto-detta, posseduto SOLO dal thread tastiera
-tasto_voce_premuto = False  # idem per il tasto on/off voce: un hold = una commutazione
+alt_premuto = False  # Option giu': serve per riconoscere i combo Option+tasto
+combo_scattati = set()  # debounce: un combo scatta una sola volta finche' resta giu'
 inizio_registrazione = None
+mani_libere_attiva = False  # ascolto continuo a soglia di volume, senza tasto
+volume_corrente = 0.0  # RMS aggiornato ad ogni callback audio, anche fuori registrazione
 
 BARRE = 18  # quante lineette nel visualizzatore
 livelli = collections.deque([0.0] * BARRE, maxlen=BARRE)
@@ -371,10 +381,12 @@ def incolla(testo):
 
 
 def su_callback(indata, frames, t, status):
+    global volume_corrente
+    volume_corrente = float(np.sqrt(np.mean(indata ** 2)))  # serve al VAD mani-libere anche fuori registrazione
     if not registrando:
         return  # stream sempre aperto: fuori registrazione scartiamo, non accumuliamo
     blocchi.append(indata.copy())
-    livelli.append(float(np.sqrt(np.mean(indata ** 2))))  # volume per le lineette
+    livelli.append(volume_corrente)
 
 
 def nome_device_input():
@@ -543,6 +555,57 @@ def commuta_voce():
     pronuncia(stato)
 
 
+def commuta_mani_libere():
+    """Tasto on/off della modalita' mani libere: ascolto continuo a soglia di
+    volume (vedi worker_mani_libere), senza dover tenere premuto il tasto."""
+    global mani_libere_attiva
+    mani_libere_attiva = not mani_libere_attiva
+    pronuncia("Mani libere attivate" if mani_libere_attiva else "Mani libere disattivate")
+
+
+def worker_mani_libere():
+    """Ascolto continuo, SOLO quando mani_libere_attiva: quando il volume sale
+    sopra soglia per un po' parte la registrazione (stessa pill, stesso
+    avvia_registrazione del tasto manuale), quando scende sotto soglia per un
+    po' si ferma e trascrive da sola. In pausa mentre l'agente parla (altrimenti
+    si "sentirebbe da sola" e si incepperebbe) e mentre il tasto manuale e' gia'
+    in uso (non interferisce)."""
+    IDLE, ASCOLTO = "idle", "ascolto"
+    stato = IDLE
+    frame_sopra = frame_sotto = 0
+    intervallo = 0.05
+    soglia = cfg.get("soglia_voce", SOGLIA_VOCE)
+    frame_attivazione = max(1, round(cfg.get("mani_libere_attivazione_sec", 0.3) / intervallo))
+    frame_silenzio = max(1, round(cfg.get("mani_libere_silenzio_sec", 0.9) / intervallo))
+    while True:
+        time.sleep(intervallo)
+        if not mani_libere_attiva:
+            stato, frame_sopra, frame_sotto = IDLE, 0, 0
+            continue
+        if FLAG_PARLANDO.exists():  # l'agente sta leggendo la risposta: si aspetta
+            continue
+        if stato == IDLE:
+            if registrando:  # gia' in corso (es. tasto manuale): non toccare
+                continue
+            if volume_corrente >= soglia:
+                frame_sopra += 1
+                if frame_sopra >= frame_attivazione:
+                    frame_sopra = 0
+                    stato = ASCOLTO
+                    comandi_audio.put("start")
+            else:
+                frame_sopra = 0
+        elif stato == ASCOLTO:
+            if volume_corrente < soglia:
+                frame_sotto += 1
+                if frame_sotto >= frame_silenzio:
+                    frame_sotto = 0
+                    stato = IDLE
+                    comandi_audio.put("stop")
+            else:
+                frame_sotto = 0
+
+
 def worker_audio():
     """Esegue avvio/stop registrazione FUORI dal thread della tastiera (che deve
     solo mettere "start"/"stop" in coda e tornare subito: qualunque lavoro più
@@ -589,26 +652,49 @@ def watchdog_audio():
                 riavvia_su_cambio_device(f"{device_input_apertura!r} -> {attuale!r}")
 
 
+def _combo_da_tasto(tasto):
+    """Il carattere del combo Option+X dal codice FISICO del tasto (vk): con
+    Option giu' macOS compone caratteri diversi (Option+. = "…"), quindi
+    tasto.char non e' affidabile per riconoscere quale tasto e' stato premuto."""
+    vk = getattr(tasto, "vk", None)
+    for carattere, codice in VK_TASTI_COMBO.items():
+        if vk == codice:
+            return carattere
+    return None
+
+
 def su_pressione(tasto):
-    global tasto_premuto, tasto_voce_premuto
+    global tasto_premuto, alt_premuto
     if tasto == TASTO and not tasto_premuto:
         tasto_premuto = True            # stato sul solo thread tastiera: niente race
         comandi_audio.put("start")      # il lavoro audio (bloccante) lo fa il worker
-    elif TASTO_VOCE is not None and tasto == TASTO_VOCE and not tasto_voce_premuto:
-        tasto_voce_premuto = True       # debounce: un hold = una sola commutazione
-        # commuta_voce fa lavoro BLOCCANTE (pkill/shortcuts/say/pipe): MAI qui sul
-        # thread della tastiera, o l'event-tap si "appende" e tutta la dettatura si
-        # blocca (e il watchdog non recupera: il listener resta vivo ma incastrato).
-        threading.Thread(target=esegui_sicuro, args=(commuta_voce,), daemon=True).start()
+    elif tasto in ALT_KEYS:
+        alt_premuto = True
+    elif alt_premuto:
+        combo = _combo_da_tasto(tasto)
+        if combo and combo not in combo_scattati:
+            combo_scattati.add(combo)   # debounce: un hold = una sola commutazione
+            # commuta_* fanno lavoro BLOCCANTE (pkill/shortcuts/say/pipe): MAI qui
+            # sul thread della tastiera, o l'event-tap si "appende" e tutta la
+            # dettatura si blocca (il watchdog non recupera: listener vivo ma incastrato).
+            if combo == COMBO_VOCE:
+                threading.Thread(target=esegui_sicuro, args=(commuta_voce,), daemon=True).start()
+            elif combo == COMBO_MANI_LIBERE:
+                threading.Thread(target=esegui_sicuro, args=(commuta_mani_libere,), daemon=True).start()
 
 
 def su_rilascio(tasto):
-    global tasto_premuto, tasto_voce_premuto
+    global tasto_premuto, alt_premuto
     if tasto == TASTO and tasto_premuto:
         tasto_premuto = False
         comandi_audio.put("stop")
-    elif tasto == TASTO_VOCE:
-        tasto_voce_premuto = False      # rilasciato: la prossima pressione ricommuta
+    elif tasto in ALT_KEYS:
+        alt_premuto = False
+        combo_scattati.clear()          # Option su: la prossima pressione ricommuta
+    else:
+        combo = _combo_da_tasto(tasto)
+        if combo:
+            combo_scattati.discard(combo)
 
 
 # macOS disabilita un event-tap appena una callback tarda anche una sola volta
@@ -741,6 +827,7 @@ if __name__ == "__main__":
     avvia_stream()  # microfono aperto una volta sola, per tutta la vita del processo
     threading.Thread(target=worker_audio, daemon=True).start()  # possiede lo start/stop registrazione
     threading.Thread(target=watchdog_audio, daemon=True).start()  # recupera stop persi/CoreAudio bloccato
+    threading.Thread(target=worker_mani_libere, daemon=True).start()  # ascolto continuo, solo se attivato
     listener = avvia_listener()  # hotkey attivo DA SUBITO
     threading.Thread(target=_scalda_modello, daemon=True).start()  # modello in sottofondo
     threading.Thread(target=lambda: esegui_sicuro(_impara_dagli_errori), daemon=True).start()
