@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (3)
+
+- **Pillola "armata" mentre le mani libere sono accese**: prima la pill spariva del tutto tra un turno e l'altro (stato "nascosto"), quindi Sal non aveva modo di vedere se la modalità era davvero attiva senza parlare. Ora, con mani libere ON, resta visibile una pillola ferma "🎙️ Mani libere attive" finché non parte un vero ascolto (poi torna l'onda come sempre) o non si spegne la modalità. Compare subito al momento del combo, non solo al primo turno.
+- Log diagnostico aggiunto (v11 di stanotte, ora confermato utile): traccia sempre parole trascritte, incolla ed invio, anche quando la pulizia viene saltata in conversazione — prima quei log sparivano proprio quando servivano di più.
+
 ## Non rilasciato - 06/07/2026 (2)
 
 - **Mani libere ora e' un combo di due modificatori**: Sal ha chiesto due tasti insieme (non uno) per evitare attivazioni accidentali su un tasto che usera' spesso. `Ctrl destro + Option destro` tenuti insieme = mani libere ON/OFF; `Option destro` da solo (senza Ctrl) resta voce agenti ON/OFF, invariato. Niente lettera da comporre come nei vecchi combo Option+punto/meno (abbandonati): solo lo stato giu'/su di due modificatori, molto piu' affidabile. Verificato con eventi sintetici: Option da solo accende la voce; Ctrl+Option insieme (senza toccare la voce) accende le mani libere, confermato da un trigger reale su un suono di prova; entrambi si spengono allo stesso modo. Rimossa la chiave config `tasto_mani_libere` (non piu' un tasto singolo).

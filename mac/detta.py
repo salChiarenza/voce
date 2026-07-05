@@ -234,6 +234,17 @@ class GestorePannello(AppKit.NSObject):
                 elif nuovo == "sistemo":
                     etichetta.setStringValue_("✨ Sistemo…")
                     etichetta.setHidden_(False)
+                elif nuovo == "armato":
+                    # mani libere accesa ma non sta ancora ascoltando: pillola
+                    # ferma finche' resta attiva, cosi' si vede sempre che e' ON
+                    # (prima spariva del tutto tra un turno e l'altro).
+                    posiziona_pannello()
+                    aggiorna_indicatore_voce()
+                    brand.setHidden_(False)
+                    onda.setHidden_(True)
+                    etichetta.setStringValue_("🎙️ Mani libere attive")
+                    etichetta.setHidden_(False)
+                    pannello.orderFrontRegardless()
                 elif nuovo == "nascosto":
                     pannello.orderOut_(None)
         except queue.Empty:
@@ -422,6 +433,13 @@ def avvia_stream():
     device_input_apertura = nome_device_input()
 
 
+def _nascondi_o_arma():
+    """Fine ciclo pill: torna alla pillola 'armata' se le mani libere sono
+    ancora accese (cosi' resta visibile che e' ON tra un turno e l'altro),
+    altrimenti sparisce come sempre."""
+    eventi.put("armato" if mani_libere_attiva else "nascosto")
+
+
 def avvia_registrazione():
     global blocchi, registrando, inizio_registrazione
     ferma_voce()  # ti zittisco se parlo io: tocca a te
@@ -495,7 +513,7 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
                 if debug:
                     log.info("pulito: %s", pulito)
             testo = pulito or testo
-        eventi.put("nascosto")
+        _nascondi_o_arma()
         if testo:
             riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
             incolla(testo)
@@ -518,7 +536,7 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
             log.info("niente da incollare (testo vuoto dopo trascrizione/pulizia)")
     except Exception:
         log.exception("errore in trascrizione/incolla")
-        eventi.put("nascosto")
+        _nascondi_o_arma()
 
 
 def ferma_e_trascrivi():
@@ -526,7 +544,7 @@ def ferma_e_trascrivi():
     e lancia la trascrizione su un thread a parte."""
     global registrando, inizio_registrazione
     if not registrando:
-        eventi.put("nascosto")
+        _nascondi_o_arma()
         return
     app_bersaglio = app_frontale()  # bersaglio del testo: l'app davanti ORA, non a fine pulizia
     scheda_bersaglio = scheda_browser_frontale(app_bersaglio)  # idem, la scheda se e' un browser noto
@@ -535,17 +553,17 @@ def ferma_e_trascrivi():
     logging.getLogger("voce").info("registrazione fermata")
     suono("Bottle")
     if not blocchi:
-        eventi.put("nascosto")
+        _nascondi_o_arma()
         return
     audio = np.concatenate(blocchi)[:, 0]
     if len(audio) < FREQ * 0.4:  # sotto 0,4 s: pressione accidentale
-        eventi.put("nascosto")
+        _nascondi_o_arma()
         return
     rms = float(np.sqrt(np.mean(audio ** 2)))
     logging.getLogger("voce").info("audio: %.1fs, volume rms %.4f", len(audio) / FREQ, rms)
     if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
         logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
-        eventi.put("nascosto")
+        _nascondi_o_arma()
         return
     threading.Thread(
         target=_trascrivi_e_incolla, args=(audio, app_bersaglio, scheda_bersaglio), daemon=True
@@ -569,6 +587,7 @@ def commuta_mani_libere():
     global mani_libere_attiva
     mani_libere_attiva = not mani_libere_attiva
     pronuncia("Mani libere attivate" if mani_libere_attiva else "Mani libere disattivate")
+    _nascondi_o_arma()  # feedback visivo immediato: pillola armata subito, non solo al primo turno
 
 
 def worker_mani_libere():
