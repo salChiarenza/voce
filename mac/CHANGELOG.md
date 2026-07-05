@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (5) — incidente reale, secondo caso
+
+- **Fix allucinazione a ripetizione senza spazi**: dopo il fix di stanotte su "мент" ripetuto, un nuovo caso reale — "Ecologia" seguito da centinaia di "版" (cinese) SENZA spazi tra i caratteri. Lo split per parole vedeva tutto come "1 parola sola" (log: "trascritto: 1 parole"), quindi il controllo non scattava. Aggiunto un secondo controllo a livello di CARATTERE (regex su run ripetuti): cattura anche le scritture senza spazi tra parole (cinese, giapponese...) dove il conteggio per parole non si accorge di niente. Test aggiunto (46 totali).
+
 ## Non rilasciato - 06/07/2026 (4)
 
 - **Mani libere ora e' un flag su file, come la voce agenti**: prima era una variabile in memoria dentro `detta.py`, commutabile solo dal combo da tastiera. Ora `MANI_LIBERE_ON` (gemello di `VOICE_ON`): un lanciatore esterno (Desktop `.command`) puo' accenderla con un click, non solo il combo. Nuova `mani_libere_attive()` in `voce_lib.py`. Verificato: creare/cancellare il file da fuori il processo accende/spegne davvero l'ascolto (trigger reale su un suono di prova).

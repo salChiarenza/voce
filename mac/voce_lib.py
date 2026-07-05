@@ -76,19 +76,24 @@ def _normalizza(testo):
 
 
 def _ripetizione_patologica(testo, soglia_ripetizioni=8, soglia_quota=0.6):
-    """True se il testo e' dominato da UNA parola ripetuta tante volte: e' il
-    collasso classico di Whisper su audio corto/ambiguo (visto 05/07: quasi
-    un secondo di audio -> centinaia di "мент" ripetuto). Non dipende dalla
-    lingua/alfabeto, a differenza delle frasi-fantasma note sotto."""
+    """True se il testo e' dominato da un collasso ripetuto: e' il difetto
+    classico di Whisper su audio corto/ambiguo (visto 06/07: "мент" ripetuto
+    centinaia di volte, poi "版" cinese ripetuto senza spazi). Due controlli,
+    non dipendono da lingua/alfabeto:
+    1. una PAROLA (separata da spazi) che copre la maggior parte del testo;
+    2. un CARATTERE ripetuto tante volte di fila senza spazi (cinese,
+       giapponese...: li' lo split per parole vede tutto come "1 parola sola"
+       e il controllo 1 non si accorge di niente)."""
     parole = testo.split()
-    if len(parole) < soglia_ripetizioni:
-        return False
-    conteggi = {}
-    for p in parole:
-        chiave = p.lower()
-        conteggi[chiave] = conteggi.get(chiave, 0) + 1
-    piu_frequente = max(conteggi.values())
-    return piu_frequente >= soglia_ripetizioni and piu_frequente / len(parole) >= soglia_quota
+    if len(parole) >= soglia_ripetizioni:
+        conteggi = {}
+        for p in parole:
+            chiave = p.lower()
+            conteggi[chiave] = conteggi.get(chiave, 0) + 1
+        piu_frequente = max(conteggi.values())
+        if piu_frequente >= soglia_ripetizioni and piu_frequente / len(parole) >= soglia_quota:
+            return True
+    return re.search(r"(.)\1{%d,}" % (soglia_ripetizioni - 1), testo) is not None
 
 
 def e_allucinazione(testo):
