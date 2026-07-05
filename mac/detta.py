@@ -39,14 +39,14 @@ cfg = carica_config()
 TASTO = getattr(Key, cfg["hotkey"])
 FREQ = 16000  # Whisper lavora a 16 kHz
 
-# Interruttori scelti da Sal (06/07, terza e definitiva iterazione):
+# Interruttori scelti da Sal (06/07, iterazione definitiva):
 # - voce agenti = OPTION TENUTO PREMUTO ~1s da solo, poi rilasciato
 #   (Option+punto confliggeva con la scorciatoia "sezione laterale" dell'app);
-# - mani libere = Option+meno (riconosciuto dal CARATTERE composto "–",
-#   stabile su qualunque layout fisico — i vk cambiano tra tastiere).
-# Un tocco breve di Option o un combo con altri tasti NON commuta niente.
+# - mani libere = CMD DESTRO + OPTION tenuti insieme (solo modificatori:
+#   niente carattere composto che finirebbe digitato in chat, com'era con
+#   Option+meno che lasciava un "–" a ogni attivazione).
+# Un tocco breve di Option o un Option usato per comporre NON commuta niente.
 ALT_KEYS = (Key.alt, Key.alt_l, Key.alt_r)  # pynput a volte riporta il generico Key.alt
-CHAR_COMBO_MANI_LIBERE = "–"   # Option + meno (en dash)
 TASTO_VOCE_HOLD_SEC = float(cfg.get("tasto_voce_hold_sec", 1.0))
 
 tastiera = Controller()
@@ -59,8 +59,8 @@ comandi_audio = queue.Queue()  # il thread tastiera mette qui "start"/"stop": li
 tasto_premuto = False  # stato del tasto-detta, posseduto SOLO dal thread tastiera
 alt_premuto = False  # Option giu': serve al combo mani-libere e al long-press voce
 alt_giu_da = None  # quando Option e' sceso: rilascio dopo TASTO_VOCE_HOLD_SEC = toggle voce
-alt_usato_per_altro = False  # Option ha composto un carattere/combo: niente toggle voce al rilascio
-combo_scattati = set()  # debounce: un combo scatta una volta sola finche' resta giu'
+alt_usato_per_altro = False  # Option ha composto/fatto combo: niente toggle voce al rilascio
+combo_mani_libere_scattato = False  # debounce: Cmd+Option tenuti = una sola commutazione
 inizio_registrazione = None
 volume_corrente = 0.0  # RMS aggiornato ad ogni callback audio, anche fuori registrazione
 
@@ -709,43 +709,55 @@ def watchdog_audio():
                 riavvia_su_cambio_device(f"{device_input_apertura!r} -> {attuale!r}")
 
 
+def _scatta_combo_mani_libere():
+    """Cmd destro + Option insieme: una sola commutazione per hold.
+    commuta_* fanno lavoro BLOCCANTE (pkill/shortcuts/say/pipe): MAI sul
+    thread della tastiera, o l'event-tap si "appende" e la dettatura si
+    blocca (il watchdog non recupera: listener vivo ma incastrato)."""
+    global combo_mani_libere_scattato, alt_usato_per_altro
+    if not combo_mani_libere_scattato:
+        combo_mani_libere_scattato = True
+        alt_usato_per_altro = True      # questo hold di Option era per il combo: niente toggle voce
+        threading.Thread(target=esegui_sicuro, args=(commuta_mani_libere,), daemon=True).start()
+
+
 def su_pressione(tasto):
     global tasto_premuto, alt_premuto, alt_giu_da, alt_usato_per_altro
-    if tasto == TASTO and not tasto_premuto:
-        tasto_premuto = True            # stato sul solo thread tastiera: niente race
-        comandi_audio.put("start")      # il lavoro audio (bloccante) lo fa il worker
+    if tasto == TASTO:
+        if alt_premuto:                 # Option gia' giu' + Cmd ora = combo mani libere
+            _scatta_combo_mani_libere() # niente dettatura: tasto_premuto resta False
+        elif not tasto_premuto:
+            tasto_premuto = True        # stato sul solo thread tastiera: niente race
+            comandi_audio.put("start")  # il lavoro audio (bloccante) lo fa il worker
     elif tasto in ALT_KEYS:
         if not alt_premuto:             # i modificatori non auto-ripetono, ma per sicurezza
             alt_premuto = True
             alt_giu_da = time.monotonic()
             alt_usato_per_altro = False
+        if tasto_premuto:               # Cmd gia' giu' (registrazione partita) + Option ora
+            tasto_premuto = False       # annulla la dettatura: l'audio di pochi decimi
+            comandi_audio.put("stop")   # di secondo viene scartato dal gate < 0.4s
+            _scatta_combo_mani_libere()
     elif alt_premuto:
         alt_usato_per_altro = True      # Option sta componendo: niente toggle voce al rilascio
-        char = getattr(tasto, "char", None)
-        if char == CHAR_COMBO_MANI_LIBERE and char not in combo_scattati:
-            combo_scattati.add(char)    # debounce: un hold = una sola commutazione
-            # commuta_* fanno lavoro BLOCCANTE (pkill/shortcuts/say/pipe): MAI qui
-            # sul thread della tastiera, o l'event-tap si "appende" e la dettatura
-            # si blocca (il watchdog non recupera: listener vivo ma incastrato).
-            threading.Thread(target=esegui_sicuro, args=(commuta_mani_libere,), daemon=True).start()
 
 
 def su_rilascio(tasto):
-    global tasto_premuto, alt_premuto, alt_giu_da
-    if tasto == TASTO and tasto_premuto:
-        tasto_premuto = False
-        comandi_audio.put("stop")
+    global tasto_premuto, alt_premuto, alt_giu_da, combo_mani_libere_scattato
+    if tasto == TASTO:
+        if tasto_premuto:
+            tasto_premuto = False
+            comandi_audio.put("stop")
+        combo_mani_libere_scattato = False  # combo finito: il prossimo hold ricommuta
     elif tasto in ALT_KEYS:
         # long-press di Option DA SOLO = toggle voce agenti; un tocco breve o
-        # un Option usato per comporre caratteri/combo non commuta niente.
+        # un Option usato per comporre/combo non commuta niente.
         tenuto = alt_giu_da is not None and (time.monotonic() - alt_giu_da) >= TASTO_VOCE_HOLD_SEC
         if tenuto and not alt_usato_per_altro:
             threading.Thread(target=esegui_sicuro, args=(commuta_voce,), daemon=True).start()
         alt_premuto = False
         alt_giu_da = None
-        combo_scattati.clear()          # Option su: la prossima pressione ricommuta
-    else:
-        combo_scattati.discard(getattr(tasto, "char", None))
+        combo_mani_libere_scattato = False
 
 
 # macOS disabilita un event-tap appena una callback tarda anche una sola volta

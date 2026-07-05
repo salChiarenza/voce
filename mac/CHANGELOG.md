@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (11) — tasti DEFINITIVI
+
+- **Mani libere = Cmd destro + Option tenuti insieme** (era la scelta di Sal fin dall'inizio; Option+meno inoltre digitava un "–" in chat a ogni attivazione — solo modificatori, niente caratteri sporchi). Ordine indifferente: Option→Cmd non avvia la dettatura; Cmd→Option annulla la dettatura appena partita (audio < 0.4s scartato dal gate). Voce agenti resta Option tenuto ~1s da solo. Verificati 4 casi: entrambi gli ordini del combo, long-press voce, Cmd hold normale.
+
 ## Non rilasciato - 06/07/2026 (10)
 
 - **Voce agenti: da Option+punto a Option TENUTO ~1s** (`tasto_voce_hold_sec`): Option+punto apre la sezione laterale dell'app di Sal — conflitto trovato al primo uso reale. Ora: tieni Option da solo ~1s e rilascia = toggle voce; tocco breve = niente; Option usato per comporre caratteri o per il combo meno = niente. Mani libere resta Option+meno. Verificati tutti e 4 i casi (long-press ON, tocco breve neutro, combo meno senza interferenza sulla voce, long-press OFF).
