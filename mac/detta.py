@@ -672,6 +672,10 @@ def su_pressione(tasto):
         alt_premuto = True
     elif alt_premuto:
         combo = _combo_da_tasto(tasto)
+        logging.getLogger("voce").info(
+            "combo: Option giu' + tasto vk=%s char=%r -> %r",
+            getattr(tasto, "vk", None), getattr(tasto, "char", None), combo,
+        )
         if combo and combo not in combo_scattati:
             combo_scattati.add(combo)   # debounce: un hold = una sola commutazione
             # commuta_* fanno lavoro BLOCCANTE (pkill/shortcuts/say/pipe): MAI qui
