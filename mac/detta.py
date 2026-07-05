@@ -271,17 +271,90 @@ def app_frontale():
     return AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
 
 
-def riattiva_bersaglio(app):
-    """Se nel frattempo Sal ha cambiato pagina/app (dettatura lunga + pulizia),
-    il testo deve arrivare comunque dove stava parlando, non dove si trova
-    ora il focus. Riporta avanti l'app-bersaglio prima di incollare."""
+# Riattivare l'app non basta se il bersaglio e' una SCHEDA di un browser:
+# Instagram e ChatGPT nella stessa finestra Chrome sono la stessa app, quindi
+# activateWithOptions_ non se ne accorge. Per i browser che sanno rispondere
+# via AppleScript teniamo anche l'URL della scheda attiva e la ripristiniamo.
+_SCRIPT_SCHEDA = {
+    "com.google.Chrome": {
+        "leggi": 'tell application "Google Chrome" to get URL of active tab of front window',
+        "scrivi": '''
+            tell application "Google Chrome"
+                repeat with w in windows
+                    set i to 1
+                    repeat with t in tabs of w
+                        if URL of t is "{url}" then
+                            set active tab index of w to i
+                            set index of w to 1
+                            return
+                        end if
+                        set i to i + 1
+                    end repeat
+                end repeat
+            end tell
+        ''',
+    },
+    "com.apple.Safari": {
+        "leggi": 'tell application "Safari" to get URL of front document',
+        "scrivi": '''
+            tell application "Safari"
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        if URL of t is "{url}" then
+                            set current tab of w to t
+                            set index of w to 1
+                            return
+                        end if
+                    end repeat
+                end repeat
+            end tell
+        ''',
+    },
+}
+
+
+def scheda_browser_frontale(app):
+    """URL della scheda attiva ORA, solo per i browser che sappiamo pilotare
+    (None per tutto il resto: allora il bersaglio resta solo l'app)."""
+    script = app is not None and _SCRIPT_SCHEDA.get(app.bundleIdentifier())
+    if not script:
+        return None
+    try:
+        esito = subprocess.run(
+            ["osascript", "-e", script["leggi"]], capture_output=True, text=True, timeout=3
+        )
+        return esito.stdout.strip() or None
+    except Exception:
+        return None
+
+
+def riattiva_scheda_browser(app, url):
+    """Riporta avanti la scheda esatta (per URL) dove Sal stava dettando,
+    dentro l'app-browser gia' riattivata."""
+    script = _SCRIPT_SCHEDA.get(app.bundleIdentifier())
+    if not script or scheda_browser_frontale(app) == url:
+        return
+    comando = script["scrivi"].format(url=url.replace('\\', '\\\\').replace('"', '\\"'))
+    try:
+        subprocess.run(["osascript", "-e", comando], capture_output=True, timeout=3)
+        time.sleep(0.2)
+    except Exception:
+        logging.getLogger("voce").exception("impossibile riattivare la scheda del browser")
+
+
+def riattiva_bersaglio(app, scheda_url=None):
+    """Se nel frattempo Sal ha cambiato pagina/app/scheda (dettatura lunga +
+    pulizia), il testo deve arrivare comunque dove stava parlando, non dove
+    si trova ora il focus. Riporta avanti l'app-bersaglio (e la scheda, se
+    era un browser) prima di incollare."""
     if app is None:
         return
     corrente = AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
-    if corrente is not None and corrente.processIdentifier() == app.processIdentifier():
-        return
-    app.activateWithOptions_(AppKit.NSApplicationActivateIgnoringOtherApps)
-    time.sleep(0.2)  # tempo al focus di spostarsi davvero prima del Cmd+V
+    if corrente is None or corrente.processIdentifier() != app.processIdentifier():
+        app.activateWithOptions_(AppKit.NSApplicationActivateIgnoringOtherApps)
+        time.sleep(0.2)  # tempo al focus di spostarsi davvero prima del Cmd+V
+    if scheda_url:
+        riattiva_scheda_browser(app, scheda_url)
 
 
 def incolla(testo):
@@ -348,14 +421,15 @@ def avvia_registrazione():
 _lock_trascrizione = threading.Lock()
 
 
-def _trascrivi_e_incolla(audio, app_bersaglio):
+def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
     """Parte pesante (Whisper ~2-3s + incolla): gira su un thread a parte e
     blindata. Se girasse sul thread della tastiera, macOS la vedrebbe "appesa"
     e disabiliterebbe l'hotkey; e un suo errore ucciderebbe il listener.
 
-    app_bersaglio e' l'app che era davanti al momento dello stop: se nel
-    frattempo (pulizia inclusa) Sal cambia pagina, il testo deve arrivare
-    comunque li', non dove si trova ora il focus."""
+    app_bersaglio e' l'app (e scheda_bersaglio l'URL, se browser noto) che
+    erano davanti al momento dello stop: se nel frattempo (pulizia inclusa)
+    Sal cambia pagina o scheda, il testo deve arrivare comunque li', non dove
+    si trova ora il focus."""
     try:
         with _lock_trascrizione:  # una trascrizione per volta
             eventi.put("trascrivo")
@@ -401,7 +475,7 @@ def _trascrivi_e_incolla(audio, app_bersaglio):
             testo = pulito or testo
         eventi.put("nascosto")
         if testo:
-            riattiva_bersaglio(app_bersaglio)
+            riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
             incolla(testo)
             # invio automatico: indipendente dal toggle voce agenti (quello
             # resta solo per la lettura ad alta voce delle risposte). Pausa
@@ -424,6 +498,7 @@ def ferma_e_trascrivi():
         eventi.put("nascosto")
         return
     app_bersaglio = app_frontale()  # bersaglio del testo: l'app davanti ORA, non a fine pulizia
+    scheda_bersaglio = scheda_browser_frontale(app_bersaglio)  # idem, la scheda se e' un browser noto
     registrando = False
     inizio_registrazione = None
     logging.getLogger("voce").info("registrazione fermata")
@@ -441,7 +516,9 @@ def ferma_e_trascrivi():
         logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
         eventi.put("nascosto")
         return
-    threading.Thread(target=_trascrivi_e_incolla, args=(audio, app_bersaglio), daemon=True).start()
+    threading.Thread(
+        target=_trascrivi_e_incolla, args=(audio, app_bersaglio, scheda_bersaglio), daemon=True
+    ).start()
 
 
 def commuta_voce():
