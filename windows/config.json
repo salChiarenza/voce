@@ -2,6 +2,7 @@
   "hotkey": "ctrl_r",
   "tasto_voce": "menu",
   "invio_automatico": true,
+  "invio_automatico_ritardo_sec": 2.5,
   "voce_rate": 0,
   "model": "medium",
   "language": "it",

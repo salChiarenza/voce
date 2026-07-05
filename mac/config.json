@@ -8,6 +8,7 @@
   "suoni": true,
   "colore": "#7ED321",
   "invio_automatico": true,
+  "invio_automatico_ritardo_sec": 2.5,
   "velocita": 195,
   "max_registrazione_sec": 90,
   "glossario": [

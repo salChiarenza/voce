@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (3)
+
+- **Pausa prima dell'Invio automatico** (gemello Mac): nuova chiave `invio_automatico_ritardo_sec` in `config.json` (default 2.5s), tempo per correggere il testo prima che parta l'Invio.
+
 ## Non rilasciato - 05/07/2026 (2)
 
 - **Invio automatico sempre attivo** (gemello Mac): non dipende piu' dal toggle "voce agenti" (VOICE_ON), che resta solo per la lettura ad alta voce delle risposte.

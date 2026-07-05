@@ -44,6 +44,7 @@ SAMPLE_RATE = int(CFG.get("sample_rate", 16000))
 HOTKEY = getattr(Key, CFG.get("hotkey", "f8"))
 TASTO_VOCE = getattr(Key, CFG.get("tasto_voce", "f9"), None)  # on/off voce agenti
 INVIO_AUTOMATICO = bool(CFG.get("invio_automatico", True))
+RITARDO_INVIO_AUTOMATICO = float(CFG.get("invio_automatico_ritardo_sec", 2.5))
 VOICE_THRESHOLD = float(CFG.get("voice_threshold", 0.004))
 MIN_RECORDING_SEC = float(CFG.get("min_recording_sec", 0.4))
 MAX_RECORDING_SEC = float(CFG.get("max_recording_sec", 90))
@@ -505,9 +506,10 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
         riattiva_bersaglio(finestra_bersaglio)
         paste_text(text)
         # invio automatico: indipendente dal toggle voce agenti (quello resta
-        # solo per la lettura ad alta voce delle risposte)
+        # solo per la lettura ad alta voce delle risposte). Pausa configurabile
+        # prima dell'Invio: da' il tempo di correggere il testo appena incollato.
         if INVIO_AUTOMATICO:
-            time.sleep(0.1)
+            time.sleep(RITARDO_INVIO_AUTOMATICO)
             keyboard_controller.press(Key.enter)
             keyboard_controller.release(Key.enter)
         print("Inserito:", text)
