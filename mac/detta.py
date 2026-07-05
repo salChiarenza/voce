@@ -212,6 +212,7 @@ class GestorePannello(AppKit.NSObject):
 
     stato = "nascosto"
     _tick = 0
+    _armato_dal = None  # quando e' comparsa la pillola "armato": si nasconde da sola dopo un lampo
 
     def tick_(self, timer):
         try:
@@ -235,9 +236,9 @@ class GestorePannello(AppKit.NSObject):
                     etichetta.setStringValue_("✨ Sistemo…")
                     etichetta.setHidden_(False)
                 elif nuovo == "armato":
-                    # mani libere accesa ma non sta ancora ascoltando: pillola
-                    # ferma finche' resta attiva, cosi' si vede sempre che e' ON
-                    # (prima spariva del tutto tra un turno e l'altro).
+                    # mani libere accesa: solo un LAMPO di conferma (schermo
+                    # piccolo, non deve restare li' per sempre), poi si nasconde
+                    # da sola (vedi sotto). Un vero ascolto la fa ricomparire.
                     posiziona_pannello()
                     aggiorna_indicatore_voce()
                     brand.setHidden_(False)
@@ -245,13 +246,19 @@ class GestorePannello(AppKit.NSObject):
                     etichetta.setStringValue_("🎙️ Mani libere attive")
                     etichetta.setHidden_(False)
                     pannello.orderFrontRegardless()
+                    self._armato_dal = time.monotonic()
                 elif nuovo == "nascosto":
+                    self._armato_dal = None
                     pannello.orderOut_(None)
         except queue.Empty:
             pass
         if self.stato == "ascolto":
             stop_se_registrazione_troppo_lunga()
             onda.setNeedsDisplay_(True)  # ridisegna il sorriso col volume nuovo
+        elif self.stato == "armato" and self._armato_dal is not None:
+            if time.monotonic() - self._armato_dal > cfg.get("mani_libere_pillola_sec", 2.5):
+                pannello.orderOut_(None)
+                self._armato_dal = None  # gia' nascosta: non richiamare ogni tick
         # watchdog dell'hotkey: se il listener della tastiera si fosse fermato,
         # lo riaccendo (controllo ogni ~2s, non a ogni tick).
         self._tick += 1

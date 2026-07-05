@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (6)
+
+- **Pillola "mani libere" ora e' un lampo, non fissa**: Sal ha lo schermo piccolo e la pillola "🎙️ Mani libere attive" restava sempre visibile — troppo invadente. Ora compare 2.5s (`mani_libere_pillola_sec`) e poi si nasconde da sola; un vero ascolto la fa ricomparire normalmente (onda, "Trascrivo…", ecc.).
+- Rimossi dal Desktop i due lanciatori separati (`Voce Dettatura.command`, `Voce On-Off.command`): resta solo `Voce Attiva Tutto.command`.
+
 ## Non rilasciato - 06/07/2026 (5) — incidente reale, secondo caso
 
 - **Fix allucinazione a ripetizione senza spazi**: dopo il fix di stanotte su "мент" ripetuto, un nuovo caso reale — "Ecologia" seguito da centinaia di "版" (cinese) SENZA spazi tra i caratteri. Lo split per parole vedeva tutto come "1 parola sola" (log: "trascritto: 1 parole"), quindi il controllo non scattava. Aggiunto un secondo controllo a livello di CARATTERE (regex su run ripetuti): cattura anche le scritture senza spazi tra parole (cinese, giapponese...) dove il conteggio per parole non si accorge di niente. Test aggiunto (46 totali).
