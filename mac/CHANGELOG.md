@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (14)
+
+- **Voce agenti = Option + freccia sinistra** (scelto e provato da Sal: freccia attaccata a Option sulla sua tastiera, nessuna interferenza). Sostituisce il long-press di Option (~1s), poco scopribile. Rimossa la chiave `tasto_voce_hold_sec`. Verificati 4 casi: toggle ON/OFF, freccia da sola neutra, Cmd+Option (mani libere) invariato.
+
 ## Non rilasciato - 06/07/2026 (13)
 
 - **Rimossa la pillola-lampo "Mani libere attive"**: ricompariva a ogni fine dettatura (2.5s), ridondante e fastidiosa ora che lo stato e' sempre visibile nell'icona della barra menu. La pillola ora appare solo durante ascolto/trascrizione, come per la dettatura col tasto. Rimossa la chiave config `mani_libere_pillola_sec`.
