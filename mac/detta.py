@@ -26,6 +26,7 @@ from pynput.keyboard import Controller, Key
 
 from voce_lib import (
     carica_config, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
+    mani_libere_attive, FLAG_MANI_LIBERE_ON,
     c_e_voce, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
@@ -60,7 +61,6 @@ tasto_voce_premuto = False  # idem per il tasto on/off voce: un hold = una commu
 mod_mani_libere_premuto = False  # Ctrl destro giu': se anche TASTO_VOCE scende, e' il combo
 combo_mani_libere_scattato = False  # debounce: un hold del combo = una sola commutazione
 inizio_registrazione = None
-mani_libere_attiva = False  # ascolto continuo a soglia di volume, senza tasto
 volume_corrente = 0.0  # RMS aggiornato ad ogni callback audio, anche fuori registrazione
 
 BARRE = 18  # quante lineette nel visualizzatore
@@ -437,7 +437,7 @@ def _nascondi_o_arma():
     """Fine ciclo pill: torna alla pillola 'armata' se le mani libere sono
     ancora accese (cosi' resta visibile che e' ON tra un turno e l'altro),
     altrimenti sparisce come sempre."""
-    eventi.put("armato" if mani_libere_attiva else "nascosto")
+    eventi.put("armato" if mani_libere_attive() else "nascosto")
 
 
 def avvia_registrazione():
@@ -583,15 +583,22 @@ def commuta_voce():
 
 def commuta_mani_libere():
     """Tasto on/off della modalita' mani libere: ascolto continuo a soglia di
-    volume (vedi worker_mani_libere), senza dover tenere premuto il tasto."""
-    global mani_libere_attiva
-    mani_libere_attiva = not mani_libere_attiva
-    pronuncia("Mani libere attivate" if mani_libere_attiva else "Mani libere disattivate")
+    volume (vedi worker_mani_libere), senza dover tenere premuto il tasto.
+
+    Su file (FLAG_MANI_LIBERE_ON), non variabile in memoria: cosi' anche il
+    lanciatore sul Desktop puo' accenderla insieme alla voce con un click."""
+    if FLAG_MANI_LIBERE_ON.exists():
+        FLAG_MANI_LIBERE_ON.unlink()
+        stato = "Mani libere disattivate"
+    else:
+        FLAG_MANI_LIBERE_ON.touch()
+        stato = "Mani libere attivate"
+    pronuncia(stato)
     _nascondi_o_arma()  # feedback visivo immediato: pillola armata subito, non solo al primo turno
 
 
 def worker_mani_libere():
-    """Ascolto continuo, SOLO quando mani_libere_attiva: quando il volume sale
+    """Ascolto continuo, SOLO quando mani_libere_attive(): quando il volume sale
     sopra soglia per un po' parte la registrazione (stessa pill, stesso
     avvia_registrazione del tasto manuale), quando scende sotto soglia per un
     po' si ferma e trascrive da sola. In pausa mentre l'agente parla (altrimenti
@@ -606,7 +613,7 @@ def worker_mani_libere():
     frame_silenzio = max(1, round(cfg.get("mani_libere_silenzio_sec", 0.9) / intervallo))
     while True:
         time.sleep(intervallo)
-        if not mani_libere_attiva:
+        if not mani_libere_attive():
             stato, frame_sopra, frame_sotto = IDLE, 0, 0
             continue
         if FLAG_PARLANDO.exists():  # l'agente sta leggendo la risposta: si aspetta

@@ -13,6 +13,7 @@ from pathlib import Path
 BASE = Path(__file__).parent
 FLAG_VOICE_ON = BASE / "VOICE_ON"
 FLAG_PARLANDO = BASE / "PARLANDO"  # esiste mentre l'agente sta leggendo una risposta ad alta voce
+FLAG_MANI_LIBERE_ON = BASE / "MANI_LIBERE_ON"  # esiste quando l'ascolto continuo e' attivo
 
 
 def carica_config():
@@ -23,6 +24,15 @@ def carica_config():
 def voce_attiva():
     """La voce in uscita parla solo se esiste il file flag VOICE_ON."""
     return FLAG_VOICE_ON.exists()
+
+
+def mani_libere_attive():
+    """L'ascolto continuo e' attivo solo se esiste il file flag MANI_LIBERE_ON.
+
+    Su file (come VOICE_ON) invece che una variabile in memoria: cosi' un
+    lanciatore esterno (es. lo .command sul Desktop) puo' accenderla insieme
+    alla voce con un solo click, non solo il combo da tastiera."""
+    return FLAG_MANI_LIBERE_ON.exists()
 
 
 def timeout_scaduto(attivo, inizio, ora, limite_sec):

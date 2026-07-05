@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (4)
+
+- **Mani libere ora e' un flag su file, come la voce agenti**: prima era una variabile in memoria dentro `detta.py`, commutabile solo dal combo da tastiera. Ora `MANI_LIBERE_ON` (gemello di `VOICE_ON`): un lanciatore esterno (Desktop `.command`) puo' accenderla con un click, non solo il combo. Nuova `mani_libere_attive()` in `voce_lib.py`. Verificato: creare/cancellare il file da fuori il processo accende/spegne davvero l'ascolto (trigger reale su un suono di prova).
+- Un solo lanciatore Desktop (personale di Sal, non nel repo): avvia `detta.py` se non gira, accende voce + mani libere insieme; un secondo click spegne tutto. Verificato avvio a freddo (processo non ancora partito) e toggle a caldo.
+
 ## Non rilasciato - 06/07/2026 (3)
 
 - **Pillola "armata" mentre le mani libere sono accese**: prima la pill spariva del tutto tra un turno e l'altro (stato "nascosto"), quindi Sal non aveva modo di vedere se la modalità era davvero attiva senza parlare. Ora, con mani libere ON, resta visibile una pillola ferma "🎙️ Mani libere attive" finché non parte un vero ascolto (poi torna l'onda come sempre) o non si spegne la modalità. Compare subito al momento del combo, non solo al primo turno.
