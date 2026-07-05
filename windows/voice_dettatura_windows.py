@@ -77,10 +77,6 @@ PID_FILE = BASE / "voce_pid"               # PID dell'ultima lettura: una voce p
 VOCE_RATE = int(CFG.get("voce_rate", 0))   # System.Speech: da -10 (lenta) a +10 (veloce)
 
 
-def voce_attiva() -> bool:
-    return FLAG_VOICE_ON.exists()
-
-
 # --- glossario e detta pulito: la trascrizione grezza diventa testo curato ---
 # (gemelli delle funzioni in mac/voce_lib.py: stessi nomi, stesso contratto)
 
@@ -508,8 +504,9 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             return
         riattiva_bersaglio(finestra_bersaglio)
         paste_text(text)
-        # modalita' conversazione: voce accesa = la domanda parte da sola
-        if voce_attiva() and INVIO_AUTOMATICO:
+        # invio automatico: indipendente dal toggle voce agenti (quello resta
+        # solo per la lettura ad alta voce delle risposte)
+        if INVIO_AUTOMATICO:
             time.sleep(0.1)
             keyboard_controller.press(Key.enter)
             keyboard_controller.release(Key.enter)

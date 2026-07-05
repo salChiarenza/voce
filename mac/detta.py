@@ -24,7 +24,7 @@ from pynput import keyboard
 from pynput.keyboard import Controller, Key
 
 from voce_lib import (
-    carica_config, voce_attiva, FLAG_VOICE_ON,
+    carica_config, FLAG_VOICE_ON,
     c_e_voce, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
@@ -118,8 +118,10 @@ vista.addSubview_(indicatore_voce)
 
 
 def aggiorna_indicatore_voce():
-    """Mostra quando la voce agenti e' attiva e puo' inviare in automatico."""
-    attiva = voce_attiva() and cfg.get("invio_automatico", True)
+    """Mostra quando l'invio automatico e' attivo (indipendente dal toggle
+    'voce agenti', che resta solo per la lettura ad alta voce delle risposte:
+    Sal vuole lo stile verde + Invio automatico sempre, non solo a voce ON)."""
+    attiva = cfg.get("invio_automatico", True)
     indicatore_voce.setHidden_(not attiva)
     vista.layer().setBorderWidth_(1.0 if attiva else 0.0)
     vista.layer().setBorderColor_(COLORE_BARRE.CGColor())
@@ -399,8 +401,9 @@ def _trascrivi_e_incolla(audio, app_bersaglio):
         if testo:
             riattiva_bersaglio(app_bersaglio)
             incolla(testo)
-            # modalita' conversazione: voce accesa = la domanda parte da sola
-            if voce_attiva() and cfg.get("invio_automatico", True):
+            # invio automatico: indipendente dal toggle voce agenti (quello
+            # resta solo per la lettura ad alta voce delle risposte)
+            if cfg.get("invio_automatico", True):
                 time.sleep(0.1)
                 tastiera.press(Key.enter)
                 tastiera.release(Key.enter)
