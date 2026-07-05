@@ -24,7 +24,7 @@ from pynput import keyboard
 from pynput.keyboard import Controller, Key
 
 from voce_lib import (
-    carica_config, FLAG_VOICE_ON,
+    carica_config, voce_attiva, FLAG_VOICE_ON,
     c_e_voce, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
@@ -118,13 +118,15 @@ vista.addSubview_(indicatore_voce)
 
 
 def aggiorna_indicatore_voce():
-    """Mostra quando l'invio automatico e' attivo (indipendente dal toggle
-    'voce agenti', che resta solo per la lettura ad alta voce delle risposte:
-    Sal vuole lo stile verde + Invio automatico sempre, non solo a voce ON)."""
-    attiva = cfg.get("invio_automatico", True)
-    indicatore_voce.setHidden_(not attiva)
-    vista.layer().setBorderWidth_(1.0 if attiva else 0.0)
+    """Due cose distinte sulla pill, non piu' una sola:
+    - bordo verde = stile della pill quando l'invio automatico e' attivo
+      (quasi sempre, e' di config): Sal lo vuole sempre, non solo a voce ON;
+    - etichetta '● ON' = il tasto voce agenti (TTS) e' DAVVERO acceso: deve
+      dire il vero, altrimenti sembra sempre ON anche a voce spenta."""
+    stile_attivo = cfg.get("invio_automatico", True)
+    vista.layer().setBorderWidth_(1.0 if stile_attivo else 0.0)
     vista.layer().setBorderColor_(COLORE_BARRE.CGColor())
+    indicatore_voce.setHidden_(not voce_attiva())
 
 
 class VistaOnda(AppKit.NSView):
