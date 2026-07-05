@@ -112,6 +112,29 @@ def applica_sostituzioni(testo, sostituzioni):
     return testo
 
 
+# Apple Intelligence (corsia veloce via Comando Rapido) rifiuta in blocco le
+# richieste con parolacce ("Il modello non puo' fornire una risposta a questa
+# richiesta"): verificato in diretta il 05/07, causa reale di gran parte dei
+# fallimenti della corsia veloce (Sal ne usa spesso). Le mascheriamo solo per
+# la chiamata al Comando Rapido e le rimettiamo a posto nel risultato: la
+# corsia agente non ha questo problema e non viene toccata.
+_VOLGARI_MASCHERA = {
+    "cazzo": "trippa",
+    "cazzata": "fesseria",
+    "cazzate": "fesserie",
+    "minchia": "capperi",
+    "puttana": "sgualdrina",
+    "troia": "bagascia",
+    "stronzo": "mascalzone",
+    "stronza": "mascalzona",
+    "merda": "guazzabuglio",
+    "coglione": "sempliciotto",
+    "coglioni": "sempliciotti",
+    "vaffanculo": "sparisci",
+}
+_VOLGARI_SMASCHERA = {v: k for k, v in _VOLGARI_MASCHERA.items()}
+
+
 def serve_pulizia(testo, cfg):
     """Detta pulito solo se attivo in config e la dettatura e' lunga: le
     dettature corte (comandi rapidi) devono incollare subito, senza attese."""
@@ -180,26 +203,49 @@ def shortcut_pulizia_disponibile(nome):
 def pulisci_con_shortcut(testo, nome, timeout=10, glossario=()):
     """Corsia veloce: Apple Intelligence via Comando Rapido (~1s, niente
     token; di default Private Cloud Compute, "Su dispositivo" per il 100% locale). Torna il testo sistemato, o None se qualcosa va storto: il
-    chiamante allora ripiega sull'agente o sul grezzo."""
+    chiamante allora ripiega sull'agente o sul grezzo.
+
+    Logga SEMPRE il motivo del fallimento (prima veniva inghiottito: si
+    vedeva solo "FALLITA" senza sapere se era timeout, comando rotto o
+    guardia pulizia_sospetta troppo aggressiva)."""
     import tempfile
+    log = logging.getLogger("voce")
+    testo_mascherato = applica_sostituzioni(testo, _VOLGARI_MASCHERA)
     try:
         with tempfile.TemporaryDirectory() as d:
             ingresso = Path(d) / "in.txt"
             uscita = Path(d) / "out.txt"
-            ingresso.write_text(prompt_pulizia(testo, glossario))
+            ingresso.write_text(prompt_pulizia(testo_mascherato, glossario))
             esito = subprocess.run(
                 ["shortcuts", "run", nome, "-i", str(ingresso),
                  "-o", str(uscita), "--output-type", "public.plain-text"],
                 capture_output=True, timeout=timeout,
             )
-            if esito.returncode != 0 or not uscita.exists():
+            if esito.returncode != 0:
+                log.warning(
+                    "shortcut '%s' returncode %d: %s", nome, esito.returncode,
+                    (esito.stderr or b"").decode(errors="replace").strip()[:200],
+                )
                 return None
-            pulito = uscita.read_text().strip()
-            if not pulito or pulizia_sospetta(testo, pulito, glossario):
+            if not uscita.exists():
+                log.warning("shortcut '%s' non ha scritto il file di uscita", nome)
+                return None
+            pulito = applica_sostituzioni(uscita.read_text().strip(), _VOLGARI_SMASCHERA)
+            if not pulito:
+                log.warning("shortcut '%s' ha risposto vuoto", nome)
+                return None
+            if pulizia_sospetta(testo, pulito, glossario):
+                log.warning(
+                    "shortcut '%s' scartato da pulizia_sospetta (nomi inventati o testo collassato)",
+                    nome,
+                )
                 return None
             return pulito
+    except subprocess.TimeoutExpired:
+        log.warning("shortcut '%s' oltre il timeout di %.0fs", nome, timeout)
+        return None
     except Exception:
-        logging.getLogger("voce").exception("pulizia con Comando Rapido fallita")
+        log.exception("pulizia con Comando Rapido fallita")
         return None
 
 

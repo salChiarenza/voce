@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (7)
+
+- **Indagati i fallimenti della corsia veloce (Apple Intelligence)**: confermato in diretta che il modello rifiuta in blocco le richieste con parolacce ("Il modello non può fornire una risposta a questa richiesta"). Le parolacce vengono ora mascherate prima di mandarle al Comando Rapido e rimesse a posto nel risultato — corsia agente non toccata, non ha questo problema. Log ora dice il motivo esatto di ogni fallimento (returncode/timeout/vuoto/pulizia_sospetta), non solo "FALLITA". Trovata anche una seconda causa (frasi innocue tipo "Ho ricevuto la PEC." rifiutate in modo deterministico ma imprevedibile): e' un filtro opaco lato Apple, non risolvibile da qui — il fallback all'agente locale la assorbe già correttamente.
+
 ## Non rilasciato - 05/07/2026 (6)
 
 - **Rotazione log a 7 giorni**: con `debug_dettature: true` il log contiene il grezzo di ogni dettatura in chiaro (conversazioni, call). Prima si accumulava senza limiti; ora `TimedRotatingFileHandler` tiene solo gli ultimi 7 giorni. L'apprendimento automatico (`impara_sostituzioni`) legge solo le righe recenti: nessun impatto.
