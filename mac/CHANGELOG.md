@@ -1,10 +1,13 @@
 # Changelog
 
-## Non rilasciato - 05/07/2026 (10) — non ancora collaudato da Sal con tasti reali
+## Non rilasciato - 05/07/2026 (11)
+
+- **Fix riconoscimento combo Option+tasto**: la prima versione usava il codice fisico del tasto (vk), tarato sulla tastiera US — sulla tastiera italiana reale di Sal i vk erano completamente diversi (verificato dal log diagnostico). Ora si riconosce dal CARATTERE che macOS compone con Option giù (`…` per Option+punto, `–` per Option+meno): stabile su qualunque tastiera fisica, non serve più indovinare i vk. Confermato con eventi sintetici a carattere forzato (`CGEventKeyboardSetUnicodeString`) che accende e spegne in entrambi i versi.
+
+## Non rilasciato - 05/07/2026 (10)
 
 - **Modalità mani libere (ascolto continuo)**: nuovo combo `Option+-` accende/spegne l'ascolto a soglia di volume, senza tenere premuto nessun tasto — parte da sola sopra soglia, si ferma da sola al silenzio, si mette in pausa mentre l'agente parla (flag `PARLANDO` condiviso con `parla.py`). Riusa tutta l'infrastruttura esistente (stream sempre aperto, `avvia_registrazione`/`ferma_e_trascrivi`, pill).
 - **Voce agenti ON/OFF ora è `Option+.`** (prima tasto singolo `alt_r`): stesso interruttore, cambiato solo il modo di premerlo. Nuove chiavi config: `tasto_voce_combo` (era `tasto_voce`), `tasto_mani_libere_combo`, `mani_libere_attivazione_sec`, `mani_libere_silenzio_sec`.
-- Verificato con eventi tastiera sintetici (CGEventPost): entrambi i combo commutano correttamente; trovato e corretto un bug reale nel farlo (pynput riporta `Key.alt` generico, non `Key.alt_l`/`Key.alt_r` — il controllo non scattava). **Non ancora provato da Sal con la pressione fisica dei tasti**: se Option+. o Option+- non rispondono, verificare `voce.log` e i codici vk in `detta.py` (`VK_TASTI_COMBO`).
 - Sensibile al rumore ambiente per costruzione (soglia di volume, non riconoscimento vocale): può accendersi da sola su rumori forti. Non ancora portato su Windows.
 
 ## Non rilasciato - 05/07/2026 (9)

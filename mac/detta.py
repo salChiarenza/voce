@@ -38,11 +38,14 @@ cfg = carica_config()
 TASTO = getattr(Key, cfg["hotkey"])
 FREQ = 16000  # Whisper lavora a 16 kHz
 
-# Option+tasto per i due interruttori "a distanza" (voce agenti, mani libere):
-# usiamo il codice FISICO del tasto (vk), non il carattere — Option su macOS
-# compone caratteri diversi (Option+. = "…") quindi tasto.char non e' affidabile.
+# Option+tasto per i due interruttori "a distanza" (voce agenti, mani libere).
+# Il codice FISICO del tasto (vk) cambia da tastiera a tastiera (US vs ISO
+# italiana: verificato 05/07, i vk ANSI standard non corrispondevano affatto);
+# il CARATTERE composto invece e' stabile e documentato da macOS stesso:
+# Option+punto compone sempre "…", Option+meno compone sempre "–" ("en dash"),
+# qualunque sia la tastiera fisica sotto.
 ALT_KEYS = (Key.alt, Key.alt_l, Key.alt_r)  # pynput a volte riporta il generico Key.alt, non _l/_r
-VK_TASTI_COMBO = {".": 47, "-": 27}  # kVK_ANSI_Period, kVK_ANSI_Minus (posizione fisica, stabili su Mac)
+CHAR_TASTI_COMBO = {"…": ".", "–": "-"}
 COMBO_VOCE = cfg.get("tasto_voce_combo", ".")          # Option+. = voce agenti on/off
 COMBO_MANI_LIBERE = cfg.get("tasto_mani_libere_combo", "-")  # Option+- = mani libere on/off
 
@@ -653,14 +656,9 @@ def watchdog_audio():
 
 
 def _combo_da_tasto(tasto):
-    """Il carattere del combo Option+X dal codice FISICO del tasto (vk): con
-    Option giu' macOS compone caratteri diversi (Option+. = "…"), quindi
-    tasto.char non e' affidabile per riconoscere quale tasto e' stato premuto."""
-    vk = getattr(tasto, "vk", None)
-    for carattere, codice in VK_TASTI_COMBO.items():
-        if vk == codice:
-            return carattere
-    return None
+    """Quale combo e', dal carattere che macOS compone con Option giu'
+    (stabile su qualunque tastiera fisica: vedi nota su CHAR_TASTI_COMBO)."""
+    return CHAR_TASTI_COMBO.get(getattr(tasto, "char", None))
 
 
 def su_pressione(tasto):
