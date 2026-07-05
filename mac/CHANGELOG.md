@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (1) — incidente reale corretto
+
+- **Fix allucinazione a ripetizione**: un audio di 1.7s (mani libere, rumore ambiente) ha prodotto centinaia di "мент" ripetuto, incollato per intero nella chat di Sal — `e_allucinazione()` filtrava solo frasi-fantasma italiane note (grazie, sottotitoli...), non un collasso a ripetizione generico. Nuova `_ripetizione_patologica()`: scarta il testo se una singola parola copre ≥60% delle parole totali (soglia minima 8 parole) — funziona in qualunque lingua/alfabeto, non solo italiano. Non tocca ripetizioni legittime del parlato reale ("no no no, non intendevo..."). Test aggiunti (45). **Non ancora portato su Windows** (non ha nessun filtro allucinazioni oggi, gap preesistente).
+
 ## Non rilasciato - 05/07/2026 (12)
 
 - **Abbandonati i combo Option+tasto: tornati a tasti singoli.** Anche col riconoscimento a carattere (v11) i combo restavano inaffidabili nell'uso reale di Sal (log diagnostico: nessun evento arrivava per il suo tentativo fisico, probabile timing troppo stretto per una pressione umana Option+lettera). Voce agenti ON/OFF torna un tasto singolo (`tasto_voce`, default `alt_r`, come da sempre); mani libere ora e' anch'essa un tasto singolo dedicato (`tasto_mani_libere`, default `ctrl_r`) — stesso identico meccanismo di debounce hold/release del tasto voce, gia' proveto affidabile da mesi. Verificato con eventi sintetici sul tasto reale (non piu' char composto): ON e OFF confermati per la voce.

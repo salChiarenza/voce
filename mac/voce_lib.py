@@ -65,8 +65,25 @@ def _normalizza(testo):
     return testo.strip()
 
 
+def _ripetizione_patologica(testo, soglia_ripetizioni=8, soglia_quota=0.6):
+    """True se il testo e' dominato da UNA parola ripetuta tante volte: e' il
+    collasso classico di Whisper su audio corto/ambiguo (visto 05/07: quasi
+    un secondo di audio -> centinaia di "мент" ripetuto). Non dipende dalla
+    lingua/alfabeto, a differenza delle frasi-fantasma note sotto."""
+    parole = testo.split()
+    if len(parole) < soglia_ripetizioni:
+        return False
+    conteggi = {}
+    for p in parole:
+        chiave = p.lower()
+        conteggi[chiave] = conteggi.get(chiave, 0) + 1
+    piu_frequente = max(conteggi.values())
+    return piu_frequente >= soglia_ripetizioni and piu_frequente / len(parole) >= soglia_quota
+
+
 def e_allucinazione(testo):
-    """True se il testo e' una frase-fantasma tipica di Whisper sul non-parlato.
+    """True se il testo e' una frase-fantasma tipica di Whisper sul non-parlato,
+    o un collasso a ripetizione (vedi _ripetizione_patologica).
 
     Il confronto e' sull'intera stringa normalizzata: una frase vera che
     contiene 'grazie' (es. 'Grazie mille per la proposta…') non viene scartata.
@@ -76,7 +93,9 @@ def e_allucinazione(testo):
         return True
     if n in _FRASI_FANTASMA:
         return True
-    return "sottotitoli" in n and ("a cura di" in n or "creati dalla comunit" in n)
+    if "sottotitoli" in n and ("a cura di" in n or "creati dalla comunit" in n):
+        return True
+    return _ripetizione_patologica(testo)
 
 
 def esegui_sicuro(fn, *args):
