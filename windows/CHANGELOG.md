@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (5)
+
+- **Pausa pre-Invio consapevole del contesto** (gemello Mac): a voce ON (conversazione con l'agente) la pausa scende a `invio_automatico_ritardo_conversazione_sec` (default 0.3s) invece di 2.5s.
+
 ## Non rilasciato - 05/07/2026 (4)
 
 - **Rotazione log a 7 giorni** (gemello Mac): `debug_dettature: true` logga il grezzo in chiaro, ora limitato agli ultimi 7 giorni invece di accumularsi senza limiti.

@@ -478,12 +478,17 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         if testo:
             riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
             incolla(testo)
-            # invio automatico: indipendente dal toggle voce agenti (quello
-            # resta solo per la lettura ad alta voce delle risposte). Pausa
-            # configurabile prima dell'Invio: da' il tempo di correggere il
-            # testo appena incollato (0.1s non bastava, partiva troppo presto).
+            # invio automatico: parte sempre (indipendente dal toggle voce
+            # agenti). La PAUSA prima dell'Invio pero' dipende dal contesto:
+            # a voce ON e' una conversazione vera con l'agente (botta e
+            # risposta, niente tempo di rilettura); a voce OFF e' dettatura
+            # su testo/email/social dove serve tempo per correggere.
             if cfg.get("invio_automatico", True):
-                time.sleep(float(cfg.get("invio_automatico_ritardo_sec", 2.5)))
+                chiave_ritardo = (
+                    "invio_automatico_ritardo_conversazione_sec" if voce_attiva()
+                    else "invio_automatico_ritardo_sec"
+                )
+                time.sleep(float(cfg.get(chiave_ritardo, 0.3 if voce_attiva() else 2.5)))
                 tastiera.press(Key.enter)
                 tastiera.release(Key.enter)
     except Exception:

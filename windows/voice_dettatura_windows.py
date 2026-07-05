@@ -46,6 +46,7 @@ HOTKEY = getattr(Key, CFG.get("hotkey", "f8"))
 TASTO_VOCE = getattr(Key, CFG.get("tasto_voce", "f9"), None)  # on/off voce agenti
 INVIO_AUTOMATICO = bool(CFG.get("invio_automatico", True))
 RITARDO_INVIO_AUTOMATICO = float(CFG.get("invio_automatico_ritardo_sec", 2.5))
+RITARDO_INVIO_CONVERSAZIONE = float(CFG.get("invio_automatico_ritardo_conversazione_sec", 0.3))
 VOICE_THRESHOLD = float(CFG.get("voice_threshold", 0.004))
 MIN_RECORDING_SEC = float(CFG.get("min_recording_sec", 0.4))
 MAX_RECORDING_SEC = float(CFG.get("max_recording_sec", 90))
@@ -77,6 +78,12 @@ model: WhisperModel | None = None
 FLAG_VOICE_ON = BASE / "VOICE_ON"          # se esiste, la voce in uscita e' accesa
 PID_FILE = BASE / "voce_pid"               # PID dell'ultima lettura: una voce per volta
 VOCE_RATE = int(CFG.get("voce_rate", 0))   # System.Speech: da -10 (lenta) a +10 (veloce)
+
+
+def voce_attiva() -> bool:
+    """Voce agenti accesa = conversazione vera con l'agente (botta e risposta,
+    niente tempo di rilettura). Usata per scegliere la pausa pre-Invio."""
+    return FLAG_VOICE_ON.exists()
 
 
 # --- glossario e detta pulito: la trascrizione grezza diventa testo curato ---
@@ -506,11 +513,11 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             return
         riattiva_bersaglio(finestra_bersaglio)
         paste_text(text)
-        # invio automatico: indipendente dal toggle voce agenti (quello resta
-        # solo per la lettura ad alta voce delle risposte). Pausa configurabile
-        # prima dell'Invio: da' il tempo di correggere il testo appena incollato.
+        # invio automatico: parte sempre. La pausa prima dell'Invio dipende
+        # dal contesto: a voce ON e' conversazione vera con l'agente (botta e
+        # risposta), a voce OFF serve tempo per correggere il testo incollato.
         if INVIO_AUTOMATICO:
-            time.sleep(RITARDO_INVIO_AUTOMATICO)
+            time.sleep(RITARDO_INVIO_CONVERSAZIONE if voce_attiva() else RITARDO_INVIO_AUTOMATICO)
             keyboard_controller.press(Key.enter)
             keyboard_controller.release(Key.enter)
         print("Inserito:", text)
