@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (12)
+
+- **Icona di stato nella barra dei menu**: la pillola e' un lampo, quindi non c'era modo di sapere se mani libere/voce fossero accese senza provare a parlare. Ora in alto a destra compare 🎙️ (mani libere attiva) e/o 🔊 (voce agenti accesa); niente di attivo = nessuna icona. Aggiornata ogni ~0.5s dal tick del pannello.
+
 ## Non rilasciato - 06/07/2026 (11) — tasti DEFINITIVI
 
 - **Mani libere = Cmd destro + Option tenuti insieme** (era la scelta di Sal fin dall'inizio; Option+meno inoltre digitava un "–" in chat a ogni attivazione — solo modificatori, niente caratteri sporchi). Ordine indifferente: Option→Cmd non avvia la dettatura; Cmd→Option annulla la dettatura appena partita (audio < 0.4s scartato dal gate). Voce agenti resta Option tenuto ~1s da solo. Verificati 4 casi: entrambi gli ordini del combo, long-press voce, Cmd hold normale.

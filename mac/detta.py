@@ -208,6 +208,26 @@ def stop_se_registrazione_troppo_lunga():
         comandi_audio.put("stop")
 
 
+# Indicatore di stato SEMPRE visibile ma discreto, nella barra dei menu in
+# alto: la pillola e' un lampo che sparisce, quindi senza questo Sal non ha
+# modo di sapere se mani libere/voce sono accese senza provare a parlare.
+indicatore_menu = AppKit.NSStatusBar.systemStatusBar().statusItemWithLength_(
+    AppKit.NSVariableStatusItemLength
+)
+indicatore_menu.setVisible_(False)
+
+
+def aggiorna_indicatore_menu():
+    """🎙️ = mani libere attiva, 🔊 = voce agenti accesa (anche insieme).
+    Niente di attivo = icona nascosta."""
+    titolo = ("🎙️" if mani_libere_attive() else "") + ("🔊" if voce_attiva() else "")
+    if titolo:
+        indicatore_menu.button().setTitle_(titolo)
+        indicatore_menu.setVisible_(True)
+    else:
+        indicatore_menu.setVisible_(False)
+
+
 class GestorePannello(AppKit.NSObject):
     """Vive nel thread principale: applica gli stati e anima le lineette."""
 
@@ -263,6 +283,8 @@ class GestorePannello(AppKit.NSObject):
         # watchdog dell'hotkey: se il listener della tastiera si fosse fermato,
         # lo riaccendo (controllo ogni ~2s, non a ogni tick).
         self._tick += 1
+        if self._tick % 6 == 0:  # ogni ~0.5s: icona di stato nella barra menu
+            esegui_sicuro(aggiorna_indicatore_menu)
         if self._tick % 25 == 0:
             global listener
             if listener is not None and not listener.is_alive():
