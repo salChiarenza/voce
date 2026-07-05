@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (9) — tasti definitivi scelti da Sal
+
+- **Option+punto = voce agenti, Option+meno = mani libere** (tasti tutti vicini in basso a destra sulla sua tastiera). Option da solo torna NEUTRO (niente piu' toggle su alt_r: deve poter far parte del combo senza commutare). Rimossi il combo Ctrl+Option e la chiave config `tasto_voce`. Riconoscimento sul carattere composto ("…", "–"), stabile su ogni layout: la prova fisica di Sal di ieri sera confermava che questi char arrivano correttamente (il fallimento di allora era un problema diverso, gia' risolto: `Key.alt` generico non tracciato). Verificato in accensione E spegnimento per entrambi con eventi a carattere forzato.
+
 ## Non rilasciato - 06/07/2026 (8)
 
 - **Soglia d'innesco mani libere separata e più alta** (`mani_libere_soglia_voce`, default 0.012): il VAD usava la soglia-voce generale (0.004) e partiva sul rumore ambiente (caso reale: rms 0.0046 → Whisper allucinava "ARRAB ARRAB" sul nulla, incollato in chat). Il parlato vero sta a 0.02-0.06: con 0.012 il rumore non innesca più, la voce sì. Il gate finale sull'intero audio resta invariato.

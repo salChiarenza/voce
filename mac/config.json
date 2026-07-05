@@ -1,6 +1,5 @@
 {
   "hotkey": "cmd_r",
-  "tasto_voce": "alt_r",
   "modello": "mlx-community/whisper-large-v3-turbo",
   "lingua": "it",
   "voce": "Alice",
