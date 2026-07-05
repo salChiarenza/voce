@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (15)
+
+- **Microfonino mani-libere sempre visibile e vivo**: quando la modalita' e' attiva, in basso (a destra del centro, fuori dall'ingombro della pill) resta un piccolo 🎙️ flottante che pulsa col volume — piu' forte parli, piu' grande e opaco. Sparisce quando la modalita' si spegne. Risolve "non si intuisce se e' attivo": lo stato ora ha un segno vivo sullo schermo, non solo l'icona statica nella barra menu.
+
 ## Non rilasciato - 06/07/2026 (14)
 
 - **Voce agenti = Option + freccia sinistra** (scelto e provato da Sal: freccia attaccata a Option sulla sua tastiera, nessuna interferenza). Sostituisce il long-press di Option (~1s), poco scopribile. Rimossa la chiave `tasto_voce_hold_sec`. Verificati 4 casi: toggle ON/OFF, freccia da sola neutra, Cmd+Option (mani libere) invariato.

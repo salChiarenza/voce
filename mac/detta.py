@@ -196,6 +196,41 @@ def posiziona_pannello():
 
 posiziona_pannello()
 
+# --- microfonino mani-libere: piccolo, sempre visibile quando la modalita'
+# e' attiva e a riposo, pulsa col volume mentre Sal parla (richiesta 06/07:
+# "un'emoji microfono piccola da vedere che si muove quando io parlo") ---
+
+MINI_LATO = 44
+mini_pannello = AppKit.NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+    AppKit.NSMakeRect(0, 0, MINI_LATO, MINI_LATO),
+    AppKit.NSWindowStyleMaskBorderless | AppKit.NSWindowStyleMaskNonactivatingPanel,
+    AppKit.NSBackingStoreBuffered,
+    False,
+)
+mini_pannello.setLevel_(AppKit.NSStatusWindowLevel)
+mini_pannello.setOpaque_(False)
+mini_pannello.setBackgroundColor_(AppKit.NSColor.clearColor())
+mini_pannello.setIgnoresMouseEvents_(True)
+mini_pannello.setCollectionBehavior_(
+    AppKit.NSWindowCollectionBehaviorCanJoinAllSpaces
+    | AppKit.NSWindowCollectionBehaviorFullScreenAuxiliary
+)
+mini_label = AppKit.NSTextField.labelWithString_("🎙️")
+mini_label.setFrame_(AppKit.NSMakeRect(0, 0, MINI_LATO, MINI_LATO))
+mini_label.setAlignment_(AppKit.NSTextAlignmentCenter)
+mini_label.setFont_(AppKit.NSFont.systemFontOfSize_(22))
+mini_pannello.contentView().addSubview_(mini_label)
+
+
+def posiziona_mini_pannello():
+    """Microfonino in basso, poco a destra del centro (stessa fascia della
+    pill ma fuori dal suo ingombro), sul monitor dove sta il mouse."""
+    area = schermo_attivo().visibleFrame()
+    x = area.origin.x + (area.size.width - MINI_LATO) / 2 + LARGHEZZA / 2 + 24
+    margine_basso = min(80, max(16, area.size.height * 0.10))
+    y = area.origin.y + margine_basso
+    mini_pannello.setFrameOrigin_(AppKit.NSMakePoint(x, y))
+
 
 def stop_se_registrazione_troppo_lunga():
     """Airbag anti-incanto: non ferma mai subito, solo se resta aperta troppo."""
@@ -233,6 +268,22 @@ class GestorePannello(AppKit.NSObject):
 
     stato = "nascosto"
     _tick = 0
+    _mini_visibile = False
+
+    def _aggiorna_mini(self):
+        """Microfonino mani-libere: visibile finche' la modalita' e' ON,
+        pulsa col volume (piu' forte parli, piu' grande e opaco)."""
+        attiva = mani_libere_attive()
+        if attiva and not self._mini_visibile:
+            posiziona_mini_pannello()
+            mini_pannello.orderFrontRegardless()
+            self._mini_visibile = True
+        elif not attiva and self._mini_visibile:
+            mini_pannello.orderOut_(None)
+            self._mini_visibile = False
+        if self._mini_visibile:
+            mini_pannello.setAlphaValue_(0.45 + min(0.55, volume_corrente * 18))
+            mini_label.setFont_(AppKit.NSFont.systemFontOfSize_(22 + min(10.0, volume_corrente * 250)))
 
     def tick_(self, timer):
         try:
@@ -265,6 +316,7 @@ class GestorePannello(AppKit.NSObject):
         # watchdog dell'hotkey: se il listener della tastiera si fosse fermato,
         # lo riaccendo (controllo ogni ~2s, non a ogni tick).
         self._tick += 1
+        esegui_sicuro(self._aggiorna_mini)  # microfonino mani-libere: pulsa a ogni tick
         if self._tick % 6 == 0:  # ogni ~0.5s: icona di stato nella barra menu
             esegui_sicuro(aggiorna_indicatore_menu)
         if self._tick % 25 == 0:
