@@ -1,6 +1,10 @@
 # Changelog
 
-## Non rilasciato - 06/07/2026 (9) — tasti definitivi scelti da Sal
+## Non rilasciato - 06/07/2026 (10)
+
+- **Voce agenti: da Option+punto a Option TENUTO ~1s** (`tasto_voce_hold_sec`): Option+punto apre la sezione laterale dell'app di Sal — conflitto trovato al primo uso reale. Ora: tieni Option da solo ~1s e rilascia = toggle voce; tocco breve = niente; Option usato per comporre caratteri o per il combo meno = niente. Mani libere resta Option+meno. Verificati tutti e 4 i casi (long-press ON, tocco breve neutro, combo meno senza interferenza sulla voce, long-press OFF).
+
+## Non rilasciato - 06/07/2026 (9) — tasti scelti da Sal (superati dalla v10 per conflitto app)
 
 - **Option+punto = voce agenti, Option+meno = mani libere** (tasti tutti vicini in basso a destra sulla sua tastiera). Option da solo torna NEUTRO (niente piu' toggle su alt_r: deve poter far parte del combo senza commutare). Rimossi il combo Ctrl+Option e la chiave config `tasto_voce`. Riconoscimento sul carattere composto ("…", "–"), stabile su ogni layout: la prova fisica di Sal di ieri sera confermava che questi char arrivano correttamente (il fallimento di allora era un problema diverso, gia' risolto: `Key.alt` generico non tracciato). Verificato in accensione E spegnimento per entrambi con eventi a carattere forzato.
 

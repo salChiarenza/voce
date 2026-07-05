@@ -26,5 +26,6 @@
   "pulizia_min_parole": 15,
   "pulizia_timeout_sec": 20,
   "mani_libere_grazia_dopo_voce_sec": 0.7,
-  "mani_libere_soglia_voce": 0.012
+  "mani_libere_soglia_voce": 0.012,
+  "tasto_voce_hold_sec": 1.0
 }
