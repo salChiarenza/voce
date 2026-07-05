@@ -10,6 +10,7 @@
   "invio_automatico": true,
   "invio_automatico_ritardo_sec": 2.5,
   "invio_automatico_ritardo_conversazione_sec": 0.3,
+  "tasto_mani_libere": "ctrl_r",
   "velocita": 195,
   "max_registrazione_sec": 90,
   "glossario": [
