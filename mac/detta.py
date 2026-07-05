@@ -446,12 +446,19 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
     erano davanti al momento dello stop: se nel frattempo (pulizia inclusa)
     Sal cambia pagina o scheda, il testo deve arrivare comunque li', non dove
     si trova ora il focus."""
+    log = logging.getLogger("voce")
     try:
         with _lock_trascrizione:  # una trascrizione per volta
             eventi.put("trascrivo")
             testo = trascrivi(audio)
-        if e_allucinazione(testo):  # frase-fantasma di Whisper sul non-parlato: scarta
+        debug = cfg.get("debug_dettature", False)
+        allucinato = e_allucinazione(testo)
+        if allucinato:  # frase-fantasma di Whisper sul non-parlato: scarta
+            log.info("scartato come allucinazione (%d caratteri)", len(testo))
             testo = ""
+        log.info("trascritto: %d parole%s", len(testo.split()), " (grezzo, in conversazione)" if testo else "")
+        if debug and testo and not allucinato:
+            log.info("grezzo: %s", testo)
         # In conversazione (voce ON) la pulizia costa 1-3s su quasi ogni turno
         # (quasi tutto supera pulizia_min_parole) per un guadagno che l'agente
         # non ha bisogno di avere: capisce benissimo il parlato grezzo. Botta
@@ -459,12 +466,6 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         salta_per_conversazione = voce_attiva() and not cfg.get("pulizia_in_conversazione", False)
         if testo and not salta_per_conversazione and (SHORTCUT_PULIZIA or COMANDO_PULIZIA) and serve_pulizia(testo, cfg):
             eventi.put("sistemo")
-            log = logging.getLogger("voce")
-            # i TESTI si loggano solo col flag debug (la privacy promette
-            # "nessun archivio delle dettature"); tempi ed esiti sempre.
-            debug = cfg.get("debug_dettature", False)
-            if debug:
-                log.info("grezzo: %s", testo)
             glossario = cfg.get("glossario", [])
             inizio_pulizia = time.monotonic()
             pulito = None
@@ -498,6 +499,7 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         if testo:
             riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
             incolla(testo)
+            log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
             # invio automatico: parte sempre (indipendente dal toggle voce
             # agenti). La PAUSA prima dell'Invio pero' dipende dal contesto:
             # a voce ON e' una conversazione vera con l'agente (botta e
@@ -511,8 +513,11 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
                 time.sleep(float(cfg.get(chiave_ritardo, 0.3 if voce_attiva() else 2.5)))
                 tastiera.press(Key.enter)
                 tastiera.release(Key.enter)
+                log.info("invio automatico premuto")
+        else:
+            log.info("niente da incollare (testo vuoto dopo trascrizione/pulizia)")
     except Exception:
-        logging.getLogger("voce").exception("errore in trascrizione/incolla")
+        log.exception("errore in trascrizione/incolla")
         eventi.put("nascosto")
 
 
