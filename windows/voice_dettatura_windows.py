@@ -15,6 +15,7 @@ import collections
 import ctypes
 import json
 import logging
+import logging.handlers
 import queue
 import re
 import shutil
@@ -713,8 +714,14 @@ class Pannello:
 
 
 def main() -> None:
+    # Rotazione a 7 giorni (gemello Mac): con debug_dettature=true il log
+    # contiene il grezzo di ogni dettatura in chiaro, non deve accumularsi
+    # all'infinito.
+    gestore_log = logging.handlers.TimedRotatingFileHandler(
+        LOG, when="midnight", backupCount=7, encoding="utf-8"
+    )
     logging.basicConfig(
-        filename=LOG,
+        handlers=[gestore_log],
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )

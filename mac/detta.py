@@ -7,6 +7,7 @@ che si muovono col volume mentre parli. Per uscire: chiudi la finestra del Termi
 """
 import collections
 import logging
+import logging.handlers
 import os
 import queue
 import subprocess
@@ -712,8 +713,16 @@ def _avvisa_se_non_autorizzato():
 
 if __name__ == "__main__":
     unica_istanza()
+    # Rotazione a 7 giorni: con debug_dettature=true il log contiene il grezzo
+    # di ogni dettatura in chiaro (conversazioni, call, sfoghi) — non deve
+    # accumularsi all'infinito. impara_sostituzioni() legge solo le ultime
+    # righe, quindi 7 giorni bastano e avanzano per quella funzione.
+    gestore_log = logging.handlers.TimedRotatingFileHandler(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "voce.log"),
+        when="midnight", backupCount=7, encoding="utf-8",
+    )
     logging.basicConfig(
-        filename=os.path.join(os.path.dirname(os.path.abspath(__file__)), "voce.log"),
+        handlers=[gestore_log],
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )

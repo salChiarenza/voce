@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (6)
+
+- **Rotazione log a 7 giorni**: con `debug_dettature: true` il log contiene il grezzo di ogni dettatura in chiaro (conversazioni, call). Prima si accumulava senza limiti; ora `TimedRotatingFileHandler` tiene solo gli ultimi 7 giorni. L'apprendimento automatico (`impara_sostituzioni`) legge solo le righe recenti: nessun impatto.
+
 ## Non rilasciato - 05/07/2026 (5)
 
 - **Fix testo sulla scheda sbagliata dello stesso browser**: il fix "riattiva app-bersaglio" lavorava a livello di app — se il bersaglio e il punto d'arrivo erano due SCHEDE della stessa finestra Chrome/Safari (es. Instagram e ChatGPT), non se ne accorgeva. Ora per Chrome e Safari (via AppleScript) si memorizza anche l'URL della scheda attiva al momento dello stop e si ripristina prima di incollare. Richiede permesso "Automazione" (una tantum, come microfono/accessibilità). Altri browser: resta solo il fix a livello app.

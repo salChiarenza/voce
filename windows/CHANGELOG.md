@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (4)
+
+- **Rotazione log a 7 giorni** (gemello Mac): `debug_dettature: true` logga il grezzo in chiaro, ora limitato agli ultimi 7 giorni invece di accumularsi senza limiti.
+
 ## Non rilasciato - 05/07/2026 (3)
 
 - **Pausa prima dell'Invio automatico** (gemello Mac): nuova chiave `invio_automatico_ritardo_sec` in `config.json` (default 2.5s), tempo per correggere il testo prima che parta l'Invio.
