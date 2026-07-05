@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (13)
+
+- **Rimossa la pillola-lampo "Mani libere attive"**: ricompariva a ogni fine dettatura (2.5s), ridondante e fastidiosa ora che lo stato e' sempre visibile nell'icona della barra menu. La pillola ora appare solo durante ascolto/trascrizione, come per la dettatura col tasto. Rimossa la chiave config `mani_libere_pillola_sec`.
+
 ## Non rilasciato - 06/07/2026 (12)
 
 - **Icona di stato nella barra dei menu**: la pillola e' un lampo, quindi non c'era modo di sapere se mani libere/voce fossero accese senza provare a parlare. Ora in alto a destra compare 🎙️ (mani libere attiva) e/o 🔊 (voce agenti accesa); niente di attivo = nessuna icona. Aggiornata ogni ~0.5s dal tick del pannello.

@@ -22,7 +22,6 @@
   "pulizia_in_conversazione": false,
   "mani_libere_attivazione_sec": 0.3,
   "mani_libere_silenzio_sec": 0.9,
-  "mani_libere_pillola_sec": 2.5,
   "pulizia_min_parole": 15,
   "pulizia_timeout_sec": 20,
   "mani_libere_grazia_dopo_voce_sec": 0.7,
