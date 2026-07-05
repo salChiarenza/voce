@@ -596,11 +596,16 @@ def commuta_mani_libere():
     lanciatore sul Desktop puo' accenderla insieme alla voce con un click."""
     if FLAG_MANI_LIBERE_ON.exists():
         FLAG_MANI_LIBERE_ON.unlink()
-        stato = "Mani libere disattivate"
+        pronuncia("Mani libere disattivate")
     else:
+        # PRIMA l'annuncio, POI il flag: se il flag si accendesse per primo,
+        # il VAD partirebbe sul rumore ambiente e avvia_registrazione()
+        # zittirebbe l'annuncio appena partito (ferma_voce): Sal non sentiva
+        # mai "attivate" e la coda audio diventava un "Yeah" allucinato in chat.
+        # pronuncia() crea FLAG_PARLANDO in modo sincrono, quindi quando il
+        # flag qui sotto si accende il worker resta in attesa fino a fine annuncio.
+        pronuncia("Mani libere attivate")
         FLAG_MANI_LIBERE_ON.touch()
-        stato = "Mani libere attivate"
-    pronuncia(stato)
     _nascondi_o_arma()  # feedback visivo immediato: pillola armata subito, non solo al primo turno
 
 
@@ -618,13 +623,19 @@ def worker_mani_libere():
     soglia = cfg.get("soglia_voce", SOGLIA_VOCE)
     frame_attivazione = max(1, round(cfg.get("mani_libere_attivazione_sec", 0.3) / intervallo))
     frame_silenzio = max(1, round(cfg.get("mani_libere_silenzio_sec", 0.9) / intervallo))
+    fine_voce = 0.0  # quando l'agente ha smesso di parlare: piccolo periodo di grazia
+    grazia_sec = float(cfg.get("mani_libere_grazia_dopo_voce_sec", 0.7))
     while True:
         time.sleep(intervallo)
         if not mani_libere_attive():
             stato, frame_sopra, frame_sotto = IDLE, 0, 0
             continue
         if FLAG_PARLANDO.exists():  # l'agente sta leggendo la risposta: si aspetta
+            fine_voce = time.monotonic()
+            frame_sopra = 0
             continue
+        if time.monotonic() - fine_voce < grazia_sec:
+            continue  # coda audio delle casse appena spente: non scambiarla per Sal
         if stato == IDLE:
             if registrando:  # gia' in corso (es. tasto manuale): non toccare
                 continue

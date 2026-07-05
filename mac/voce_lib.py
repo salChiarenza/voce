@@ -67,6 +67,14 @@ _FRASI_FANTASMA = {
     "grazie per aver guardato il video",
     "ciao a tutti",
     "buona giornata a tutti",
+    # Whisper allucina anche in inglese su code audio/rumore (caso reale
+    # 06/07: "Yeah." dalla coda dell'annuncio TTS zittito). Confronto solo
+    # sull'INTERA stringa: un "yeah" dentro una frase vera non viene toccato.
+    "yeah",
+    "yes",
+    "bye",
+    "thank you",
+    "thanks for watching",
 }
 
 

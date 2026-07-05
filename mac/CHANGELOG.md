@@ -1,5 +1,11 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (7)
+
+- **Fix annuncio "Mani libere attivate" mai sentito**: all'accensione il flag si attivava PRIMA dell'annuncio; il VAD partiva sul rumore ambiente e `avvia_registrazione()` (che zittisce la voce come prima cosa) uccideva l'annuncio appena partito — Sal non sentiva mai la conferma e la coda audio diventava un "Yeah." allucinato incollato in chat. Ora: annuncio prima (crea `PARLANDO` in modo sincrono), flag dopo — il worker aspetta la fine dell'annuncio prima di armarsi.
+- **Periodo di grazia dopo la voce** (`mani_libere_grazia_dopo_voce_sec`, default 0.7s): quando l'agente smette di parlare, il VAD non riparte all'istante — la coda audio delle casse non viene scambiata per Sal.
+- **Frasi-fantasma inglesi**: "Yeah.", "Yes", "Thank you", "Thanks for watching", "Bye" aggiunte al filtro allucinazioni (Whisper le inventa su code audio/rumore anche con lingua italiana). Confronto sempre sull'intera stringa: dentro frasi vere non scattano. Test aggiornati (46).
+
 ## Non rilasciato - 06/07/2026 (6)
 
 - **Pillola "mani libere" ora e' un lampo, non fissa**: Sal ha lo schermo piccolo e la pillola "🎙️ Mani libere attive" restava sempre visibile — troppo invadente. Ora compare 2.5s (`mani_libere_pillola_sec`) e poi si nasconde da sola; un vero ascolto la fa ricomparire normalmente (onda, "Trascrivo…", ecc.).
