@@ -493,7 +493,10 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
         )
         text = " ".join(segment.text.strip() for segment in segments).strip()
         text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
-        if text and COMANDO_PULIZIA and serve_pulizia(text, CFG):
+        # In conversazione (voce ON) la pulizia costa secondi su quasi ogni
+        # turno per un guadagno che l'agente non ha bisogno di avere (gemello Mac).
+        salta_per_conversazione = voce_attiva() and not CFG.get("pulizia_in_conversazione", False)
+        if text and not salta_per_conversazione and COMANDO_PULIZIA and serve_pulizia(text, CFG):
             eventi.put("sistemo")
             # i TESTI si loggano solo col flag debug (privacy); tempi sempre
             debug = CFG.get("debug_dettature", False)

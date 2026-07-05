@@ -437,7 +437,12 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
             testo = trascrivi(audio)
         if e_allucinazione(testo):  # frase-fantasma di Whisper sul non-parlato: scarta
             testo = ""
-        if testo and (SHORTCUT_PULIZIA or COMANDO_PULIZIA) and serve_pulizia(testo, cfg):
+        # In conversazione (voce ON) la pulizia costa 1-3s su quasi ogni turno
+        # (quasi tutto supera pulizia_min_parole) per un guadagno che l'agente
+        # non ha bisogno di avere: capisce benissimo il parlato grezzo. Botta
+        # e risposta vince sulla forma: si salta, salvo attivarla a mano.
+        salta_per_conversazione = voce_attiva() and not cfg.get("pulizia_in_conversazione", False)
+        if testo and not salta_per_conversazione and (SHORTCUT_PULIZIA or COMANDO_PULIZIA) and serve_pulizia(testo, cfg):
             eventi.put("sistemo")
             log = logging.getLogger("voce")
             # i TESTI si loggano solo col flag debug (la privacy promette

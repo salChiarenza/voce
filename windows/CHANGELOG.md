@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (6)
+
+- **Pulizia saltata in conversazione** (gemello Mac): a voce ON la pulizia (1-3s extra) si salta, l'agente capisce il parlato grezzo. Nuova chiave `pulizia_in_conversazione` (default `false`).
+
 ## Non rilasciato - 05/07/2026 (5)
 
 - **Pausa pre-Invio consapevole del contesto** (gemello Mac): a voce ON (conversazione con l'agente) la pausa scende a `invio_automatico_ritardo_conversazione_sec` (default 0.3s) invece di 2.5s.

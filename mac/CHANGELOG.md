@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026 (9)
+
+- **Pulizia saltata in conversazione**: misurato dal log che la trascrizione Whisper e' gia' velocissima nell'uso reale (0.6-1.3s per 10-25s di audio); il vero collo di bottiglia era "detta pulito" (1-3s extra su quasi ogni turno, perche' quasi tutto supera `pulizia_min_parole`). A voce ON (conversazione con l'agente) ora si salta: l'agente capisce benissimo il parlato grezzo, la velocita' conta più della forma. A voce OFF resta attiva. Nuova chiave `pulizia_in_conversazione` (default `false`) per chi la vuole comunque sempre attiva.
+
 ## Non rilasciato - 05/07/2026 (8)
 
 - **Pausa pre-Invio consapevole del contesto**: a voce ON (conversazione vera con l'agente, botta e risposta) la pausa prima dell'Invio scende da 2.5s a `invio_automatico_ritardo_conversazione_sec` (default 0.3s); a voce OFF (dettatura su testo/email/social) resta 2.5s per dare tempo di correggere. Stesso interruttore di sempre, nessuna voce/stile toccati.
