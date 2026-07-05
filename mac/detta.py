@@ -41,20 +41,17 @@ FREQ = 16000  # Whisper lavora a 16 kHz
 tastiera = Controller()
 registrando = False
 blocchi = []
-stream = None
+stream = None  # aperto una volta sola all'avvio: mai piu' stop()/close() per ogni dettatura
 listener = None  # listener globale della tastiera (ricreabile dal watchdog)
 eventi = queue.Queue()  # il thread tastiera manda qui i cambi di stato per il pannello
 comandi_audio = queue.Queue()  # il thread tastiera mette qui "start"/"stop": li esegue il worker audio
 tasto_premuto = False  # stato del tasto-detta, posseduto SOLO dal thread tastiera
 tasto_voce_premuto = False  # idem per il tasto on/off voce: un hold = una commutazione
 inizio_registrazione = None
-stop_audio_in_corso_da = None
-riavvio_in_corso = False
 
 BARRE = 18  # quante lineette nel visualizzatore
 livelli = collections.deque([0.0] * BARRE, maxlen=BARRE)
 MAX_REGISTRAZIONE_SEC = float(cfg.get("max_registrazione_sec", 90))
-STOP_AUDIO_TIMEOUT_SEC = float(cfg.get("stop_audio_timeout_sec", 10))
 
 # --- pannello di stato nativo (NonactivatingPanel: mai il focus) ---
 
@@ -265,6 +262,24 @@ def trascrivi(audio):
     return applica_sostituzioni(esito["text"].strip(), cfg.get("sostituzioni", {}))
 
 
+def app_frontale():
+    """L'app davanti in questo momento: e' il bersaglio del testo dettato."""
+    return AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
+
+
+def riattiva_bersaglio(app):
+    """Se nel frattempo Sal ha cambiato pagina/app (dettatura lunga + pulizia),
+    il testo deve arrivare comunque dove stava parlando, non dove si trova
+    ora il focus. Riporta avanti l'app-bersaglio prima di incollare."""
+    if app is None:
+        return
+    corrente = AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
+    if corrente is not None and corrente.processIdentifier() == app.processIdentifier():
+        return
+    app.activateWithOptions_(AppKit.NSApplicationActivateIgnoringOtherApps)
+    time.sleep(0.2)  # tempo al focus di spostarsi davvero prima del Cmd+V
+
+
 def incolla(testo):
     """Mette il testo in clipboard, simula Cmd+V, poi ripristina la clipboard."""
     vecchia = subprocess.run(["pbpaste"], capture_output=True).stdout
@@ -278,19 +293,47 @@ def incolla(testo):
 
 
 def su_callback(indata, frames, t, status):
+    if not registrando:
+        return  # stream sempre aperto: fuori registrazione scartiamo, non accumuliamo
     blocchi.append(indata.copy())
     livelli.append(float(np.sqrt(np.mean(indata ** 2))))  # volume per le lineette
 
 
-def avvia_registrazione():
-    global stream, blocchi, registrando, inizio_registrazione
-    ferma_voce()  # ti zittisco se parlo io: tocca a te
-    blocchi = []
-    livelli.extend([0.0] * BARRE)
+def nome_device_input():
+    """Nome del device di input di sistema in questo momento (None se non
+    determinabile: mai far esplodere il watchdog per questo)."""
+    try:
+        return sd.query_devices(kind="input")["name"]
+    except Exception:
+        return None
+
+
+device_input_apertura = None  # device che avevamo quando lo stream e' stato aperto
+
+
+def avvia_stream():
+    """Apre il microfono UNA sola volta per tutta la vita del processo.
+
+    Aprire/chiudere lo stream a ogni dettatura e' quello che faceva incantare
+    CoreAudio (deadlock nel mutex della HAL allo stop, vedi git history):
+    tenerlo sempre acceso elimina la causa invece di limitarsi a riavviare
+    il processo quando succede. Contropartita: se il device di input cambia
+    (es. colleghi AirPods, disconnetti un mic USB) questo processo resta
+    agganciato al vecchio finche' non riparte: watchdog_audio se ne accorge
+    e si riavvia da solo (vedi riavvia_su_cambio_device)."""
+    global stream, device_input_apertura
     stream = sd.InputStream(
         samplerate=FREQ, channels=1, dtype="float32", callback=su_callback
     )
     stream.start()
+    device_input_apertura = nome_device_input()
+
+
+def avvia_registrazione():
+    global blocchi, registrando, inizio_registrazione
+    ferma_voce()  # ti zittisco se parlo io: tocca a te
+    blocchi = []
+    livelli.extend([0.0] * BARRE)
     registrando = True
     inizio_registrazione = time.monotonic()
     logging.getLogger("voce").info("registrazione avviata")
@@ -301,10 +344,14 @@ def avvia_registrazione():
 _lock_trascrizione = threading.Lock()
 
 
-def _trascrivi_e_incolla(audio):
+def _trascrivi_e_incolla(audio, app_bersaglio):
     """Parte pesante (Whisper ~2-3s + incolla): gira su un thread a parte e
     blindata. Se girasse sul thread della tastiera, macOS la vedrebbe "appesa"
-    e disabiliterebbe l'hotkey; e un suo errore ucciderebbe il listener."""
+    e disabiliterebbe l'hotkey; e un suo errore ucciderebbe il listener.
+
+    app_bersaglio e' l'app che era davanti al momento dello stop: se nel
+    frattempo (pulizia inclusa) Sal cambia pagina, il testo deve arrivare
+    comunque li', non dove si trova ora il focus."""
     try:
         with _lock_trascrizione:  # una trascrizione per volta
             eventi.put("trascrivo")
@@ -350,6 +397,7 @@ def _trascrivi_e_incolla(audio):
             testo = pulito or testo
         eventi.put("nascosto")
         if testo:
+            riattiva_bersaglio(app_bersaglio)
             incolla(testo)
             # modalita' conversazione: voce accesa = la domanda parte da sola
             if voce_attiva() and cfg.get("invio_automatico", True):
@@ -362,27 +410,15 @@ def _trascrivi_e_incolla(audio):
 
 
 def ferma_e_trascrivi():
-    """Ferma lo stream, applica il gate sull'energia, poi lancia la trascrizione
-    su un thread a parte. Gira sul WORKER audio, mai sul thread della tastiera:
-    stream.stop()/close() prendono un mutex della HAL di CoreAudio e, chiamati
-    dentro il callback dell'event-tap, vanno in deadlock col thread IO di
-    CoreAudio sullo stesso mutex (l'hotkey si 'incanta'). Vedi _worker_audio."""
-    global stream, registrando, inizio_registrazione, stop_audio_in_corso_da
-    if not registrando and stream is None:
+    """Chiude la registrazione (il microfono resta aperto: vedi avvia_stream)
+    e lancia la trascrizione su un thread a parte."""
+    global registrando, inizio_registrazione
+    if not registrando:
         eventi.put("nascosto")
         return
+    app_bersaglio = app_frontale()  # bersaglio del testo: l'app davanti ORA, non a fine pulizia
     registrando = False
     inizio_registrazione = None
-    stop_audio_in_corso_da = time.monotonic()
-    if stream is not None:
-        try:
-            stream.stop()
-            stream.close()
-        finally:
-            stream = None
-            stop_audio_in_corso_da = None
-    else:
-        stop_audio_in_corso_da = None
     logging.getLogger("voce").info("registrazione fermata")
     suono("Bottle")
     if not blocchi:
@@ -398,7 +434,7 @@ def ferma_e_trascrivi():
         logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
         eventi.put("nascosto")
         return
-    threading.Thread(target=_trascrivi_e_incolla, args=(audio,), daemon=True).start()
+    threading.Thread(target=_trascrivi_e_incolla, args=(audio, app_bersaglio), daemon=True).start()
 
 
 def commuta_voce():
@@ -413,11 +449,11 @@ def commuta_voce():
 
 
 def worker_audio():
-    """Possiede il ciclo di vita dello stream (open/start/stop/close) FUORI dal
-    thread della tastiera. Il callback dell'hotkey deve solo mettere "start"/
-    "stop" in coda e tornare subito: se invece aprisse o chiudesse lo stream
-    direttamente, le chiamate bloccanti di CoreAudio incastrerebbero l'event-tap
-    e la dettatura si 'incanterebbe' (deadlock sul mutex HAL col thread IO)."""
+    """Esegue avvio/stop registrazione FUORI dal thread della tastiera (che deve
+    solo mettere "start"/"stop" in coda e tornare subito: qualunque lavoro più
+    lento fatto li' dentro incastrerebbe l'event-tap). Lo stream resta aperto
+    per tutta la vita del processo (vedi avvia_stream): qui non si apre ne'
+    si chiude piu' microfono a ogni dettatura."""
     while True:
         cmd = comandi_audio.get()
         if cmd == "start":
@@ -426,21 +462,21 @@ def worker_audio():
             esegui_sicuro(ferma_e_trascrivi)
 
 
-def riavvia_forzato(motivo):
-    """Riavvia l'app se CoreAudio resta bloccato durante lo stop del microfono."""
-    global riavvio_in_corso
-    if riavvio_in_corso:
-        return
-    riavvio_in_corso = True
-    logging.getLogger("voce").critical("riavvio forzato dettatura: %s", motivo)
+def riavvia_su_cambio_device(motivo):
+    """Il device di input e' cambiato sotto lo stream sempre-aperto: invece di
+    chiamare stream.stop()/close() (il deadlock che abbiamo appena eliminato),
+    usciamo e ripartiamo da zero. L'uscita del processo chiude il device per
+    conto dell'OS, senza passare dal mutex CoreAudio che si incantava."""
+    logging.getLogger("voce").warning("riavvio per cambio microfono: %s", motivo)
     cartella = os.path.dirname(os.path.abspath(__file__))
     subprocess.Popen([sys.executable, os.path.abspath(__file__)], cwd=cartella, start_new_session=True)
-    os._exit(70)
+    os._exit(0)
 
 
 def watchdog_audio():
     """Airbag fuori dal pannello: interviene anche se l'UI resta viva ma l'audio no."""
     global tasto_premuto
+    tick = 0
     while True:
         time.sleep(0.5)
         ora = time.monotonic()
@@ -451,14 +487,11 @@ def watchdog_audio():
             )
             tasto_premuto = False
             comandi_audio.put("stop")
-        if timeout_scaduto(
-            stop_audio_in_corso_da is not None,
-            stop_audio_in_corso_da,
-            ora,
-            STOP_AUDIO_TIMEOUT_SEC,
-        ):
-            durata = ora - stop_audio_in_corso_da
-            riavvia_forzato(f"stop audio bloccato da {durata:.1f}s")
+        tick += 1
+        if tick % 10 == 0 and not registrando:  # ogni ~5s, mai a meta' di una dettatura
+            attuale = nome_device_input()
+            if attuale is not None and attuale != device_input_apertura:
+                riavvia_su_cambio_device(f"{device_input_apertura!r} -> {attuale!r}")
 
 
 def su_pressione(tasto):
@@ -602,7 +635,8 @@ if __name__ == "__main__":
     )
     logging.getLogger("voce").info("avvio dettatura")
     _avvisa_se_non_autorizzato()
-    threading.Thread(target=worker_audio, daemon=True).start()  # possiede lo stream audio
+    avvia_stream()  # microfono aperto una volta sola, per tutta la vita del processo
+    threading.Thread(target=worker_audio, daemon=True).start()  # possiede lo start/stop registrazione
     threading.Thread(target=watchdog_audio, daemon=True).start()  # recupera stop persi/CoreAudio bloccato
     listener = avvia_listener()  # hotkey attivo DA SUBITO
     threading.Thread(target=_scalda_modello, daemon=True).start()  # modello in sottofondo

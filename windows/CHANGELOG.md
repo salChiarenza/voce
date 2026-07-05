@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 05/07/2026
+
+- **Fix testo incollato sulla finestra sbagliata** (gemello Mac): se una dettatura lunga (pulizia inclusa) richiedeva qualche secondo e nel frattempo cambiavi finestra, il testo finiva incollato dove si trovava il focus a fine elaborazione, non dove avevi parlato. Ora la finestra-bersaglio (`GetForegroundWindow`) viene memorizzata al momento dello stop e riportata avanti (`SetForegroundWindow`) prima di incollare, sempre.
+- Il fix del blocco ricorrente per deadlock CoreAudio (Mac) NON è stato portato qui: è specifico dell'HAL di CoreAudio, nessuna prova che affligga anche Windows. Se capita un blocco analogo su Windows, verificarlo prima di copiare la stessa soluzione (stream sempre aperto).
+
 ## Non rilasciato - 03/07/2026
 
 - **Fix eco glossario nel detta pulito** (gemello Mac): regola 5 del prompt riformulata (la vecchia "Scrivi correttamente questi nomi" faceva appendere il glossario al testo) + guardia `pulizia_sospetta`: scarta la pulizia se aggiunge ≥2 nomi mai dettati o collassa il testo sotto un terzo delle parole.

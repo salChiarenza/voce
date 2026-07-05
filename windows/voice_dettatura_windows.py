@@ -12,6 +12,7 @@ nel programma dove sei. Per fermare la dettatura chiudi la finestra.
 from __future__ import annotations
 
 import collections
+import ctypes
 import json
 import logging
 import queue
@@ -419,10 +420,35 @@ def start_recording() -> None:
     beep(880, 80)
 
 
+def finestra_frontale():
+    """Handle della finestra in primo piano ORA: e' il bersaglio del testo
+    dettato (gemello di app_frontale() in mac/detta.py)."""
+    try:
+        return ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        return None
+
+
+def riattiva_bersaglio(hwnd) -> None:
+    """Se nel frattempo (dettatura lunga + pulizia) Sal cambia finestra, il
+    testo deve arrivare comunque li' dove parlava, non dove si trova ora il
+    focus. Riporta avanti la finestra-bersaglio prima di incollare."""
+    if not hwnd:
+        return
+    try:
+        if ctypes.windll.user32.GetForegroundWindow() == hwnd:
+            return
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        time.sleep(0.2)  # tempo al focus di spostarsi davvero prima del Ctrl+V
+    except Exception:
+        logging.exception("impossibile riattivare la finestra bersaglio")
+
+
 def stop_recording() -> None:
     global stream, recording, recording_started_at
     if not recording:
         return
+    finestra_bersaglio = finestra_frontale()  # bersaglio: la finestra davanti ORA, non a fine pulizia
     recording = False
     started = recording_started_at
     recording_started_at = None
@@ -447,10 +473,12 @@ def stop_recording() -> None:
         return
 
     eventi.put("trascrivo")
-    threading.Thread(target=transcribe_and_paste, args=(audio,), daemon=True).start()
+    threading.Thread(
+        target=transcribe_and_paste, args=(audio, finestra_bersaglio), daemon=True
+    ).start()
 
 
-def transcribe_and_paste(audio: np.ndarray) -> None:
+def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
     try:
         segments, _info = load_model().transcribe(
             audio,
@@ -478,6 +506,7 @@ def transcribe_and_paste(audio: np.ndarray) -> None:
         eventi.put("nascosto")
         if not text:
             return
+        riattiva_bersaglio(finestra_bersaglio)
         paste_text(text)
         # modalita' conversazione: voce accesa = la domanda parte da sola
         if voce_attiva() and INVIO_AUTOMATICO:
