@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (20)
+
+- **La pulizia si salta anche a mani libere ON, non solo a voce ON**: caso reale — Sal usava mani libere con la voce agenti spenta, la pulizia girava e il modello Apple ha RIASSUNTO il dettato invece di correggerlo (35 parole grezze intere ridotte a meta': "si e' mangiato le parole" era la pulizia, non il microfono). Il criterio "sono in conversazione con l'agente" ora e' `voce ON || mani libere ON`.
+
 ## Non rilasciato - 06/07/2026 (19)
 
 - **Toggle mani libere: suoni immediati invece dell'annuncio parlato**: il TTS ("Mani libere attivate", via Shortcuts/Siri) teneva il microfono sordo ~4s tra latenza, durata e periodo di grazia — quello che si diceva subito dopo il combo andava perso (caso reale: l'"Ok" di Sal ignorato). Ora: ON = suono "Glass", OFF = suono "Bottle", si puo' parlare immediatamente. Lo stato visivo lo danno il microfonino flottante e l'icona nella barra menu.

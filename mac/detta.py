@@ -551,11 +551,13 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         log.info("trascritto: %d parole%s", len(testo.split()), " (grezzo, in conversazione)" if testo else "")
         if debug and testo and not allucinato:
             log.info("grezzo: %s", testo)
-        # In conversazione (voce ON) la pulizia costa 1-3s su quasi ogni turno
-        # (quasi tutto supera pulizia_min_parole) per un guadagno che l'agente
-        # non ha bisogno di avere: capisce benissimo il parlato grezzo. Botta
-        # e risposta vince sulla forma: si salta, salvo attivarla a mano.
-        salta_per_conversazione = voce_attiva() and not cfg.get("pulizia_in_conversazione", False)
+        # In conversazione con l'agente (voce ON *o* mani libere ON) la
+        # pulizia si salta: costa 1-3s a turno e — caso reale 06/07 — il
+        # modello Apple a volte RIASSUME invece di correggere (35 parole
+        # grezze intere ridotte a meta': "si e' mangiato le parole" era la
+        # pulizia, non il microfono). L'agente capisce benissimo il grezzo.
+        in_conversazione = voce_attiva() or mani_libere_attive()
+        salta_per_conversazione = in_conversazione and not cfg.get("pulizia_in_conversazione", False)
         if testo and not salta_per_conversazione and (SHORTCUT_PULIZIA or COMANDO_PULIZIA) and serve_pulizia(testo, cfg):
             eventi.put("sistemo")
             glossario = cfg.get("glossario", [])
