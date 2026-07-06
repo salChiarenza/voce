@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (17) — combo modificatori riscritto sui flag di sistema
+
+- **Cmd+Option ora si legge dai flag Quartz, non dagli eventi pynput**: log alla mano, la tastiera fisica di Sal NON generava alcun evento pynput quando i due modificatori venivano premuti insieme (con eventi sintetici funzionava, con le dita no — zero righe nel log). Nuovo `worker_combo_mani_libere`: polling 0.05s su `CGEventSourceFlagsState` (stato di sistema, sempre vero qualunque tastiera); debounce per hold; chiude la dettatura manuale se era appena partita. Vale per qualsiasi Cmd + qualsiasi Option (destri o sinistri). Anche il combo voce (Option+freccia sinistra) ora verifica Option dai flag di sistema invece che da pynput. Rimossi ALT_KEYS/alt_premuto e il log diagnostico temporaneo.
+
 ## Non rilasciato - 06/07/2026 (16)
 
 - **Fix: spegnere mani libere mentre il VAD registra chiudeva male**: la registrazione restava aperta (pill fissa sullo schermo) finche' non scattava l'anti-incanto dei 90s — percepita come "resta sempre attivo". Ora il worker chiude la registrazione appena la modalita' si spegne.

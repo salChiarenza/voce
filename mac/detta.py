@@ -41,13 +41,13 @@ FREQ = 16000  # Whisper lavora a 16 kHz
 
 # Interruttori scelti da Sal (06/07, iterazione definitiva):
 # - voce agenti = OPTION + FRECCIA SINISTRA (la freccia attaccata a Option
-#   sulla sua tastiera; provato da lui: nessuna interferenza. Le versioni
-#   precedenti confliggevano: Option+punto apriva la sezione laterale
-#   dell'app, il long-press era poco scopribile);
-# - mani libere = CMD DESTRO + OPTION tenuti insieme (solo modificatori:
-#   niente carattere composto che finirebbe digitato in chat).
+#   sulla sua tastiera; provato da lui: nessuna interferenza);
+# - mani libere = CMD + OPTION tenuti insieme (solo modificatori: niente
+#   carattere composto che finirebbe digitato in chat). Lo stato dei
+#   modificatori si legge dai flag di sistema Quartz, NON dagli eventi
+#   pynput: sulla tastiera fisica di Sal i modificatori premuti insieme
+#   non generavano alcun evento (verificato dal log 06/07).
 # Option da solo e' NEUTRO.
-ALT_KEYS = (Key.alt, Key.alt_l, Key.alt_r)  # pynput a volte riporta il generico Key.alt
 TASTO_COMBO_VOCE = Key.left  # Option + freccia sinistra = voce agenti on/off
 
 tastiera = Controller()
@@ -58,7 +58,6 @@ listener = None  # listener globale della tastiera (ricreabile dal watchdog)
 eventi = queue.Queue()  # il thread tastiera manda qui i cambi di stato per il pannello
 comandi_audio = queue.Queue()  # il thread tastiera mette qui "start"/"stop": li esegue il worker audio
 tasto_premuto = False  # stato del tasto-detta, posseduto SOLO dal thread tastiera
-alt_premuto = False  # Option giu': serve ai due combo (voce, mani libere)
 combo_voce_scattato = False  # debounce: Option+freccia tenuti = una sola commutazione
 combo_mani_libere_scattato = False  # debounce: Cmd+Option tenuti = una sola commutazione
 inizio_registrazione = None
@@ -773,47 +772,62 @@ def watchdog_audio():
                 riavvia_su_cambio_device(f"{device_input_apertura!r} -> {attuale!r}")
 
 
-def _scatta_combo_mani_libere():
-    """Cmd destro + Option insieme: una sola commutazione per hold.
-    commuta_* fanno lavoro BLOCCANTE (pkill/shortcuts/say/pipe): MAI sul
-    thread della tastiera, o l'event-tap si "appende" e la dettatura si
-    blocca (il watchdog non recupera: listener vivo ma incastrato)."""
+# pynput si e' dimostrato CIECO sui combo di modificatori premuti insieme
+# dalla tastiera fisica di Sal (log 06/07: Cmd destro+Option premuti e
+# rilasciati, ZERO eventi arrivati al listener; con eventi sintetici invece
+# funzionava). Lo stato dei modificatori si legge quindi direttamente dal
+# sistema (Quartz), che e' sempre vero qualunque sia la tastiera.
+
+def _option_giu():
+    flags = Quartz.CGEventSourceFlagsState(Quartz.kCGEventSourceStateCombinedSessionState)
+    return bool(flags & Quartz.kCGEventFlagMaskAlternate)
+
+
+def _cmd_giu():
+    flags = Quartz.CGEventSourceFlagsState(Quartz.kCGEventSourceStateCombinedSessionState)
+    return bool(flags & Quartz.kCGEventFlagMaskCommand)
+
+
+def worker_combo_mani_libere():
+    """Cmd + Option tenuti insieme = toggle mani libere. Polling sullo stato
+    di sistema dei modificatori (0.05s), NON eventi pynput. Debounce: una
+    commutazione per hold. Se la dettatura manuale era appena partita (Cmd
+    sceso un attimo prima di Option), la chiude: l'audio di pochi decimi di
+    secondo viene scartato dal gate < 0.4s."""
     global combo_mani_libere_scattato
-    if not combo_mani_libere_scattato:
-        combo_mani_libere_scattato = True
-        threading.Thread(target=esegui_sicuro, args=(commuta_mani_libere,), daemon=True).start()
+    while True:
+        time.sleep(0.05)
+        entrambi = _cmd_giu() and _option_giu()
+        if entrambi and not combo_mani_libere_scattato:
+            combo_mani_libere_scattato = True
+            if registrando:
+                comandi_audio.put("stop")
+            # commuta_* fanno lavoro BLOCCANTE (pkill/shortcuts/say/pipe):
+            # su thread dedicato per non bloccare questo poller.
+            threading.Thread(target=esegui_sicuro, args=(commuta_mani_libere,), daemon=True).start()
+        elif not entrambi:
+            combo_mani_libere_scattato = False
 
 
 def su_pressione(tasto):
-    global tasto_premuto, alt_premuto, combo_voce_scattato
+    global tasto_premuto, combo_voce_scattato
     if tasto == TASTO:
-        if alt_premuto:                 # Option gia' giu' + Cmd ora = combo mani libere
-            _scatta_combo_mani_libere() # niente dettatura: tasto_premuto resta False
-        elif not tasto_premuto:
+        if _option_giu():               # Option gia' giu': e' il combo mani libere
+            return                      # (lo scatta il poller) — niente dettatura
+        if not tasto_premuto:
             tasto_premuto = True        # stato sul solo thread tastiera: niente race
             comandi_audio.put("start")  # il lavoro audio (bloccante) lo fa il worker
-    elif tasto in ALT_KEYS:
-        alt_premuto = True
-        if tasto_premuto:               # Cmd gia' giu' (registrazione partita) + Option ora
-            tasto_premuto = False       # annulla la dettatura: l'audio di pochi decimi
-            comandi_audio.put("stop")   # di secondo viene scartato dal gate < 0.4s
-            _scatta_combo_mani_libere()
-    elif tasto == TASTO_COMBO_VOCE and alt_premuto and not combo_voce_scattato:
+    elif tasto == TASTO_COMBO_VOCE and not combo_voce_scattato and _option_giu():
         combo_voce_scattato = True      # debounce: un hold = una sola commutazione
         threading.Thread(target=esegui_sicuro, args=(commuta_voce,), daemon=True).start()
 
 
 def su_rilascio(tasto):
-    global tasto_premuto, alt_premuto, combo_voce_scattato, combo_mani_libere_scattato
+    global tasto_premuto, combo_voce_scattato
     if tasto == TASTO:
         if tasto_premuto:
             tasto_premuto = False
             comandi_audio.put("stop")
-        combo_mani_libere_scattato = False  # combo finito: il prossimo hold ricommuta
-    elif tasto in ALT_KEYS:
-        alt_premuto = False
-        combo_voce_scattato = False
-        combo_mani_libere_scattato = False
     elif tasto == TASTO_COMBO_VOCE:
         combo_voce_scattato = False
 
@@ -949,6 +963,7 @@ if __name__ == "__main__":
     threading.Thread(target=worker_audio, daemon=True).start()  # possiede lo start/stop registrazione
     threading.Thread(target=watchdog_audio, daemon=True).start()  # recupera stop persi/CoreAudio bloccato
     threading.Thread(target=worker_mani_libere, daemon=True).start()  # ascolto continuo, solo se attivato
+    threading.Thread(target=worker_combo_mani_libere, daemon=True).start()  # Cmd+Option via flag di sistema
     listener = avvia_listener()  # hotkey attivo DA SUBITO
     threading.Thread(target=_scalda_modello, daemon=True).start()  # modello in sottofondo
     threading.Thread(target=lambda: esegui_sicuro(_impara_dagli_errori), daemon=True).start()
