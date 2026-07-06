@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (23)
+
+- **L'Invio automatico si annulla se tocchi la tastiera o stai gia' ridettando**: durante la pausa pre-Invio, qualsiasi tasto premuto o una nuova registrazione in corso bloccano l'Enter (caso reale: Sal voleva aggiungere una seconda frase e la prima e' partita da sola). Il testo resta incollato e parte con l'Invio del turno successivo, tutto insieme.
+
 ## Non rilasciato - 06/07/2026 (22)
 
 - **`voce mani on|off`**: lo script `voce` ora comanda anche le mani libere, e `voce` senza argomenti mostra lo stato di entrambe. Cosi' l'agente puo' eseguire "spegni il microfono" al volo (`voce mani off`) invece di spiegare i tasti.

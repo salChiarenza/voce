@@ -60,6 +60,7 @@ comandi_audio = queue.Queue()  # il thread tastiera mette qui "start"/"stop": li
 tasto_premuto = False  # stato del tasto-detta, posseduto SOLO dal thread tastiera
 combo_voce_scattato = False  # debounce: Option+freccia tenuti = una sola commutazione
 combo_mani_libere_scattato = False  # debounce: Cmd+Option tenuti = una sola commutazione
+ultima_pressione_utente = 0.0  # qualsiasi tasto: annulla l'Invio automatico in attesa
 inizio_registrazione = None
 volume_corrente = 0.0  # RMS aggiornato ad ogni callback audio, anche fuori registrazione
 # anello di pre-registrazione (~1s): i blocchi audio appena precedenti allo
@@ -610,19 +611,36 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
             incolla(testo)
             log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
             # invio automatico: parte sempre (indipendente dal toggle voce
-            # agenti). La PAUSA prima dell'Invio pero' dipende dal contesto:
-            # a voce ON e' una conversazione vera con l'agente (botta e
-            # risposta, niente tempo di rilettura); a voce OFF e' dettatura
-            # su testo/email/social dove serve tempo per correggere.
+            # agenti). La PAUSA prima dell'Invio dipende dal contesto: a voce
+            # ON e' botta e risposta (breve), a voce OFF e' dettatura su testo
+            # dove serve tempo per correggere. Durante l'attesa, QUALSIASI
+            # tasto premuto da Sal o una nuova registrazione gia' in corso
+            # ANNULLANO l'Invio (richiesta 06/07: "se clicco un tasto l'invio
+            # si deve bloccare" — stava aggiungendo una seconda frase e la
+            # prima e' partita da sola). La frase resta incollata: partira'
+            # con l'Invio del turno successivo, tutto insieme.
             if cfg.get("invio_automatico", True):
                 chiave_ritardo = (
                     "invio_automatico_ritardo_conversazione_sec" if voce_attiva()
                     else "invio_automatico_ritardo_sec"
                 )
-                time.sleep(float(cfg.get(chiave_ritardo, 0.3 if voce_attiva() else 2.5)))
-                tastiera.press(Key.enter)
-                tastiera.release(Key.enter)
-                log.info("invio automatico premuto")
+                attesa = float(cfg.get(chiave_ritardo, 0.3 if voce_attiva() else 2.5))
+                time.sleep(0.15)  # margine: il Cmd+V dell'incolla non deve contare come "tasto di Sal"
+                riferimento = time.monotonic()
+                trascorso = 0.0
+                annullato = False
+                while trascorso < attesa:
+                    time.sleep(min(0.1, attesa - trascorso))
+                    trascorso = time.monotonic() - riferimento
+                    if ultima_pressione_utente > riferimento or registrando:
+                        annullato = True
+                        break
+                if annullato:
+                    log.info("invio automatico ANNULLATO (tasto premuto o nuova dettatura in corso)")
+                else:
+                    tastiera.press(Key.enter)
+                    tastiera.release(Key.enter)
+                    log.info("invio automatico premuto")
         else:
             log.info("niente da incollare (testo vuoto dopo trascrizione/pulizia)")
     except Exception:
@@ -860,7 +878,8 @@ def worker_combo_mani_libere():
 
 
 def su_pressione(tasto):
-    global tasto_premuto, combo_voce_scattato
+    global tasto_premuto, combo_voce_scattato, ultima_pressione_utente
+    ultima_pressione_utente = time.monotonic()  # annulla un eventuale Invio in attesa
     if tasto == TASTO:
         if _option_giu():               # Option gia' giu': e' il combo mani libere
             return                      # (lo scatta il poller) — niente dettatura
