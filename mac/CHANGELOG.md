@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (22)
+
+- **`voce mani on|off`**: lo script `voce` ora comanda anche le mani libere, e `voce` senza argomenti mostra lo stato di entrambe. Cosi' l'agente puo' eseguire "spegni il microfono" al volo (`voce mani off`) invece di spiegare i tasti.
+
 ## Non rilasciato - 06/07/2026 (21) — protezioni mani libere
 
 - **Auto-spegnimento dopo inattivita'** (`mani_libere_autospegnimento_min`, default 10): mani libere dimenticata accesa = telefonate/persone/video trascritti e inviati in chat. Dopo N minuti senza dettature si spegne da sola con suono. Verificato dal vivo (timeout di prova: spenta e loggata). `0` = disattivato.

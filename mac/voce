@@ -1,5 +1,10 @@
 #!/bin/bash
-# Interruttore voce in uscita: voce on | voce off | voce (stato)
+# Interruttori Voce:
+#   voce on|off          -> voce agenti (lettura risposte ad alta voce)
+#   voce mani on|off     -> mani libere (ascolto continuo senza tasto)
+#   voce                 -> stato di entrambe
+# Comandi usati anche dagli agenti quando chiedi a voce/chat di
+# accendere o spegnere ("spegni il microfono" = voce mani off).
 DIR="$(cd "$(dirname "$0")" && pwd)"
 PY="$DIR/.venv/bin/python"
 case "$1" in
@@ -7,5 +12,13 @@ case "$1" in
   off) rm -f "$DIR/VOICE_ON"
        "$PY" "$DIR/parla.py" --stop
        echo "Voce: SPENTA" ;;
-  *)   [ -f "$DIR/VOICE_ON" ] && echo "Voce: ACCESA" || echo "Voce: SPENTA" ;;
+  mani)
+    case "$2" in
+      on)  touch "$DIR/MANI_LIBERE_ON"; echo "Mani libere: ATTIVE" ;;
+      off) rm -f "$DIR/MANI_LIBERE_ON"; echo "Mani libere: SPENTE" ;;
+      *)   [ -f "$DIR/MANI_LIBERE_ON" ] && echo "Mani libere: ATTIVE" || echo "Mani libere: SPENTE" ;;
+    esac ;;
+  *)
+    [ -f "$DIR/VOICE_ON" ] && echo "Voce: ACCESA" || echo "Voce: SPENTA"
+    [ -f "$DIR/MANI_LIBERE_ON" ] && echo "Mani libere: ATTIVE" || echo "Mani libere: SPENTE" ;;
 esac
