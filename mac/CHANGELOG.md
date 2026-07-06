@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (18) — mani libere: frasi intere, non spezzate
+
+- **Pre-registrazione (~1s)**: il VAD parte quando gia' stai parlando — senza anello di pre-buffer la prima parola andava persa ("mi ha preso solo una parte"). Ora la registrazione parte dai blocchi audio appena precedenti allo start. Vale anche per la dettatura manuale (innocuo: il pre-roll e' silenzio).
+- **Isteresi a due soglie**: innesco a `mani_libere_soglia_voce` (0.010), stop solo sotto `mani_libere_soglia_stop` (0.005, meta') per `mani_libere_silenzio_sec` (1.4s, era 0.9): chi parla piano (rms 0.012-0.015 misurato) non viene piu' tagliato nelle pause naturali. Attivazione piu' rapida (0.2s).
+
 ## Non rilasciato - 06/07/2026 (17) — combo modificatori riscritto sui flag di sistema
 
 - **Cmd+Option ora si legge dai flag Quartz, non dagli eventi pynput**: log alla mano, la tastiera fisica di Sal NON generava alcun evento pynput quando i due modificatori venivano premuti insieme (con eventi sintetici funzionava, con le dita no — zero righe nel log). Nuovo `worker_combo_mani_libere`: polling 0.05s su `CGEventSourceFlagsState` (stato di sistema, sempre vero qualunque tastiera); debounce per hold; chiude la dettatura manuale se era appena partita. Vale per qualsiasi Cmd + qualsiasi Option (destri o sinistri). Anche il combo voce (Option+freccia sinistra) ora verifica Option dai flag di sistema invece che da pynput. Rimossi ALT_KEYS/alt_premuto e il log diagnostico temporaneo.

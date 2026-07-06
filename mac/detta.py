@@ -62,6 +62,9 @@ combo_voce_scattato = False  # debounce: Option+freccia tenuti = una sola commut
 combo_mani_libere_scattato = False  # debounce: Cmd+Option tenuti = una sola commutazione
 inizio_registrazione = None
 volume_corrente = 0.0  # RMS aggiornato ad ogni callback audio, anche fuori registrazione
+# anello di pre-registrazione (~1s): i blocchi audio appena precedenti allo
+# start, per non perdere l'attacco della frase quando parte il VAD mani-libere
+pre_registrazione = collections.deque(maxlen=32)
 
 BARRE = 18  # quante lineette nel visualizzatore
 livelli = collections.deque([0.0] * BARRE, maxlen=BARRE)
@@ -461,7 +464,12 @@ def su_callback(indata, frames, t, status):
     global volume_corrente
     volume_corrente = float(np.sqrt(np.mean(indata ** 2)))  # serve al VAD mani-libere anche fuori registrazione
     if not registrando:
-        return  # stream sempre aperto: fuori registrazione scartiamo, non accumuliamo
+        # stream sempre aperto: fuori registrazione teniamo solo un piccolo
+        # anello di pre-registrazione (~1s). Serve alle mani libere: il VAD
+        # parte DOPO che hai iniziato a parlare, senza questo la prima
+        # parola andrebbe persa ("mi ha preso solo una parte", 06/07).
+        pre_registrazione.append(indata.copy())
+        return
     blocchi.append(indata.copy())
     livelli.append(volume_corrente)
 
@@ -506,7 +514,10 @@ def _nascondi_o_arma():
 def avvia_registrazione():
     global blocchi, registrando, inizio_registrazione
     ferma_voce()  # ti zittisco se parlo io: tocca a te
-    blocchi = []
+    # si parte dall'anello di pre-registrazione: il VAD scatta quando gia'
+    # stai parlando, senza questi blocchi la prima parola andrebbe persa
+    blocchi = list(pre_registrazione)
+    pre_registrazione.clear()
     livelli.extend([0.0] * BARRE)
     registrando = True
     inizio_registrazione = time.monotonic()
@@ -679,13 +690,16 @@ def worker_mani_libere():
     stato = IDLE
     frame_sopra = frame_sotto = 0
     intervallo = 0.05
-    # Soglia d'innesco PIU' ALTA della soglia-voce generale: il rumore ambiente
-    # di Sal sta a rms 0.004-0.009 (caso reale "ARRAB ARRAB": innescato a
-    # 0.0046), il suo parlato vero a 0.02-0.06. Con la soglia base il VAD
-    # partiva sul rumore e Whisper allucinava sopra il nulla.
-    soglia = float(cfg.get("mani_libere_soglia_voce", 0.012))
-    frame_attivazione = max(1, round(cfg.get("mani_libere_attivazione_sec", 0.3) / intervallo))
-    frame_silenzio = max(1, round(cfg.get("mani_libere_silenzio_sec", 0.9) / intervallo))
+    # ISTERESI a due soglie (06/07, "mi ha preso solo una parte"): Sal a
+    # volte parla piano (rms 0.012-0.015, vicino alla soglia d'innesco) e
+    # con una soglia sola il VAD si fermava nelle sue pause naturali,
+    # spezzando la frase. Innesco a soglia piena (sopra il rumore ambiente
+    # 0.004-0.009), STOP solo quando si scende sotto una soglia piu' bassa
+    # (meta') per un silenzio piu' lungo.
+    soglia_start = float(cfg.get("mani_libere_soglia_voce", 0.010))
+    soglia_stop = float(cfg.get("mani_libere_soglia_stop", soglia_start / 2))
+    frame_attivazione = max(1, round(cfg.get("mani_libere_attivazione_sec", 0.2) / intervallo))
+    frame_silenzio = max(1, round(cfg.get("mani_libere_silenzio_sec", 1.4) / intervallo))
     fine_voce = 0.0  # quando l'agente ha smesso di parlare: piccolo periodo di grazia
     grazia_sec = float(cfg.get("mani_libere_grazia_dopo_voce_sec", 0.7))
     while True:
@@ -707,7 +721,7 @@ def worker_mani_libere():
         if stato == IDLE:
             if registrando:  # gia' in corso (es. tasto manuale): non toccare
                 continue
-            if volume_corrente >= soglia:
+            if volume_corrente >= soglia_start:
                 frame_sopra += 1
                 if frame_sopra >= frame_attivazione:
                     frame_sopra = 0
@@ -716,7 +730,7 @@ def worker_mani_libere():
             else:
                 frame_sopra = 0
         elif stato == ASCOLTO:
-            if volume_corrente < soglia:
+            if volume_corrente < soglia_stop:
                 frame_sotto += 1
                 if frame_sotto >= frame_silenzio:
                     frame_sotto = 0
