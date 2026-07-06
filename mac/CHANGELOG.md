@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (21) — protezioni mani libere
+
+- **Auto-spegnimento dopo inattivita'** (`mani_libere_autospegnimento_min`, default 10): mani libere dimenticata accesa = telefonate/persone/video trascritti e inviati in chat. Dopo N minuti senza dettature si spegne da sola con suono. Verificato dal vivo (timeout di prova: spenta e loggata). `0` = disattivato.
+- **Filtro anti-non-parlato**: Whisper dichiara per segmento quanto e' sicuro che sia voce (`no_speech_prob`) e quanto e' confidente (`avg_logprob`). Musica/rumore/sottofondo con no_speech alto E confidenza bassa vengono scartati prima di diventare testo in chat (`soglia_no_speech` 0.6, `soglia_confidenza` -1.0).
+
 ## Non rilasciato - 06/07/2026 (20)
 
 - **La pulizia si salta anche a mani libere ON, non solo a voce ON**: caso reale — Sal usava mani libere con la voce agenti spenta, la pulizia girava e il modello Apple ha RIASSUNTO il dettato invece di correggerlo (35 parole grezze intere ridotte a meta': "si e' mangiato le parole" era la pulizia, non il microfono). Il criterio "sono in conversazione con l'agente" ora e' `voce ON || mani libere ON`.

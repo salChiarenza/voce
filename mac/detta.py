@@ -354,6 +354,21 @@ def trascrivi(audio):
         audio, path_or_hf_repo=cfg["modello"], language=cfg["lingua"],
         initial_prompt=GLOSSARIO_PROMPT,
     )
+    # Filtro anti-non-parlato (06/07): Whisper dichiara per ogni segmento
+    # quanto e' sicuro che sia voce vera. Musica, rumori e audio di
+    # sottofondo (video, telefono in vivavoce) producono no_speech_prob
+    # alta o confidenza bassissima: si scartano qui, prima che diventino
+    # testo allucinato incollato in chat. Soglie regolabili in config.
+    segmenti = esito.get("segments") or []
+    if segmenti:
+        no_speech = sum(s.get("no_speech_prob", 0.0) for s in segmenti) / len(segmenti)
+        confidenza = sum(s.get("avg_logprob", 0.0) for s in segmenti) / len(segmenti)
+        if no_speech > float(cfg.get("soglia_no_speech", 0.6)) and confidenza < float(cfg.get("soglia_confidenza", -1.0)):
+            logging.getLogger("voce").info(
+                "scartato: non sembra parlato (no_speech %.2f, confidenza %.2f)",
+                no_speech, confidenza,
+            )
+            return ""
     return applica_sostituzioni(esito["text"].strip(), cfg.get("sostituzioni", {}))
 
 
@@ -702,6 +717,13 @@ def worker_mani_libere():
     frame_silenzio = max(1, round(cfg.get("mani_libere_silenzio_sec", 1.4) / intervallo))
     fine_voce = 0.0  # quando l'agente ha smesso di parlare: piccolo periodo di grazia
     grazia_sec = float(cfg.get("mani_libere_grazia_dopo_voce_sec", 0.7))
+    # Auto-spegnimento: mani libere dimenticata accesa = tutto quello che
+    # suona nella stanza (telefonate, persone, video) finisce in chat con
+    # Invio automatico. Dopo N minuti senza nessuna dettatura si spegne da
+    # sola, con suono di conferma.
+    autospegnimento_sec = float(cfg.get("mani_libere_autospegnimento_min", 10)) * 60
+    ultima_attivita = time.monotonic()
+    era_attiva = False
     while True:
         time.sleep(intervallo)
         if not mani_libere_attive():
@@ -711,6 +733,20 @@ def worker_mani_libere():
                 # fissa sullo schermo) finche' non scatta l'anti-incanto.
                 comandi_audio.put("stop")
             stato, frame_sopra, frame_sotto = IDLE, 0, 0
+            era_attiva = False
+            continue
+        if not era_attiva:  # appena accesa: il conto dell'inattivita' riparte
+            era_attiva = True
+            ultima_attivita = time.monotonic()
+        if registrando or stato == ASCOLTO:
+            ultima_attivita = time.monotonic()  # sta lavorando: niente conto alla rovescia
+        elif autospegnimento_sec > 0 and time.monotonic() - ultima_attivita > autospegnimento_sec:
+            logging.getLogger("voce").info(
+                "mani libere: auto-spegnimento dopo %.0f minuti di inattivita'",
+                autospegnimento_sec / 60,
+            )
+            FLAG_MANI_LIBERE_ON.unlink(missing_ok=True)
+            suono("Bottle")
             continue
         if FLAG_PARLANDO.exists():  # l'agente sta leggendo la risposta: si aspetta
             fine_voce = time.monotonic()

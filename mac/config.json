@@ -26,5 +26,8 @@
   "pulizia_timeout_sec": 20,
   "mani_libere_grazia_dopo_voce_sec": 0.7,
   "mani_libere_soglia_voce": 0.01,
-  "mani_libere_soglia_stop": 0.005
+  "mani_libere_soglia_stop": 0.005,
+  "mani_libere_autospegnimento_min": 10,
+  "soglia_no_speech": 0.6,
+  "soglia_confidenza": -1.0
 }
