@@ -662,21 +662,19 @@ def commuta_mani_libere():
 
     Su file (FLAG_MANI_LIBERE_ON), non variabile in memoria: cosi' anche il
     lanciatore sul Desktop puo' accenderla insieme alla voce con un click."""
+    # Feedback con SUONI immediati, non TTS: l'annuncio parlato ("Mani
+    # libere attivate", via Shortcuts/Siri) teneva il microfono sordo per
+    # ~4s (latenza + durata + grazia) e quello che Sal diceva subito dopo
+    # il combo andava perso (caso reale 06/07: il suo "Ok" ignorato).
+    # Lo stato visivo lo danno il microfonino e l'icona nella barra menu.
     if FLAG_MANI_LIBERE_ON.exists():
         FLAG_MANI_LIBERE_ON.unlink()
         logging.getLogger("voce").info("combo mani libere: OFF")
-        pronuncia("Mani libere disattivate")
+        suono("Bottle")
     else:
-        # PRIMA l'annuncio, POI il flag: se il flag si accendesse per primo,
-        # il VAD partirebbe sul rumore ambiente e avvia_registrazione()
-        # zittirebbe l'annuncio appena partito (ferma_voce): Sal non sentiva
-        # mai "attivate" e la coda audio diventava un "Yeah" allucinato in chat.
-        # pronuncia() crea FLAG_PARLANDO in modo sincrono, quindi quando il
-        # flag qui sotto si accende il worker resta in attesa fino a fine annuncio.
         logging.getLogger("voce").info("combo mani libere: ON")
-        pronuncia("Mani libere attivate")
+        suono("Glass")
         FLAG_MANI_LIBERE_ON.touch()
-    # feedback visivo: l'icona nella barra menu si aggiorna dal tick (~0.5s)
 
 
 def worker_mani_libere():

@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (19)
+
+- **Toggle mani libere: suoni immediati invece dell'annuncio parlato**: il TTS ("Mani libere attivate", via Shortcuts/Siri) teneva il microfono sordo ~4s tra latenza, durata e periodo di grazia — quello che si diceva subito dopo il combo andava perso (caso reale: l'"Ok" di Sal ignorato). Ora: ON = suono "Glass", OFF = suono "Bottle", si puo' parlare immediatamente. Lo stato visivo lo danno il microfonino flottante e l'icona nella barra menu.
+
 ## Non rilasciato - 06/07/2026 (18) — mani libere: frasi intere, non spezzate
 
 - **Pre-registrazione (~1s)**: il VAD parte quando gia' stai parlando — senza anello di pre-buffer la prima parola andava persa ("mi ha preso solo una parte"). Ora la registrazione parte dai blocchi audio appena precedenti allo start. Vale anche per la dettatura manuale (innocuo: il pre-roll e' silenzio).
