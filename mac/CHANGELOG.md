@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 06/07/2026 (16)
+
+- **Fix: spegnere mani libere mentre il VAD registra chiudeva male**: la registrazione restava aperta (pill fissa sullo schermo) finche' non scattava l'anti-incanto dei 90s — percepita come "resta sempre attivo". Ora il worker chiude la registrazione appena la modalita' si spegne.
+- I toggle voce/mani libere ora scrivono una riga nel log ("combo voce: ...", "combo mani libere: ON/OFF"): diagnosi immediata quando un combo fisico non risponde.
+
 ## Non rilasciato - 06/07/2026 (15)
 
 - **Microfonino mani-libere sempre visibile e vivo**: quando la modalita' e' attiva, in basso (a destra del centro, fuori dall'ingombro della pill) resta un piccolo 🎙️ flottante che pulsa col volume — piu' forte parli, piu' grande e opaco. Sparisce quando la modalita' si spegne. Risolve "non si intuisce se e' attivo": lo stato ora ha un segno vivo sullo schermo, non solo l'icona statica nella barra menu.

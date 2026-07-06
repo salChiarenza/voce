@@ -642,6 +642,7 @@ def commuta_voce():
     else:
         FLAG_VOICE_ON.touch()
         stato = "Voce accesa"
+    logging.getLogger("voce").info("combo voce: %s", stato)
     pronuncia(stato)
 
 
@@ -653,6 +654,7 @@ def commuta_mani_libere():
     lanciatore sul Desktop puo' accenderla insieme alla voce con un click."""
     if FLAG_MANI_LIBERE_ON.exists():
         FLAG_MANI_LIBERE_ON.unlink()
+        logging.getLogger("voce").info("combo mani libere: OFF")
         pronuncia("Mani libere disattivate")
     else:
         # PRIMA l'annuncio, POI il flag: se il flag si accendesse per primo,
@@ -661,6 +663,7 @@ def commuta_mani_libere():
         # mai "attivate" e la coda audio diventava un "Yeah" allucinato in chat.
         # pronuncia() crea FLAG_PARLANDO in modo sincrono, quindi quando il
         # flag qui sotto si accende il worker resta in attesa fino a fine annuncio.
+        logging.getLogger("voce").info("combo mani libere: ON")
         pronuncia("Mani libere attivate")
         FLAG_MANI_LIBERE_ON.touch()
     # feedback visivo: l'icona nella barra menu si aggiorna dal tick (~0.5s)
@@ -689,6 +692,11 @@ def worker_mani_libere():
     while True:
         time.sleep(intervallo)
         if not mani_libere_attive():
+            if stato == ASCOLTO:
+                # la modalita' e' stata spenta MENTRE il VAD registrava: la
+                # registrazione va chiusa, altrimenti resta aperta (pill
+                # fissa sullo schermo) finche' non scatta l'anti-incanto.
+                comandi_audio.put("stop")
             stato, frame_sopra, frame_sotto = IDLE, 0, 0
             continue
         if FLAG_PARLANDO.exists():  # l'agente sta leggendo la risposta: si aspetta
