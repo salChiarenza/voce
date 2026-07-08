@@ -511,7 +511,9 @@ def avvia_stream():
     il processo quando succede. Contropartita: se il device di input cambia
     (es. colleghi AirPods, disconnetti un mic USB) questo processo resta
     agganciato al vecchio finche' non riparte: watchdog_audio se ne accorge
-    e si riavvia da solo (vedi riavvia_su_cambio_device)."""
+    e si riavvia da solo (vedi riavvia_processo); se invece il device resta
+    uguale di nome ma lo stream consegna aria morta (Continuity iPhone),
+    interviene airbag_stream_muto alla prima dettatura lunga scartata."""
     global stream, device_input_apertura
     stream = sd.InputStream(
         samplerate=FREQ, channels=1, dtype="float32", callback=su_callback
@@ -673,6 +675,7 @@ def ferma_e_trascrivi():
     if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
         logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
         _nascondi_o_arma()
+        airbag_stream_muto(len(audio) / FREQ)
         return
     threading.Thread(
         target=_trascrivi_e_incolla, args=(audio, app_bersaglio, scheda_bersaglio), daemon=True
@@ -808,15 +811,43 @@ def worker_audio():
             esegui_sicuro(ferma_e_trascrivi)
 
 
-def riavvia_su_cambio_device(motivo):
-    """Il device di input e' cambiato sotto lo stream sempre-aperto: invece di
-    chiamare stream.stop()/close() (il deadlock che abbiamo appena eliminato),
-    usciamo e ripartiamo da zero. L'uscita del processo chiude il device per
-    conto dell'OS, senza passare dal mutex CoreAudio che si incantava."""
-    logging.getLogger("voce").warning("riavvio per cambio microfono: %s", motivo)
+def riavvia_processo(motivo):
+    """L'audio e' compromesso sotto lo stream sempre-aperto (device cambiato o
+    stream incantato): invece di chiamare stream.stop()/close() (il deadlock
+    che abbiamo appena eliminato), usciamo e ripartiamo da zero. L'uscita del
+    processo chiude il device per conto dell'OS, senza passare dal mutex
+    CoreAudio che si incantava."""
+    logging.getLogger("voce").warning("riavvio processo audio: %s", motivo)
     cartella = os.path.dirname(os.path.abspath(__file__))
     subprocess.Popen([sys.executable, os.path.abspath(__file__)], cwd=cartella, start_new_session=True)
     os._exit(0)
+
+
+FILE_ULTIMO_RIAVVIO_MUTO = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), ".ultimo_riavvio_muto"
+)
+
+
+def airbag_stream_muto(durata):
+    """Dettatura lunga ma quasi muta = quasi sempre stream CoreAudio incantato
+    (caso 08/07: 12s di parlato a rms 0.0016 dopo la comparsa del Microfono di
+    iPhone). Il watchdog per nome-device non se ne accorge: PortAudio congela
+    la lista device all'avvio, quindi il confronto non cambia mai. Rimedio:
+    lo stesso riavvio pulito del cambio device. Cooldown su file: se il
+    riavvio non risolve (mic muto davvero), niente loop di riavvii."""
+    if durata < 3.0:
+        return  # tocco corto senza parlato: silenzio legittimo, non un guasto
+    try:
+        if time.time() - os.path.getmtime(FILE_ULTIMO_RIAVVIO_MUTO) < 600:
+            logging.getLogger("voce").warning(
+                "stream ancora muto dopo riavvio recente: mic muto/occupato davvero, non riavvio"
+            )
+            return
+    except OSError:
+        pass  # mai riavviato prima: si procede
+    with open(FILE_ULTIMO_RIAVVIO_MUTO, "w") as f:
+        f.write(str(time.time()))
+    riavvia_processo(f"dettatura {durata:.1f}s quasi muta (stream incantato?)")
 
 
 def watchdog_audio():
@@ -837,7 +868,7 @@ def watchdog_audio():
         if tick % 10 == 0 and not registrando:  # ogni ~5s, mai a meta' di una dettatura
             attuale = nome_device_input()
             if attuale is not None and attuale != device_input_apertura:
-                riavvia_su_cambio_device(f"{device_input_apertura!r} -> {attuale!r}")
+                riavvia_processo(f"cambio microfono: {device_input_apertura!r} -> {attuale!r}")
 
 
 # pynput si e' dimostrato CIECO sui combo di modificatori premuti insieme

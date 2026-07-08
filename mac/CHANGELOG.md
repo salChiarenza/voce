@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 08/07/2026 (24)
+
+- **Airbag "stream muto"**: se una dettatura lunga (≥3s) arriva quasi muta (caso reale: 12s di parlato a rms 0.0016 dopo la comparsa del "Microfono di iPhone" via Continuity), lo stream CoreAudio sempre-aperto si e' incantato e l'app si riavvia da sola, come gia' fa per il cambio device. Il watchdog per nome-device non bastava: PortAudio congela la lista dispositivi all'avvio, quindi non vedeva il cambio. Cooldown 10 min su file: se il riavvio non risolve (mic muto davvero), niente loop. I tocchi corti senza parlato restano silenzio legittimo. *(Da gemellare su Windows: li' manca anche lo scarto-per-soglia; collaudo su PC reale prima di dichiararla.)*
+
 ## Non rilasciato - 06/07/2026 (23)
 
 - **L'Invio automatico si annulla se tocchi la tastiera o stai gia' ridettando**: durante la pausa pre-Invio, qualsiasi tasto premuto o una nuova registrazione in corso bloccano l'Enter (caso reale: Sal voleva aggiungere una seconda frase e la prima e' partita da sola). Il testo resta incollato e parte con l'Invio del turno successivo, tutto insieme.
