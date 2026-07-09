@@ -56,6 +56,18 @@ def audio_fuori_scala(rms, massimo=1.0):
     return rms > massimo
 
 
+def aggiorna_scarti_fuori_scala(contatore, rms, soglia_riavvio=2):
+    """Policy sull'audio fuori scala: torna (nuovo_contatore, scartare, riavviare).
+    Un episodio isolato e' un transitorio che si riassorbe da solo (caso 09/07:
+    ~20s poi tutto ok): si scarta e basta. Dal secondo di fila la corruzione
+    persiste e conviene il riavvio pulito dello stream (stesso rimedio del
+    cambio device e dello stream muto)."""
+    if not audio_fuori_scala(rms):
+        return 0, False, False
+    contatore += 1
+    return contatore, True, contatore >= soglia_riavvio
+
+
 def c_e_voce(audio, soglia=SOGLIA_VOCE):
     """True se l'audio ha l'energia di un parlato vero, non di silenzio/respiro."""
     import numpy as np  # import pigro: l'hook TTS usa voce_lib senza numpy

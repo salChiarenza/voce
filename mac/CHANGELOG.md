@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 09/07/2026 (26)
+
+- **L'airbag "audio fuori scala" ora si ripara da solo se la corruzione persiste**: il primo episodio si scarta e basta (transitorio che si riassorbe), dal **secondo di fila** l'app si riavvia da sola con lo stesso riavvio pulito del cambio device — niente dettature a vuoto finche' non riavvii a mano. Policy pura `aggiorna_scarti_fuori_scala` in `voce_lib.py`, testata. *(Su Windows non serve: li' lo stream si apre fresco a ogni dettatura, basta lo scarto.)*
+
 ## Non rilasciato - 09/07/2026 (25)
 
 - **Airbag "audio fuori scala"**: se una dettatura arriva con rms > 1.0 — fisicamente impossibile per uno stream float32 sano, i sample vivono in [-1, 1] — l'audio e' corrotto (CoreAudio ha rimappato il device sotto lo stream sempre-aperto) e si scarta invece di trascriverlo (caso reale 09/07: ~20s a rms 3-4, Whisper allucinava "KFC is a…" e l'invio automatico spediva la spazzatura agli agenti). Il transitorio si riassorbe da solo in pochi secondi; niente riavvio. Funzione pura `audio_fuori_scala` in `voce_lib.py`, testata. *(Gemellata su Windows lo stesso giorno.)*

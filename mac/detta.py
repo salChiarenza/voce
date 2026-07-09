@@ -27,7 +27,7 @@ from pynput.keyboard import Controller, Key
 from voce_lib import (
     carica_config, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
     mani_libere_attive, FLAG_MANI_LIBERE_ON,
-    c_e_voce, audio_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
+    c_e_voce, aggiorna_scarti_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
@@ -650,10 +650,13 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         _nascondi_o_arma()
 
 
+scarti_fuori_scala = 0  # dettature di fila con sample fuori [-1,1]: al 2° si riavvia lo stream
+
+
 def ferma_e_trascrivi():
     """Chiude la registrazione (il microfono resta aperto: vedi avvia_stream)
     e lancia la trascrizione su un thread a parte."""
-    global registrando, inizio_registrazione
+    global registrando, inizio_registrazione, scarti_fuori_scala
     if not registrando:
         _nascondi_o_arma()
         return
@@ -672,11 +675,16 @@ def ferma_e_trascrivi():
         return
     rms = float(np.sqrt(np.mean(audio ** 2)))
     logging.getLogger("voce").info("audio: %.1fs, volume rms %.4f", len(audio) / FREQ, rms)
-    if audio_fuori_scala(rms):  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
+    scarti_fuori_scala, scarta, riavvia = aggiorna_scarti_fuori_scala(scarti_fuori_scala, rms)
+    if scarta:  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
         logging.getLogger("voce").warning(
             "scartato: audio fuori scala (rms %.2f > 1), stream corrotto — riprova tra qualche secondo", rms
         )
         _nascondi_o_arma()
+        if riavvia:
+            riavvia_processo(
+                f"audio fuori scala persistente (rms {rms:.2f}, {scarti_fuori_scala} scarti di fila)"
+            )
         return
     if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
         logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
