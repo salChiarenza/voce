@@ -27,7 +27,7 @@ from pynput.keyboard import Controller, Key
 from voce_lib import (
     carica_config, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
     mani_libere_attive, FLAG_MANI_LIBERE_ON,
-    c_e_voce, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
+    c_e_voce, audio_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
@@ -672,6 +672,12 @@ def ferma_e_trascrivi():
         return
     rms = float(np.sqrt(np.mean(audio ** 2)))
     logging.getLogger("voce").info("audio: %.1fs, volume rms %.4f", len(audio) / FREQ, rms)
+    if audio_fuori_scala(rms):  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
+        logging.getLogger("voce").warning(
+            "scartato: audio fuori scala (rms %.2f > 1), stream corrotto — riprova tra qualche secondo", rms
+        )
+        _nascondi_o_arma()
+        return
     if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
         logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
         _nascondi_o_arma()

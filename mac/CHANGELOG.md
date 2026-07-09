@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 09/07/2026 (25)
+
+- **Airbag "audio fuori scala"**: se una dettatura arriva con rms > 1.0 — fisicamente impossibile per uno stream float32 sano, i sample vivono in [-1, 1] — l'audio e' corrotto (CoreAudio ha rimappato il device sotto lo stream sempre-aperto) e si scarta invece di trascriverlo (caso reale 09/07: ~20s a rms 3-4, Whisper allucinava "KFC is a…" e l'invio automatico spediva la spazzatura agli agenti). Il transitorio si riassorbe da solo in pochi secondi; niente riavvio. Funzione pura `audio_fuori_scala` in `voce_lib.py`, testata. *(Gemellata su Windows lo stesso giorno.)*
+
 ## Non rilasciato - 08/07/2026 (24)
 
 - **Airbag "stream muto"**: se una dettatura lunga (≥3s) arriva quasi muta (caso reale: 12s di parlato a rms 0.0016 dopo la comparsa del "Microfono di iPhone" via Continuity), lo stream CoreAudio sempre-aperto si e' incantato e l'app si riavvia da sola, come gia' fa per il cambio device. Il watchdog per nome-device non bastava: PortAudio congela la lista dispositivi all'avvio, quindi non vedeva il cambio. Cooldown 10 min su file: se il riavvio non risolve (mic muto davvero), niente loop. I tocchi corti senza parlato restano silenzio legittimo. *(Da gemellare su Windows: li' manca anche lo scarto-per-soglia; collaudo su PC reale prima di dichiararla.)*

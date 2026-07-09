@@ -48,6 +48,14 @@ def timeout_scaduto(attivo, inizio, ora, limite_sec):
 SOGLIA_VOCE = 0.004  # RMS minima sotto la quale consideriamo l'audio "non parlato"
 
 
+def audio_fuori_scala(rms, massimo=1.0):
+    """True se l'rms e' impossibile per uno stream float32 sano: i sample vivono
+    in [-1, 1], quindi rms <= 1 sempre. Sopra = CoreAudio ha rimappato il device
+    sotto lo stream e consegna dati corrotti (caso 09/07: rms 3-4 per ~20s,
+    Whisper allucinava). Meglio scartare che trascrivere spazzatura."""
+    return rms > massimo
+
+
 def c_e_voce(audio, soglia=SOGLIA_VOCE):
     """True se l'audio ha l'energia di un parlato vero, non di silenzio/respiro."""
     import numpy as np  # import pigro: l'hook TTS usa voce_lib senza numpy

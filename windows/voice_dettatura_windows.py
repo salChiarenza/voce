@@ -390,6 +390,14 @@ def load_model() -> WhisperModel:
     return model
 
 
+def audio_fuori_scala(rms: float, massimo: float = 1.0) -> bool:
+    """True se l'rms e' impossibile per uno stream float32 sano: i sample vivono
+    in [-1, 1], quindi rms <= 1 sempre. Sopra = il driver ha rimappato il device
+    sotto lo stream e consegna dati corrotti (caso Mac 09/07: rms 3-4 per ~20s,
+    Whisper allucinava). Meglio scartare che trascrivere spazzatura."""
+    return rms > massimo
+
+
 def has_voice(audio: np.ndarray) -> bool:
     flat = np.asarray(audio, dtype="float32").reshape(-1)
     if flat.size == 0:
@@ -473,6 +481,11 @@ def stop_recording() -> None:
         return
 
     audio = np.concatenate(blocks, axis=0)[:, 0]
+    rms = float(np.sqrt(np.mean(audio ** 2)))
+    if audio_fuori_scala(rms):  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
+        logging.warning("scartato: audio fuori scala (rms %.2f > 1), stream corrotto", rms)
+        eventi.put("nascosto")
+        return
     if not has_voice(audio):
         eventi.put("nascosto")
         return

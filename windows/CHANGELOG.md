@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato - 09/07/2026 (7)
+
+- **Airbag "audio fuori scala"** (gemello Mac): dettatura con rms > 1.0 = sample fuori da [-1, 1], impossibile per uno stream float32 sano → audio corrotto dal driver, si scarta invece di trascriverlo (su Mac Whisper allucinava e l'invio automatico spediva spazzatura agli agenti). Da collaudare su PC Windows reale insieme al resto.
+
 ## Non rilasciato - 05/07/2026 (6)
 
 - **Pulizia saltata in conversazione** (gemello Mac): a voce ON la pulizia (1-3s extra) si salta, l'agente capisce il parlato grezzo. Nuova chiave `pulizia_in_conversazione` (default `false`).
