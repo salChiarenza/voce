@@ -1,5 +1,11 @@
 # Changelog
 
+## Non rilasciato - 23/07/2026 — passaggio di sicurezza locale
+
+- La consegna distingue ora il download di codice esterno dal lavoro locale dell'agente: il proprietario scarica la versione verificata e avvia `Installa Voce.command`; Claude Code/Codex riprende dalla cartella installata e completa diagnosi e collaudo.
+- `install.sh` copia `INSTALLA_CON_AI.md` nella cartella locale, cosi' l'agente trova la missione completa dopo il passaggio umano.
+- Il percorso cliente usa clic e conferme macOS, senza comandi da copiare nel Terminale.
+
 ## Non rilasciato - 17/07/2026 (27) — stessa voce naturale della versione di Sal
 
 - La prima installazione separa ora requisiti tecnici e **Profilo LeaderAI consigliato**: Siri `Voce 2`, tasti e detta pulito vengono proposti in una sola domanda, non imposti. Un'alternativa scelta dal proprietario viene configurata, provata e riportata nel report.

@@ -26,7 +26,7 @@ command -v python3 >/dev/null 2>&1 || {
 }
 
 mkdir -p "$APP_DIR"
-cp "$SRC_DIR"/detta.py "$SRC_DIR"/parla.py "$SRC_DIR"/voce_hook.py "$SRC_DIR"/voce_lib.py "$SRC_DIR"/voce "$SRC_DIR/$SHORTCUT_FILE" "$APP_DIR"/
+cp "$SRC_DIR"/detta.py "$SRC_DIR"/parla.py "$SRC_DIR"/voce_hook.py "$SRC_DIR"/voce_lib.py "$SRC_DIR"/voce "$SRC_DIR/$SHORTCUT_FILE" "$SRC_DIR"/INSTALLA_CON_AI.md "$APP_DIR"/
 python3 "$SRC_DIR/voce_hook.py" --merge-config "$SRC_DIR/config.json" "$APP_DIR/config.json"
 chmod +x "$APP_DIR/voce"
 

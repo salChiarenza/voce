@@ -10,21 +10,15 @@ Risorsa gratuita per la community **AI con Sal**.
 
 Versione Windows brandizzata, allineata nell'aspetto e nel comportamento alla versione Mac (pill + marchio + sorriso, due tasti, voce agenti). L'aggiornamento conserva la configurazione personale e collega davvero la lettura delle risposte a Claude Code/Codex. Va provata su un PC Windows reale prima di considerarla stabile.
 
-## Metodo consigliato: installa con Claude Code o Codex
+## Metodo consigliato: launcher locale + collaudo con Claude Code o Codex
 
-Apri Claude Code o Codex sul PC Windows e incolla il testo-istruzioni che trovi qui:
+Segui il percorso in:
 
 ```text
 INSTALLA_CON_AI.md
 ```
 
-Oppure passa direttamente questo link all'agente e digli di lavorare nella cartella `windows/`:
-
-```text
-https://github.com/salChiarenza/voce
-```
-
-L'agente controlla il PC, aggiorna senza azzerare glossario e preferenze, installa o ripara cio' che manca, collega la voce delle risposte a Claude Code/Codex e chiude con una prova finale. Alla prima installazione elenca e fa ascoltare le voci italiane gia' presenti, suggerisce quella percepita come piu' naturale e salva la scelta del proprietario in `voce_nome`: e' una raccomandazione, non un obbligo.
+Il proprietario scarica la versione verificata, apre la cartella `windows/` e fa doppio clic su `install.bat`. L'installer lavora nel profilo utente e copia anche le istruzioni nella cartella installata. Da quel momento l'agente controlla il PC, conserva glossario e preferenze, ripara la parte locale, collega la voce delle risposte e chiude con una prova finale. Alla prima installazione elenca e fa ascoltare le voci italiane gia' presenti, suggerisce quella percepita come piu' naturale e salva la scelta del proprietario in `voce_nome`.
 
 Comandi usati dall'agente per la scelta guidata:
 
@@ -34,12 +28,13 @@ voce_hook.py --test-voice "NOME"
 voce_hook.py --set-voice "NOME"
 ```
 
-## Installazione manuale
+## Installazione
 
-1. Scarica lo zip dalla release.
+1. Scarica lo zip dalla versione esatta indicata da Sal.
 2. Estrai lo zip.
 3. Doppio click su `install.bat`.
-4. Segui le istruzioni.
+4. Attendi il messaggio `Installazione completata`.
+5. Torna nel tuo agente e chiedigli di leggere `%USERPROFILE%\VoiceDettaturaWindows\INSTALLA_CON_AI.md` e completare il collaudo locale.
 
 L'installer crea:
 

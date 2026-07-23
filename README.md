@@ -11,7 +11,7 @@ Mentre parli compare in basso al centro una pill con il marchio **salchiarenza.a
 | **Mac** | [`mac/`](mac/) | Cmd destro | Option + freccia sinistra |
 | **Windows** | [`windows/`](windows/) | Ctrl destro | tasto Menu |
 
-Apri la cartella del tuo sistema e segui il suo `INSTALLA_CON_AI.md`: incolli il testo-istruzioni nel tuo Claude Code o Codex e l'app si installa da sola.
+Apri la cartella del tuo sistema e segui il suo `INSTALLA_CON_AI.md`: scarichi la versione verificata, avvii il launcher incluso con un doppio clic e il tuo Claude Code o Codex completa diagnosi e collaudo dalla cartella locale.
 
 ## Per chi sviluppa
 

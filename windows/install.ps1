@@ -32,6 +32,7 @@ New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 Copy-Item (Join-Path $Source "voice_dettatura_windows.py") $AppDir -Force
 Copy-Item (Join-Path $Source "voce_hook.py") $AppDir -Force
 Copy-Item (Join-Path $Source "requirements.txt") $AppDir -Force
+Copy-Item (Join-Path $Source "INSTALLA_CON_AI.md") $AppDir -Force
 & $PythonCommand.Source (Join-Path $Source "voce_hook.py") --merge-config (Join-Path $Source "config.json") (Join-Path $AppDir "config.json")
 Assert-LastExit "Aggiornamento conservativo della configurazione"
 

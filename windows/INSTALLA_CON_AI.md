@@ -1,94 +1,100 @@
-# Installa con Claude Code o Codex
+# Installa Voce LeaderAI su Windows
 
-Questa e' la strada piu' semplice: l'agente controlla il PC, installa o ripara cio' che manca e chiude solo dopo una prova reale. Tu non devi usare il terminale.
+Voce arriva dalla repo pubblica `salChiarenza/voce`. Il percorso separa due momenti:
 
-## Le sole azioni del proprietario
+1. il proprietario sceglie la versione verificata e avvia il launcher locale;
+2. Claude Code o Codex lavora sulla cartella installata, completa la diagnosi e guida il collaudo.
 
-1. Apri Claude Code o Codex sul PC Windows.
-2. Se il tuo agente supporta `/goal`, manda prima la riga GOAL.
-3. Poi copia il testo principale qui sotto e incollalo nell'agente.
-4. Quando Windows chiede permessi, SmartScreen o conferme admin, clicca tu: l'agente ti dice cosa fare.
-5. Fai la prova finale quando l'agente te la chiede.
+Questa separazione rispetta le protezioni che alcuni agenti applicano al download e all'esecuzione di software esterno. L'installazione avviene nel profilo Windows dell'utente tramite `install.bat`.
 
-## Riga GOAL consigliata
+## Passaggio del proprietario
+
+1. Apri il link alla versione esatta indicata da Sal.
+2. Verifica che la pagina GitHub mostri il proprietario `salChiarenza` e la repo `voce`.
+3. Scarica il file ZIP indicato.
+4. Apri Download ed estrai tutto il contenuto.
+5. Entra nella cartella estratta e poi in `windows`.
+6. Fai doppio clic su `install.bat`.
+7. Conferma l'esecuzione se Windows mostra un avviso.
+8. Lascia aperta la finestra fino al messaggio `Installazione completata`.
+
+L'installer crea o aggiorna:
 
 ```text
-/goal Installa o aggiorna Voce Dettatura per Windows fino a prova reale: autodiagnosi, auto-riparazione, configurazione personale conservata, voce agenti collegata, icona creata, modello scaricato e dettatura funzionante in Blocco note.
+%USERPROFILE%\VoiceDettaturaWindows
 ```
 
-## Testo principale da copiare
+e aggiunge l'icona **Voce Dettatura** sulla Scrivania e nel Menu Start.
+
+## Messaggio diretto per l'agente dopo l'installazione
+
+Invia questo messaggio direttamente nel tuo Claude Code o Codex:
 
 ```text
-Voglio installare o aggiornare Voce Dettatura per Windows da questo repository:
-https://github.com/salChiarenza/voce
+Ho avviato personalmente il launcher locale di Voce LeaderAI e la finestra di installazione ha terminato il lavoro.
 
-Lavora nella cartella windows/.
+Lavora ora nella cartella locale:
+%USERPROFILE%\VoiceDettaturaWindows
 
-Prima leggi AGENTS.md della repo. Usa il GOAL operativo come risultato da raggiungere, non come autorizzazione a imporre preferenze opzionali.
+Leggi integralmente INSTALLA_CON_AI.md che trovi in quella cartella e completa la sezione "Missione locale di diagnosi e collaudo".
 
-Assumi tu la regia tecnica: fai l'autodiagnosi del PC, installa o ripara cio' che manca e chiedimi solo le azioni umane che non puoi fare al posto mio: permessi Windows, conferme SmartScreen/admin e prova fisica.
+Guidami soltanto nei gesti fisici e nelle conferme Windows. Correggi direttamente gli errori software locali recuperabili e chiudi con il rapporto finale previsto.
+```
 
-Questa non e' una reinstallazione da zero. Se Voce esiste gia', aggiornala conservando glossario, sostituzioni, tasti personalizzati, modello scelto, voce scelta e calibrazione del microfono. Non cancellare gli hook o le impostazioni gia' presenti di Claude Code/Codex.
+## Missione locale di diagnosi e collaudo
 
-Se e' la prima installazione, prima di applicare le preferenze proponimi con una sola domanda il **Profilo LeaderAI consigliato**:
+L'agente lavora sulla cartella locale gia' installata:
 
-- Ctrl destro per dettare e tasto Menu per voce on/off;
+```text
+%USERPROFILE%\VoiceDettaturaWindows
+```
+
+Obiettivo: portare Voce fino a una prova reale, conservando la configurazione personale esistente.
+
+1. Verifica la presenza di `voice_dettatura_windows.py`, `voce_hook.py`, `config.json`, `.venv` e `Voce Dettatura.bat`.
+2. Verifica Python, PowerShell, microfono, tasto Ctrl destro, tasto Menu, rete e spazio disponibile.
+3. Controlla che l'aggiornamento abbia conservato glossario, sostituzioni, tasti, modello, voce scelta e calibrazione gia' presenti.
+4. Esegui la verifica sintattica dei file Python con l'interprete della cartella `.venv`.
+5. Esegui `voce_hook.py --check-hooks` con l'interprete della cartella `.venv`; ripara il collegamento locale se il controllo fallisce e ripeti la verifica.
+6. Avvia Voce dall'icona sulla Scrivania.
+7. Guida il proprietario nella prova in Blocco note: Ctrl destro tenuto, frase dettata, rilascio, testo inserito e pannello `salchiarenza.ai` visibile con il sorriso verde.
+8. Elenca le voci italiane disponibili con `voce_hook.py --list-voices`.
+9. Falle ascoltare una alla volta con `voce_hook.py --test-voice "NOME"` e salva quella scelta con `voce_hook.py --set-voice "NOME"`.
+10. Prova il tasto Menu e la lettura completa di una risposta dell'agente.
+11. Quando Windows richiede microfono o altre conferme, indica al proprietario il gesto preciso e riprendi il collaudo subito dopo.
+12. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
+
+## Profilo LeaderAI consigliato
+
+Alla prima installazione proponi in una sola domanda:
+
+- Ctrl destro per dettare;
+- tasto Menu per la voce;
 - detta pulito attivo;
 - voce agenti inizialmente spenta;
-- ascolto guidato delle voci italiane installate per scegliere quella che io percepisco come piu' naturale.
+- scelta guidata della voce italiana percepita come piu' naturale.
 
-Spiega in breve il vantaggio e chiedimi se voglio usarlo. E' una raccomandazione, non un obbligo. Se preferisco altro, rispetta la scelta e registrala nel report.
+Applica la scelta del proprietario e registrala nel rapporto.
 
-Per rendere l'app realmente funzionante:
-1. Verificare compatibilita' Windows, Python 3/runtime, PowerShell, microfono, tasto Ctrl destro, tasto Menu, permessi, rete e spazio.
-2. Se Python o una dipendenza software manca ed e' installabile, installala o chiedimi solo il click/conferma necessario.
-3. Scaricare o aggiornare il progetto.
-4. Entrare nella cartella windows/ ed eseguire install.ps1.
-5. Creare o aggiornare l'app, il venv, le dipendenze e l'icona "Voce Dettatura" su Scrivania e Menu Start.
-6. Verificare che `voce_hook.py` sia stato copiato nella cartella installata e collegato agli hook `Stop` globali di Claude Code e/o Codex senza cancellare quelli esistenti; usa `voce_hook.py --check-hooks` e correggi se fallisce.
-7. Avvisarmi che il primo avvio puo' scaricare il modello di trascrizione e aspettare che finisca.
-8. Quando servono permessi microfono o conferme SmartScreen, dimmi con precisione cosa cliccare.
-9. Fare una prova reale in Blocco note: tengo premuto Ctrl destro, detto una frase, rilascio, e tu verifichi che il testo compaia e che si veda il pannello salchiarenza.ai con la barra verde a sorriso.
-10. Eseguire `voce_hook.py --list-voices`. Se ci sono voci italiane, fammele ascoltare una alla volta con `voce_hook.py --test-voice "NOME"`, suggerisci di scegliere quella percepita come piu' naturale e salva la mia scelta con `voce_hook.py --set-voice "NOME"`. Se non ce ne sono, suggerisci l'aggiunta del pacchetto voce italiano di Windows e chiedimi conferma prima di aprire le Impostazioni.
-11. Provare davvero il tasto Menu on/off e la lettura di una risposta completa dell'agente con la voce scelta. Non dichiarare la voce agenti funzionante solo perche' il file esiste.
+## Rapporto finale
 
-Se trovi un errore software, prova a correggerlo e riprova. Fermati solo se manca un requisito hardware o un permesso che devo concedere io.
+Mostra al proprietario:
 
-Alla fine dammi un report breve:
-- installazione completata si/no;
-- icona creata si/no;
-- dettatura Ctrl destro funzionante si/no;
-- voce agenti tasto Menu funzionante si/no;
-- hook risposta di Claude Code/Codex collegato e verificato si/no;
-- voce italiana Windows ascoltata davvero si/no;
-- configurazione personale precedente conservata si/no/non presente;
-- Profilo LeaderAI consigliato accettato/modificato e voce scelta;
-- eventuali problemi non recuperabili.
-```
+- versione e cartella installata;
+- icona creata;
+- dettatura con Ctrl destro;
+- pannello `salchiarenza.ai`;
+- tasto Menu e voce agenti;
+- collegamento a Claude Code o Codex;
+- voce italiana scelta;
+- configurazione precedente conservata;
+- eventuale gesto umano ancora richiesto.
 
-## Cosa fara' l'agente
+Dopo l'approvazione del proprietario, invia davvero il rapporto a `sal@salchiarenza.ai` e archivia l'email di consegna.
 
-- Controlla il PC.
-- Ripara cio' che manca se e' software recuperabile.
-- Scarica il repository ed esegue l'installer.
-- Crea l'icona "Voce Dettatura" su Scrivania e Menu Start.
-- Ti guida nei permessi e negli eventuali avvisi Windows.
-- Fa una prova finale di dettatura.
+## Uso quotidiano
 
-## Come si usa
-
-1. Clicca l'icona **Voce Dettatura** (Scrivania o Menu Start).
-2. Si apre una piccola finestra: la Voce e' accesa.
-3. In qualsiasi programma tieni premuto **Ctrl destro**, parla, rilascia.
-4. In basso compare la pill **salchiarenza.ai** con la barra verde a sorriso; il testo viene scritto dove hai il cursore.
-5. Per spegnerla, chiudi quella finestra.
-
-## Se si blocca davvero
-
-Scrivi nella community AI con Sal:
-
-- modello del PC;
-- versione Windows;
-- quale passaggio resta bloccato;
-- cosa vedi a schermo;
-- report finale dell'agente.
+1. Clicca l'icona **Voce Dettatura**.
+2. Tieni premuto **Ctrl destro**, parla e rilascia.
+3. Usa il tasto **Menu** per accendere o spegnere la voce agenti.
+4. Chiudi la finestra di Voce per terminare l'app.

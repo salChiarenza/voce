@@ -28,34 +28,26 @@ Il primo download puo' essere pesante: il modello Whisper viene scaricato una vo
 
 ## Installazione
 
-### Metodo consigliato: installa con Claude Code o Codex
+### Metodo consigliato: launcher locale + collaudo con Claude Code o Codex
 
-Apri Claude Code o Codex sul Mac e incolla il testo-istruzioni che trovi qui:
+Segui il percorso in:
 
 ```text
 INSTALLA_CON_AI.md
 ```
 
-Oppure passa direttamente questo link all'agente (l'app è nella cartella mac/):
-
-```text
-https://github.com/salChiarenza/voce
-```
-
-L'agente controlla il Mac, aggiorna senza azzerare cio' che hai personalizzato, installa o ripara cio' che manca, collega la voce all'agente e chiude con una prova finale.
+Scarica la versione verificata, apri la cartella `mac/` e fai doppio clic su `Installa Voce.command`. L'installer copia anche le istruzioni nella cartella locale. Da quel momento l'agente controlla il Mac, conserva cio' che hai personalizzato, ripara la parte locale, collega la voce e chiude con una prova finale.
 
 Alla prima installazione l'agente propone in una sola domanda il Profilo LeaderAI consigliato. Se lo accetti, macOS chiede un solo gesto umano: quando si apre Comandi Rapidi, clicca **Aggiungi comando rapido**. Se preferisci un'altra voce, l'agente rispetta la scelta. In entrambi i casi l'installazione si chiude solo dopo una prova audio reale.
 
-### Metodo manuale
+### Installazione
 
-1. Scarica il file `.zip` dalla release.
+1. Scarica il file `.zip` dalla versione esatta indicata da Sal.
 2. Estrai lo zip.
-3. Apri Terminale nella cartella estratta.
-4. Esegui:
-
-```bash
-./install.sh
-```
+3. Apri la cartella `mac/`.
+4. Fai doppio clic su `Installa Voce.command`.
+5. Attendi il messaggio `Installazione completata`.
+6. Torna nel tuo agente e chiedigli di leggere `~/VoiceDettaturaMac/INSTALLA_CON_AI.md` e completare il collaudo locale.
 
 L'installer crea la cartella:
 

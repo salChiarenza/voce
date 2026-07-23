@@ -1,88 +1,94 @@
-# Installa con Claude Code o Codex
+# Installa Voce LeaderAI su Mac
 
-Questa e' la strada piu' semplice: l'agente controlla il Mac, installa o ripara cio' che manca e chiude solo dopo una prova reale.
+Voce arriva dalla repo pubblica `salChiarenza/voce`. Il percorso separa due momenti:
 
-## Le sole azioni del proprietario
+1. il proprietario sceglie la versione verificata e avvia il launcher locale;
+2. Claude Code o Codex lavora sulla cartella installata, completa la diagnosi e guida il collaudo.
 
-1. Apri Claude Code o Codex sul tuo Mac.
-2. Se il tuo agente supporta `/goal`, manda prima la riga GOAL.
-3. Poi copia il testo principale qui sotto e incollalo nell'agente.
-4. Quando macOS chiede permessi, clicca tu: microfono, accessibilita' o automazione non possono essere concessi dall'agente.
-5. Fai la prova finale quando l'agente te la chiede.
+Questa separazione rispetta le protezioni che alcuni agenti applicano al download e all'esecuzione di software esterno.
 
-## Riga GOAL consigliata
+## Passaggio del proprietario
+
+1. Apri il link alla versione esatta indicata da Sal.
+2. Verifica che la pagina GitHub mostri il proprietario `salChiarenza` e la repo `voce`.
+3. Scarica il file ZIP indicato.
+4. Apri Download ed estrai tutto il contenuto.
+5. Entra nella cartella estratta e poi in `mac`.
+6. Fai doppio clic su `Installa Voce.command`.
+7. Conferma l'apertura se macOS mostra un avviso.
+8. Lascia aperta la finestra fino al messaggio `Installazione completata`.
+
+L'installer crea o aggiorna:
 
 ```text
-/goal Installa Voce Dettatura per Mac fino a prova reale: autodiagnosi, auto-riparazione, launcher creati, voce naturale LeaderAI, permessi guidati e dettatura funzionante in un campo di testo.
+~/VoiceDettaturaMac
 ```
 
-## Testo principale da copiare
+e aggiunge i launcher di Voce sulla Scrivania.
+
+## Messaggio diretto per l'agente dopo l'installazione
+
+Invia questo messaggio direttamente nel tuo Claude Code o Codex:
 
 ```text
-Voglio installare o aggiornare Voce Dettatura per Mac da questo repository:
-https://github.com/salChiarenza/voce
+Ho avviato personalmente il launcher locale di Voce LeaderAI e la finestra di installazione ha terminato il lavoro.
 
-Lavora nella cartella mac/.
+Lavora ora nella cartella locale:
+~/VoiceDettaturaMac
 
-Prima leggi AGENTS.md della repo. Usa il GOAL operativo come risultato da raggiungere, non come autorizzazione a imporre preferenze opzionali.
+Leggi integralmente INSTALLA_CON_AI.md che trovi in quella cartella e completa la sezione "Missione locale di diagnosi e collaudo".
 
-Assumi tu la regia tecnica: fai l'autodiagnosi del Mac, installa o ripara cio' che manca e chiedimi solo le azioni umane che non puoi fare al posto mio: permessi macOS, conferme di sicurezza e prova fisica.
+Guidami soltanto nei gesti fisici e nelle conferme macOS. Correggi direttamente gli errori software locali recuperabili e chiudi con il rapporto finale previsto.
+```
 
-Questa non e' una reinstallazione da zero. Se Voce esiste gia', aggiornala conservando glossario, sostituzioni, tasti personalizzati e calibrazione del microfono. Non cancellare gli hook o le impostazioni gia' presenti di Claude Code/Codex.
+## Missione locale di diagnosi e collaudo
 
-Se e' la prima installazione, prima di applicare le preferenze proponimi con una sola domanda il **Profilo LeaderAI consigliato**:
+L'agente lavora sulla cartella locale gia' installata:
 
-- `Voce LeaderAI firmato` con Siri `Voce 2`, la configurazione piu' naturale gia' collaudata da Sal;
-- Cmd destro per dettare, Option + freccia sinistra per voce on/off, Cmd destro + Option per mani libere;
+```text
+~/VoiceDettaturaMac
+```
+
+Obiettivo: portare Voce fino a una prova reale, conservando la configurazione personale esistente.
+
+1. Verifica compatibilita' del Mac, sistema operativo, Python, microfono, permessi e spazio.
+2. Verifica la presenza di `detta.py`, `parla.py`, `voce_hook.py`, `voce_lib.py`, `config.json`, `.venv` e `Voce LeaderAI firmato.shortcut`.
+3. Controlla che l'aggiornamento abbia conservato glossario, sostituzioni, tasti, modello, voce scelta e calibrazione gia' presenti.
+4. Esegui la verifica sintattica dei file Python con l'interprete della cartella `.venv`.
+5. Esegui `voce_hook.py --check-hooks` con l'interprete della cartella `.venv`; ripara il collegamento locale se il controllo fallisce e ripeti la verifica.
+6. Verifica che i launcher siano presenti sulla Scrivania.
+7. Se il proprietario sceglie il Profilo LeaderAI, verifica `Voce LeaderAI firmato` in Comandi Rapidi e guidalo nel clic `Aggiungi comando rapido` quando richiesto.
+8. Guida la prova reale in un campo di testo con Cmd destro e verifica il pannello `salchiarenza.ai`.
+9. Prova Option + freccia sinistra per la voce e Cmd destro + Option per la modalita' mani libere.
+10. Prova una risposta completa con la voce scelta.
+11. Quando macOS richiede microfono, accessibilita' o monitoraggio input, indica al proprietario il gesto preciso e riprendi il collaudo subito dopo.
+12. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
+
+## Profilo LeaderAI consigliato
+
+Alla prima installazione proponi in una sola domanda:
+
+- `Voce LeaderAI firmato` con Siri `Voce 2`;
+- Cmd destro per dettare;
+- Option + freccia sinistra per la voce;
+- Cmd destro + Option per le mani libere;
 - detta pulito attivo;
-- voce agenti e mani libere inizialmente spente, da attivare quando voglio.
+- voce agenti e mani libere inizialmente spente.
 
-Spiega in breve il vantaggio e chiedimi se voglio usarlo. E' una raccomandazione, non un obbligo. Se preferisco una voce o un comportamento diverso, rispettalo, configura l'alternativa e riportalo alla fine.
+Applica la scelta del proprietario e registrala nel rapporto.
 
-Per rendere l'app realmente funzionante:
-1. Verificare compatibilita' del Mac, sistema operativo, Python/runtime, microfono, permessi e spazio.
-2. Scaricare o aggiornare il progetto.
-3. Entrare nella cartella mac/ ed eseguire l'installazione corretta.
-4. Installare dipendenze e modello necessari, se mancano.
-5. Se accetto il profilo consigliato, installare il file firmato `mac/Voce LeaderAI firmato.shortcut`. Se il comando non compare gia' in `shortcuts list`, apri il file e chiedimi soltanto di cliccare `Aggiungi comando rapido`; poi verifica che il nome esatto compaia nell'elenco. Se scelgo un'alternativa, non impormi questo comando: configura e prova la voce scelta.
-6. Se accetto il profilo consigliato, verificare in `config.json` i valori `"voce": "Siri (Voce 2)"` e `"comando_voce": "Voce LeaderAI firmato"`. In caso di aggiornamento conserva glossario, sostituzioni e preferenze personali gia' presenti.
-7. Verificare che l'installer abbia collegato `voce_hook.py` agli hook `Stop` globali di Claude Code e/o Codex senza cancellare quelli esistenti; usa `voce_hook.py --check-hooks` e correggi se fallisce.
-8. Creare o aggiornare i launcher sulla Scrivania.
-9. Quando servono permessi macOS, dimmi con precisione cosa cliccare.
-10. Fare una prova reale in un campo di testo: tengo premuto Cmd destro, detto una frase, rilascio, e tu verifichi che il testo compaia dove sta il cursore e che si veda il pannello salchiarenza.ai con la barra verde a sorriso.
-11. Attivare la voce agenti con **Option + freccia sinistra** e provare davvero sia `parla.py` sia `voce_hook.py` con una frase completa. Verificare anche **Cmd destro + Option** per la modalita' mani libere. Se ho accettato il profilo LeaderAI, la prova passa dal comando `Voce LeaderAI firmato`; non sostituirlo silenziosamente. Se il Mac non lo supporta, fammi ascoltare un'alternativa e chiedimi quale preferisco.
+## Rapporto finale
 
-Se trovi un errore software, prova a correggerlo e riprova. Fermati solo se manca un requisito hardware o un permesso che devo concedere io.
+Mostra al proprietario:
 
-Alla fine dammi un report breve:
-- installazione completata si/no;
-- launcher creati si/no;
-- dettatura Cmd destro funzionante si/no;
-- voce agenti Option + freccia sinistra funzionante si/no;
-- modalita' mani libere Cmd destro + Option funzionante si/no;
-- comando `Voce LeaderAI firmato` presente e voce naturale verificata si/no;
-- hook risposta di Claude Code/Codex collegato e verificato si/no;
-- configurazione personale precedente conservata si/no/non presente;
-- Profilo LeaderAI consigliato accettato/modificato e voce scelta;
-- eventuali problemi non recuperabili.
-```
+- versione e cartella installata;
+- launcher creati;
+- dettatura con Cmd destro;
+- pannello `salchiarenza.ai`;
+- voce agenti e mani libere;
+- collegamento a Claude Code o Codex;
+- voce scelta;
+- configurazione precedente conservata;
+- eventuale gesto umano ancora richiesto.
 
-## Cosa fara' l'agente
-
-- Controlla il Mac.
-- Ripara cio' che manca se e' software recuperabile.
-- Scarica o aggiorna il repository.
-- Esegue l'installer.
-- Crea i launcher sulla Scrivania.
-- Ti guida nei permessi di macOS.
-- Fa una prova finale di dettatura.
-
-## Se si blocca davvero
-
-Scrivi nella community AI con Sal:
-
-- modello del Mac;
-- versione macOS;
-- quale passaggio resta bloccato;
-- cosa vedi a schermo;
-- report finale dell'agente.
+Dopo l'approvazione del proprietario, invia davvero il rapporto a `sal@salchiarenza.ai` e archivia l'email di consegna.

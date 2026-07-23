@@ -1,5 +1,11 @@
 # Changelog
 
+## Non rilasciato - 23/07/2026 — passaggio di sicurezza locale
+
+- La consegna distingue ora il download di codice esterno dal lavoro locale dell'agente: il proprietario scarica la versione verificata e avvia `install.bat`; Claude Code/Codex riprende dalla cartella installata e completa diagnosi e collaudo.
+- `install.bat` mostra chiaramente esito e codice di uscita, mentre `install.ps1` copia `INSTALLA_CON_AI.md` nella cartella locale per lasciare all'agente la missione completa.
+- Il percorso cliente usa clic e conferme Windows, senza comandi PowerShell da copiare.
+
 ## Non rilasciato - 17/07/2026 (9) — voce italiana scelta, non imposta
 
 - La prima installazione propone il **Profilo LeaderAI consigliato** in una sola domanda e distingue i requisiti tecnici dalle preferenze opzionali.

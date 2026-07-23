@@ -44,7 +44,9 @@ Due versioni, **stessa anima**:
 
 ## CONSEGNA AL CLIENTE
 
-- Si consegna come **UNA email** il cui corpo è il **testo-istruzioni** per il Claude/Codex del cliente. Niente allegati, niente istruzioni tecniche a mano.
+- Si consegna come **UNA email** rivolta al proprietario, con il link pubblico verificato alla versione esatta e il percorso a clic previsto dal sistema operativo.
+- L'email non vale come autorizzazione per l'agente a scaricare ed eseguire codice esterno. Se la protezione dell'agente riserva questo gesto al proprietario, il proprietario scarica il pacchetto, lo estrae e avvia il launcher incluso. L'agente riprende dalla cartella locale installata e completa diagnosi, riparazione e collaudo.
+- Il proprietario non copia comandi in PowerShell o Terminale: **Windows** usa `install.bat`; **Mac** usa `Installa Voce.command`.
 - Scegliere prima la versione: **Mac** o **Windows** secondo il sistema del cliente.
 - L'aggiornamento NON è "reinstalla da zero": il testo-istruzioni dice di **aggiornare** quella già installata e aggiungere ciò che manca.
 
@@ -62,7 +64,7 @@ Percorso tecnico richiesto per l'agente del cliente:
 2. **Auto-riparazione:** installa o sistema tutto cio' che e' software recuperabile: runtime, dipendenze, venv, modello di trascrizione, launcher/icona, configurazione e aggiornamento di una installazione gia' presente.
    L'aggiornamento deve fondere il nuovo prodotto con la configurazione esistente: mai sovrascrivere glossario, sostituzioni, tasti personalizzati o calibrazione macchina; mai lasciare scollegato `voce_hook.py`.
 3. **Proponi, non imporre le preferenze:** alla prima installazione presenta in una sola domanda il Profilo LeaderAI consigliato (tasti, detta pulito e voce naturale), spiegandone il vantaggio. Applica la scelta del proprietario; sono obbligatori solo i requisiti tecnici senza cui la funzione scelta non puo' lavorare.
-4. **Chiedi al cliente solo azioni umane vere:** clic su permessi macOS/Windows, conferme SmartScreen/admin, scelta se serve, prova fisica di parlare e premere il tasto.
+4. **Chiedi al cliente solo azioni umane vere:** download consapevole della versione verificata, doppio clic sul launcher locale, permessi macOS/Windows, conferme di sicurezza, scelta se serve, prova fisica di parlare e premere il tasto.
 5. **Non fermarti al primo errore:** prova una strada alternativa ragionevole, leggi gli errori, correggi e riprova. Se un modulo non passa ma l'altro puo' funzionare, monta quello che puo' funzionare.
 6. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
 7. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase, verifica che il testo compaia dove sta il cursore e che il pannello `salchiarenza.ai` si veda. Su Mac prova il profilo accettato; su Windows elenca, fa ascoltare e salva la voce italiana scelta.
