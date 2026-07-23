@@ -14,6 +14,8 @@ Due versioni, **stessa anima**:
 
 ## REGOLA MADRE (non derogabile)
 
+**Una sola sorgente fisica Mac:** i file in `mac/` sono anche quelli usati ogni giorno da Sal. Nel workspace privato `/Users/sal/leaderai/tools/voce/` esistono solo symlink a questi file e un `config.local.json` privato per glossario/calibrazione. Vietato ricreare una seconda copia del codice da sincronizzare.
+
 1. Il **Mac è il MASTER**: le novità nascono lì.
 2. Tocchi UNA delle due → **specchia la stessa cosa sull'altra nello stesso lavoro**, prima di consegnare a un cliente. Aggiornarne una sola = bug, non svista.
 3. Non si condivide il codice: il Mac usa pezzi solo-Apple (AppKit, mlx-whisper), Windows usa Tkinter + faster-whisper. Si specchia **comportamento e aspetto**, non i file.
@@ -29,13 +31,16 @@ Due versioni, **stessa anima**:
 7. Marchio, colore, forma pill in `config.json` con gli **stessi valori**.
 8. **Glossario**: chiavi `glossario` (initial_prompt di Whisper) e `sostituzioni` in `config.json` — nomi propri e brand scritti giusti. Stessi nomi-chiave sulle due app.
 9. **Detta pulito**: chiavi `detta_pulito`, `pulizia_min_parole`, `pulizia_timeout_sec`, `pulizia_shortcut`, `pulizia_timeout_shortcut_sec`. Le dettature lunghe si ripuliscono (via ripetizioni/ripensamenti, punteggiatura sistemata); la pill mostra "Sistemo…". Catena: **Mac** prima il modello Apple Intelligence (di default su Private Cloud Compute, il cloud privato Apple: gratis, niente token, dati non conservati da Apple; dall'editor del comando si può scegliere "Su dispositivo") via Comando Rapido "Voce Pulita" (~1s; differenza obbligata: su Windows non esiste) → agente locale (`claude -p` spoglio, riserva `codex exec`) → grezzo. **Windows**: solo agente → grezzo. Qualsiasi problema → si incolla il grezzo: la dettatura non si perde MAI. Il prompt di pulizia è UNO (`prompt_pulizia`, regole numerate su riga singola): stesso testo su entrambe.
+10. **Profilo voce consigliato = versione di Sal**: la distribuzione Mac include il Comando Rapido Apple firmato `mac/Voce LeaderAI firmato.shortcut`, con Siri `Voce 2`, e propone gli stessi valori `voce` / `comando_voce` della configurazione viva di Sal. E' la scelta raccomandata, non imposta: il proprietario puo' scegliere un'alternativa, che va configurata e provata senza sostituzioni silenziose.
+11. **Installazione completa, non base da ricostruire**: su entrambi i sistemi l'aggiornamento conserva glossario, sostituzioni, preferenze e calibrazione; installa `voce_hook.py`, lo collega senza cancellare gli hook esistenti a Claude Code e/o Codex e verifica il collegamento. Il cliente non deve rimontare a mano la funzione voce agenti.
 
 ## COSA PUÒ DIFFERIRE (obbligato dal sistema, non forzarlo uguale)
 
 - Pannello: AppKit (Mac) vs Tkinter (Windows).
 - Trascrizione: mlx-whisper large (Mac) vs faster-whisper medium (Windows).
 - Voce in uscita: `say` (Mac) vs System.Speech/PowerShell (Windows).
-- Tasti: **Mac** Cmd dx detta / Alt dx voce. **Windows** Ctrl dx detta / **Menu** voce. Su Windows MAI tasti F (sui portatili fanno volume/luminosità).
+- Qualita' e disponibilita' delle voci: su Mac il profilo consigliato e' `Voce LeaderAI firmato`; su Windows l'agente elenca e fa ascoltare le voci italiane installate tramite System.Speech, poi salva quella scelta dal proprietario.
+- Tasti: **Mac** Cmd dx detta / **Option + freccia sinistra** voce / Cmd+Option mani libere. **Windows** Ctrl dx detta / **Menu** voce. Su Windows MAI tasti F (sui portatili fanno volume/luminosità).
 
 ## CONSEGNA AL CLIENTE
 
@@ -51,23 +56,27 @@ Quando questa repo viene data a un cliente, il suo agente deve portare a termine
 
 `/goal` puo' essere usato dal cliente se Claude Code o Codex lo supportano, ma non e' la fonte di verita'. Se il cliente non usa `/goal`, questa sezione vale comunque come goal operativo. Non creare una skill o un comando chiamato `goal`: rischia collisione con i comandi nativi degli agenti.
 
-Ordine obbligatorio per l'agente del cliente:
+Percorso tecnico richiesto per l'agente del cliente:
 
 1. **Autodiagnosi:** identifica Mac o Windows, cartella corretta (`mac/` o `windows/`), versione del sistema, Python/runtime, microfono, tasti disponibili, permessi, rete e spazio disco.
 2. **Auto-riparazione:** installa o sistema tutto cio' che e' software recuperabile: runtime, dipendenze, venv, modello di trascrizione, launcher/icona, configurazione e aggiornamento di una installazione gia' presente.
-3. **Chiedi al cliente solo azioni umane vere:** clic su permessi macOS/Windows, conferme SmartScreen/admin, scelta se serve, prova fisica di parlare e premere il tasto.
-4. **Non fermarti al primo errore:** prova una strada alternativa ragionevole, leggi gli errori, correggi e riprova. Se un modulo non passa ma l'altro puo' funzionare, monta quello che puo' funzionare.
-5. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
-6. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase, verifica che il testo compaia dove sta il cursore e che il pannello `salchiarenza.ai` si veda. Se la voce agenti e' configurata, verifica anche l'accensione/spegnimento.
-7. **Report finale breve:** installata si/no, dettatura si/no, voce agenti si/no, launcher creato si/no, problemi non recuperabili.
+   L'aggiornamento deve fondere il nuovo prodotto con la configurazione esistente: mai sovrascrivere glossario, sostituzioni, tasti personalizzati o calibrazione macchina; mai lasciare scollegato `voce_hook.py`.
+3. **Proponi, non imporre le preferenze:** alla prima installazione presenta in una sola domanda il Profilo LeaderAI consigliato (tasti, detta pulito e voce naturale), spiegandone il vantaggio. Applica la scelta del proprietario; sono obbligatori solo i requisiti tecnici senza cui la funzione scelta non puo' lavorare.
+4. **Chiedi al cliente solo azioni umane vere:** clic su permessi macOS/Windows, conferme SmartScreen/admin, scelta se serve, prova fisica di parlare e premere il tasto.
+5. **Non fermarti al primo errore:** prova una strada alternativa ragionevole, leggi gli errori, correggi e riprova. Se un modulo non passa ma l'altro puo' funzionare, monta quello che puo' funzionare.
+6. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
+7. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase, verifica che il testo compaia dove sta il cursore e che il pannello `salchiarenza.ai` si veda. Su Mac prova il profilo accettato; su Windows elenca, fa ascoltare e salva la voce italiana scelta.
+8. **Report finale breve:** installata si/no, dettatura si/no, voce agenti si/no, Profilo LeaderAI accettato/modificato e voce scelta, launcher creato si/no, problemi non recuperabili.
 
 ## DIVIETI (qui è dove un agente "crea a cazzo" — NON farlo)
 
 - **NON** creare file nuovi o varianti (`_v2`, `_final`, copie). Una cosa = un file, si **sovrascrive**.
+- **NON** ricreare una copia fisica Mac nel workspace LeaderAI: la repo e l'app viva di Sal devono continuare a puntare allo stesso file.
 - **NON** rinominare app, cartelle o file.
 - **NON** cambiare i tasti senza un motivo reale. Su Windows mai tasti F.
 - **NON** spezzare dettatura/voce in più file: l'app Windows è **UN file solo** (`voice_dettatura_windows.py`) + `voce_hook.py` opzionale.
 - **NON** dichiarare "pronta" senza averla **vista girare su un PC reale** di quel sistema.
+- **NON** degradare la voce Mac per semplificare la distribuzione: il file firmato e la prova audio fanno parte del prodotto.
 - **NON** mettere questa repo dentro `leaderai` (è il workspace privato di Sal): qui è un prodotto pubblico a sé.
 
 ## QUANDO FINISCI una modifica

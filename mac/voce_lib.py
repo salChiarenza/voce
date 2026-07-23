@@ -11,14 +11,39 @@ import subprocess
 from pathlib import Path
 
 BASE = Path(__file__).parent
+SOURCE_BASE = Path(__file__).resolve().parent
+CONFIG_DEFAULT = SOURCE_BASE / "config.json"
+CONFIG_LOCAL = BASE / "config.local.json"
 FLAG_VOICE_ON = BASE / "VOICE_ON"
 FLAG_PARLANDO = BASE / "PARLANDO"  # esiste mentre l'agente sta leggendo una risposta ad alta voce
 FLAG_MANI_LIBERE_ON = BASE / "MANI_LIBERE_ON"  # esiste quando l'ascolto continuo e' attivo
 
 
 def carica_config():
-    with open(BASE / "config.json") as f:
-        return json.load(f)
+    """Carica l'unico config prodotto e applica solo gli override personali.
+
+    Sulla macchina di Sal i file Python in `tools/voce` sono symlink alla repo
+    pubblica: SOURCE_BASE punta quindi alla sorgente unica, mentre BASE resta il
+    percorso operativo locale che contiene `config.local.json` e i flag runtime.
+    Nell'installazione cliente i due percorsi coincidono e si usa normalmente
+    il `config.json` aggiornato dall'installer.
+    """
+    with open(CONFIG_DEFAULT, encoding="utf-8") as f:
+        cfg = json.load(f)
+    if CONFIG_LOCAL.exists():
+        with open(CONFIG_LOCAL, encoding="utf-8") as f:
+            locali = json.load(f)
+        if not isinstance(locali, dict):
+            raise ValueError(f"Configurazione locale non valida: {CONFIG_LOCAL}")
+        cfg.update(locali)
+    return cfg
+
+
+def config_scrivibile():
+    """File dove salvare apprendimenti personali senza sporcare il prodotto."""
+    if CONFIG_LOCAL.exists() or BASE != SOURCE_BASE:
+        return CONFIG_LOCAL
+    return CONFIG_DEFAULT
 
 
 def voce_attiva():

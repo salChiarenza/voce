@@ -78,6 +78,7 @@ model: WhisperModel | None = None
 FLAG_VOICE_ON = BASE / "VOICE_ON"          # se esiste, la voce in uscita e' accesa
 PID_FILE = BASE / "voce_pid"               # PID dell'ultima lettura: una voce per volta
 VOCE_RATE = int(CFG.get("voce_rate", 0))   # System.Speech: da -10 (lenta) a +10 (veloce)
+VOCE_NOME = str(CFG.get("voce_nome", ""))  # scelta guidata alla prima installazione
 
 
 def voce_attiva() -> bool:
@@ -314,15 +315,22 @@ def pulisci_per_voce(testo: str) -> str:
     return re.sub(r"\s+", " ", testo).strip()
 
 
-def _ps_voce(rate: int) -> list[str]:
+def _ps_string(valore: str) -> str:
+    return "'" + valore.replace("'", "''") + "'"
+
+
+def _ps_voce(rate: int, voice_name: str = "") -> list[str]:
     """Comando PowerShell con System.Speech (incluso in Windows): voce italiana se c'e'."""
     script = (
         "$ErrorActionPreference='SilentlyContinue';"
         "Add-Type -AssemblyName System.Speech;"
         "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
-        "$v=$s.GetInstalledVoices()|"
-        "?{$_.Enabled -and $_.VoiceInfo.Culture.Name -like 'it*'}|"
-        "select -First 1;"
+        "$wanted=" + _ps_string(voice_name) + ";"
+        "$voices=@($s.GetInstalledVoices()|"
+        "?{$_.Enabled -and $_.VoiceInfo.Culture.Name -like 'it*'});"
+        "$v=$null;"
+        "if($wanted){$v=$voices|?{$_.VoiceInfo.Name -eq $wanted}|select -First 1};"
+        "if(-not $v){$v=$voices|select -First 1};"
         "if($v){$s.SelectVoice($v.VoiceInfo.Name)};"
         "$s.Volume=100;"
         "$s.Rate=" + str(int(rate)) + ";"
@@ -356,7 +364,7 @@ def pronuncia(testo: str) -> None:
         return
     ferma_voce()  # una voce per volta
     p = subprocess.Popen(
-        _ps_voce(VOCE_RATE),
+        _ps_voce(VOCE_RATE, VOCE_NOME),
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     try:
@@ -748,7 +756,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
-    print("Voice Dettatura Windows v1.2")
+    print("Voice Dettatura Windows v1.3")
     print("Ctrl destro: tieni premuto, parla, rilascia -> il testo viene incollato.")
     print("Tasto Menu: accende/spegne la voce agenti (legge le risposte ad alta voce).")
     print("Chiudi questa finestra per fermare la dettatura.")

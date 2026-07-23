@@ -8,7 +8,7 @@ Mentre parli compare in basso al centro una pill con il marchio **salchiarenza.a
 
 | Sistema | Cartella | Dettatura | Voce on/off |
 |---|---|---|---|
-| **Mac** | [`mac/`](mac/) | Cmd destro | Alt destro |
+| **Mac** | [`mac/`](mac/) | Cmd destro | Option + freccia sinistra |
 | **Windows** | [`windows/`](windows/) | Ctrl destro | tasto Menu |
 
 Apri la cartella del tuo sistema e segui il suo `INSTALLA_CON_AI.md`: incolli il testo-istruzioni nel tuo Claude Code o Codex e l'app si installa da sola.

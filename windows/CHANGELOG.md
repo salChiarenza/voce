@@ -1,5 +1,23 @@
 # Changelog
 
+## Non rilasciato - 17/07/2026 (9) — voce italiana scelta, non imposta
+
+- La prima installazione propone il **Profilo LeaderAI consigliato** in una sola domanda e distingue i requisiti tecnici dalle preferenze opzionali.
+- Aggiunta `voce_nome` alla configurazione: `voce_hook.py --list-voices` elenca le voci italiane installate, `--test-voice "NOME"` le fa ascoltare e `--set-voice "NOME"` salva soltanto una voce realmente disponibile.
+- App e hook usano la voce scelta; se manca, ripiegano sulla prima voce italiana installata senza inventare un nome non presente sul PC.
+- La voce e i tasti restano da collaudare su un PC Windows reale prima del rilascio.
+
+## Non rilasciato - 17/07/2026 — contratto sorgente unica
+
+- La repo `voce` resta l'unica casa del prodotto. Il Mac usato da Sal punta direttamente alla cartella `mac/`; Windows resta una variante tecnica separata solo perche' il sistema operativo richiede codice diverso. Ogni cambiamento di comportamento Mac deve continuare a essere riflesso e collaudato qui prima della release.
+
+## Non rilasciato - 17/07/2026 (8) — aggiornamento completo, non ripartenza da zero
+
+- Preparata **v1.3**: `install.ps1` copia anche `voce_hook.py`, lo collega agli hook globali di Claude Code/Codex senza cancellare quelli esistenti e ne verifica la presenza.
+- Installazione e aggiornamento fondono i nuovi default con il config gia' presente: restano glossario, sostituzioni, tasti, modello, voce scelta e calibrazione microfono; il prodotto aggiorna marchio e comportamento base.
+- Aggiunta prova audio Windows durante l'installazione e missione agente estesa fino alla lettura reale di una risposta completa.
+- Tutta la logica e' testata senza toccare le configurazioni vive; dettatura, tasti e qualita' della voce restano da collaudare su un PC Windows reale prima del rilascio.
+
 ## Non rilasciato - 09/07/2026 (7)
 
 - **Airbag "audio fuori scala"** (gemello Mac): dettatura con rms > 1.0 = sample fuori da [-1, 1], impossibile per uno stream float32 sano → audio corrotto dal driver, si scarta invece di trascriverlo (su Mac Whisper allucinava e l'invio automatico spediva spazzatura agli agenti). Da collaudare su PC Windows reale insieme al resto.

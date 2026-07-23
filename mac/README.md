@@ -1,4 +1,4 @@
-# Voice Dettatura Mac v1.0.1
+# Voice Dettatura Mac v1.0.2
 
 Dettatura locale per Mac: tieni premuto un tasto, parli, rilasci, e il testo viene scritto dove hai il cursore.
 
@@ -11,6 +11,9 @@ Risorsa gratuita per la community **AI con Sal**.
 - Gira sul Mac con trascrizione locale.
 - Glossario personale: i tuoi nomi e brand escono scritti giusti (`glossario` in `config.json`).
 - Detta pulito (opzionale): le dettature lunghe passano dal tuo agente AI (Claude Code o Codex) che toglie ripetizioni e ripensamenti e sistema la punteggiatura. Si spegne con `"detta_pulito": false`.
+- Profilo voce consigliato: su Mac propone lo stesso Comando Rapido Siri collaudato da Sal, distribuito come `Voce LeaderAI firmato.shortcut`. Il proprietario puo' accettarlo o scegliere un'alternativa, che non viene mai sostituita silenziosamente.
+- Aggiornamento vero: conserva glossario, sostituzioni e calibrazione gia' presenti, aggiorna la parte di prodotto e collega automaticamente la voce delle risposte a Claude Code e/o Codex senza cancellare gli altri collegamenti.
+- Sorgente unica: il codice in questa cartella e' lo stesso codice usato ogni giorno da Sal; non esiste piu' una seconda copia interna da riallineare.
 - Include un installer guidato.
 - Se macOS resta bloccato mentre chiude il microfono, prova a riavviare da sola la dettatura invece di restare incastrata.
 
@@ -39,7 +42,9 @@ Oppure passa direttamente questo link all'agente (l'app è nella cartella mac/):
 https://github.com/salChiarenza/voce
 ```
 
-L'agente controlla il Mac, installa o ripara cio' che manca, ti chiede solo i permessi che devi concedere tu e chiude con una prova finale.
+L'agente controlla il Mac, aggiorna senza azzerare cio' che hai personalizzato, installa o ripara cio' che manca, collega la voce all'agente e chiude con una prova finale.
+
+Alla prima installazione l'agente propone in una sola domanda il Profilo LeaderAI consigliato. Se lo accetti, macOS chiede un solo gesto umano: quando si apre Comandi Rapidi, clicca **Aggiungi comando rapido**. Se preferisci un'altra voce, l'agente rispetta la scelta. In entrambi i casi l'installazione si chiude solo dopo una prova audio reale.
 
 ### Metodo manuale
 
@@ -71,6 +76,10 @@ e aggiunge due launcher sulla Scrivania:
 4. Rilascia il tasto.
 
 Il testo viene scritto dove hai il cursore.
+
+- `Option + freccia sinistra`: accende o spegne la voce delle risposte.
+- `Cmd destro + Option`: accende o spegne la modalità mani libere.
+- `Voice On-Off.command`: alternativa cliccabile per accendere o spegnere la voce.
 
 ## Permessi macOS
 

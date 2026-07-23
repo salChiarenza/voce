@@ -37,7 +37,7 @@ def parla(testo):
     if cfg["voce"].lower().startswith("siri"):
         # le voci Siri non sono usabili dalle app: si passa dal comando rapido
         p = subprocess.Popen(
-            ["shortcuts", "run", cfg.get("comando_voce", "Voce Siri")],
+            ["shortcuts", "run", cfg.get("comando_voce", "Voce LeaderAI firmato")],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -49,7 +49,10 @@ def parla(testo):
         )
     p.stdin.write(testo.encode())
     p.stdin.close()  # non aspettiamo la fine: lo stop resta possibile
-    threading.Thread(target=_segna_fine_a_processo_finito, args=(p,), daemon=True).start()
+    # Il monitor deve restare vivo finche' finisce la voce. Se fosse daemon,
+    # l'uscita di questo piccolo processo lo ucciderebbe subito e lascerebbe
+    # PARLANDO bloccato, mettendo in pausa il mani-libere per sempre.
+    threading.Thread(target=_segna_fine_a_processo_finito, args=(p,), daemon=False).start()
 
 
 if __name__ == "__main__":

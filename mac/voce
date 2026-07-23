@@ -6,7 +6,14 @@
 # Comandi usati anche dagli agenti quando chiedi a voce/chat di
 # accendere o spegnere ("spegni il microfono" = voce mani off).
 DIR="$(cd "$(dirname "$0")" && pwd)"
-PY="$DIR/.venv/bin/python"
+if [ -x "$DIR/.venv/bin/python" ]; then
+  PY="$DIR/.venv/bin/python"
+elif [ -x "$DIR/../../.venv/bin/python" ]; then
+  # Alias operativo di Sal: tools/voce -> sorgente unica della repo pubblica.
+  PY="$DIR/../../.venv/bin/python"
+else
+  PY="$(command -v python3)"
+fi
 case "$1" in
   on)  touch "$DIR/VOICE_ON"; echo "Voce: ACCESA" ;;
   off) rm -f "$DIR/VOICE_ON"

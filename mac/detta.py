@@ -25,7 +25,7 @@ from pynput import keyboard
 from pynput.keyboard import Controller, Key
 
 from voce_lib import (
-    carica_config, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
+    carica_config, config_scrivibile, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
     mani_libere_attive, FLAG_MANI_LIBERE_ON,
     c_e_voce, aggiorna_scarti_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
@@ -1018,7 +1018,7 @@ def _impara_dagli_errori():
     if not comando:
         return
     nuove = impara_sostituzioni(
-        os.path.join(base, "voce.log"), os.path.join(base, "config.json"), comando
+        os.path.join(base, "voce.log"), str(config_scrivibile()), comando
     )
     if nuove:
         cfg.setdefault("sostituzioni", {}).update(nuove)  # attive da subito

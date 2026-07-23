@@ -1,5 +1,17 @@
 # Changelog
 
+## Non rilasciato - 17/07/2026 (27) — stessa voce naturale della versione di Sal
+
+- La prima installazione separa ora requisiti tecnici e **Profilo LeaderAI consigliato**: Siri `Voce 2`, tasti e detta pulito vengono proposti in una sola domanda, non imposti. Un'alternativa scelta dal proprietario viene configurata, provata e riportata nel report.
+- Rinominato il Comando Rapido TTS in **`Voce LeaderAI firmato`**.
+- La distribuzione Mac include il file Apple firmato `Voce LeaderAI firmato.shortcut`, esportato dal comando realmente collaudato da Sal con Siri `Voce 2`.
+- Config pubblico allineato alla versione Sal: `"voce": "Siri (Voce 2)"` e `"comando_voce": "Voce LeaderAI firmato"`.
+- Installer e missione agente aprono il file firmato solo se manca, chiedono all'umano il solo click Apple `Aggiungi comando rapido` e chiudono con una prova audio reale. Vietato il fallback silenzioso ad Alice.
+- L'aggiornamento non riparte piu' da zero: conserva glossario, sostituzioni, tasti e calibrazione; monta `voce_hook.py` negli hook globali di Claude Code/Codex senza cancellare quelli esistenti e ne verifica la presenza.
+- Corrette le istruzioni consegnabili sul comando reale: voce agenti = `Option + freccia sinistra`, mani libere = `Cmd destro + Option`. Rimossi i riferimenti errati ad Alt destro.
+- Corretto il segnale `PARLANDO`: il monitor resta vivo fino alla fine dell'audio e rimuove sempre il flag, evitando che il mani libere resti in pausa dopo una risposta vocale.
+- Eliminata la doppia sorgente Mac: l'app viva di Sal usa questi stessi file tramite symlink; solo `config.local.json` conserva dati personali e calibrazione fuori dalla distribuzione. Una modifica al prodotto e' quindi gia' nella repo, senza copia manuale.
+
 ## Non rilasciato - 09/07/2026 (26)
 
 - **L'airbag "audio fuori scala" ora si ripara da solo se la corruzione persiste**: il primo episodio si scarta e basta (transitorio che si riassorbe), dal **secondo di fila** l'app si riavvia da sola con lo stesso riavvio pulito del cambio device — niente dettature a vuoto finche' non riavvii a mano. Policy pura `aggiorna_scarti_fuori_scala` in `voce_lib.py`, testata. *(Su Windows non serve: li' lo stream si apre fresco a ogni dettatura, basta lo scarto.)*

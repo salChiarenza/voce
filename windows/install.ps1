@@ -1,6 +1,12 @@
 $ErrorActionPreference = "Stop"
 
-Write-Host "Voice Dettatura Windows v1.2"
+function Assert-LastExit([string]$Step) {
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Step non riuscito (codice $LASTEXITCODE). L'installazione non viene dichiarata completata."
+    }
+}
+
+Write-Host "Voice Dettatura Windows v1.3"
 Write-Host ""
 
 if ($env:OS -ne "Windows_NT") {
@@ -24,12 +30,17 @@ $VenvPython = Join-Path $AppDir ".venv\Scripts\python.exe"
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 
 Copy-Item (Join-Path $Source "voice_dettatura_windows.py") $AppDir -Force
-Copy-Item (Join-Path $Source "config.json") $AppDir -Force
+Copy-Item (Join-Path $Source "voce_hook.py") $AppDir -Force
 Copy-Item (Join-Path $Source "requirements.txt") $AppDir -Force
+& $PythonCommand.Source (Join-Path $Source "voce_hook.py") --merge-config (Join-Path $Source "config.json") (Join-Path $AppDir "config.json")
+Assert-LastExit "Aggiornamento conservativo della configurazione"
 
 & $PythonCommand.Source -m venv (Join-Path $AppDir ".venv")
+Assert-LastExit "Creazione ambiente Python"
 & $VenvPython -m pip install --upgrade pip
+Assert-LastExit "Aggiornamento pip"
 & $VenvPython -m pip install -r (Join-Path $AppDir "requirements.txt")
+Assert-LastExit "Installazione dipendenze"
 
 # Launcher: avvia l'app dentro la sua cartella. La finestra che si apre
 # e' l'app accesa: si chiude per fermare la dettatura.
@@ -63,11 +74,23 @@ $StartDir = [Environment]::GetFolderPath("Programs")
 $StartLnk = Join-Path $StartDir "Voce Dettatura.lnk"
 New-VoceShortcut $StartLnk
 
-& $VenvPython -m py_compile (Join-Path $AppDir "voice_dettatura_windows.py")
+& $VenvPython -m py_compile (Join-Path $AppDir "voice_dettatura_windows.py") (Join-Path $AppDir "voce_hook.py")
+Assert-LastExit "Verifica sintassi app"
+& $VenvPython (Join-Path $AppDir "voce_hook.py") --install-hooks
+Assert-LastExit "Collegamento voce a Claude Code/Codex"
+& $VenvPython (Join-Path $AppDir "voce_hook.py") --check-hooks
+Assert-LastExit "Verifica collegamento voce"
+Write-Host "Voci italiane rilevate (la scelta e' consigliata, non imposta):"
+& $VenvPython (Join-Path $AppDir "voce_hook.py") --list-voices
+Assert-LastExit "Lettura voci italiane Windows"
+& $VenvPython (Join-Path $AppDir "voce_hook.py") --test-voice
+Assert-LastExit "Prova voce Windows"
 
 Write-Host ""
 Write-Host "Installazione completata."
 Write-Host "Icona creata: 'Voce Dettatura' sulla Scrivania e nel Menu Start."
+Write-Host "Voce agenti collegata a Claude Code/Codex e prova audio completata."
+Write-Host "Il profilo LeaderAI consiglia di ascoltare le voci italiane disponibili e salvare quella preferita; non viene imposta una voce diversa dalla scelta del proprietario."
 Write-Host ""
 Write-Host "Uso:"
 Write-Host "1. Clicca l'icona 'Voce Dettatura' (Scrivania o Menu Start)."

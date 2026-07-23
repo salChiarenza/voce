@@ -5,4 +5,8 @@ dist/
 voice.log
 voce.log
 VOICE_ON
+PARLANDO
+MANI_LIBERE_ON
+APPRENDIMENTO_ULTIMO
+config.local.json
 voce_pid

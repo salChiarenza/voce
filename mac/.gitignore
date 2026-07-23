@@ -3,5 +3,9 @@
 __pycache__/
 *.pyc
 VOICE_ON
+PARLANDO
+MANI_LIBERE_ON
+APPRENDIMENTO_ULTIMO
+config.local.json
 voce.log
 dist/

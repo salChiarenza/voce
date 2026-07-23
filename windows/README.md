@@ -1,4 +1,4 @@
-# Voice Dettatura Windows v1.2
+# Voice Dettatura Windows v1.3 (in preparazione)
 
 Dettatura locale per Windows: tieni premuto `Ctrl destro`, parli, rilasci, e il testo viene scritto dove hai il cursore.
 
@@ -8,7 +8,7 @@ Risorsa gratuita per la community **AI con Sal**.
 
 ## Stato
 
-Versione Windows brandizzata, allineata nell'aspetto e nel comportamento alla versione Mac (pill + marchio + sorriso, due tasti, voce agenti). Va provata su un PC Windows reale prima di considerarla stabile.
+Versione Windows brandizzata, allineata nell'aspetto e nel comportamento alla versione Mac (pill + marchio + sorriso, due tasti, voce agenti). L'aggiornamento conserva la configurazione personale e collega davvero la lettura delle risposte a Claude Code/Codex. Va provata su un PC Windows reale prima di considerarla stabile.
 
 ## Metodo consigliato: installa con Claude Code o Codex
 
@@ -24,7 +24,15 @@ Oppure passa direttamente questo link all'agente e digli di lavorare nella carte
 https://github.com/salChiarenza/voce
 ```
 
-L'agente controlla il PC, installa o ripara cio' che manca, ti chiede solo i permessi che devi concedere tu e chiude con una prova finale.
+L'agente controlla il PC, aggiorna senza azzerare glossario e preferenze, installa o ripara cio' che manca, collega la voce delle risposte a Claude Code/Codex e chiude con una prova finale. Alla prima installazione elenca e fa ascoltare le voci italiane gia' presenti, suggerisce quella percepita come piu' naturale e salva la scelta del proprietario in `voce_nome`: e' una raccomandazione, non un obbligo.
+
+Comandi usati dall'agente per la scelta guidata:
+
+```text
+voce_hook.py --list-voices
+voce_hook.py --test-voice "NOME"
+voce_hook.py --set-voice "NOME"
+```
 
 ## Installazione manuale
 
