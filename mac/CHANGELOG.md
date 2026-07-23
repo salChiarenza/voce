@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato - 23/07/2026 — email di consegna versionata
+
+- Aggiunto `EMAIL_CONSEGNA.md` nella radice della repo come fonte unica dell'email Mac e Windows: link esatto, percorso a clic, conferme del sistema, passaggio all'agente locale, ramo di recupero e collaudo.
+- Ogni miglioramento dell'esperienza di installazione aggiorna app, istruzioni ed email nello stesso commit; la cronologia Git conserva l'evoluzione.
+
 ## Non rilasciato - 23/07/2026 — passaggio di sicurezza locale
 
 - La consegna distingue ora il download di codice esterno dal lavoro locale dell'agente: il proprietario scarica la versione verificata e avvia `Installa Voce.command`; Claude Code/Codex riprende dalla cartella installata e completa diagnosi e collaudo.

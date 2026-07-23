@@ -13,6 +13,8 @@ Mentre parli compare in basso al centro una pill con il marchio **salchiarenza.a
 
 Apri la cartella del tuo sistema e segui il suo `INSTALLA_CON_AI.md`: scarichi la versione verificata, avvii il launcher incluso con un doppio clic e il tuo Claude Code o Codex completa diagnosi e collaudo dalla cartella locale.
 
+Per consegnare Voce a un cliente, usa il modello versionato [`EMAIL_CONSEGNA.md`](EMAIL_CONSEGNA.md). L'email, il launcher e le istruzioni locali vengono aggiornati insieme.
+
 ## Per chi sviluppa
 
 Le due app sono **gemelle**: il Mac è il master, Windows è il riflesso. Regole, lista parità e divieti in [`AGENTS.md`](AGENTS.md). Leggerlo prima di toccare qualsiasi cosa.

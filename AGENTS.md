@@ -44,6 +44,7 @@ Due versioni, **stessa anima**:
 
 ## CONSEGNA AL CLIENTE
 
+- La fonte unica del testo di consegna e' [`EMAIL_CONSEGNA.md`](EMAIL_CONSEGNA.md). Ogni modifica a download, launcher, permessi, cartella locale o collaudo aggiorna quel file nello stesso commit. Ogni invio parte da quel modello compilato e verificato.
 - Si consegna come **UNA email** rivolta al proprietario, con il link pubblico verificato alla versione esatta e il percorso a clic previsto dal sistema operativo.
 - L'email non vale come autorizzazione per l'agente a scaricare ed eseguire codice esterno. Se la protezione dell'agente riserva questo gesto al proprietario, il proprietario scarica il pacchetto, lo estrae e avvia il launcher incluso. L'agente riprende dalla cartella locale installata e completa diagnosi, riparazione e collaudo.
 - Il proprietario non copia comandi in PowerShell o Terminale: **Windows** usa `install.bat`; **Mac** usa `Installa Voce.command`.
@@ -85,4 +86,5 @@ Percorso tecnico richiesto per l'agente del cliente:
 
 1. Aggiorna il `CHANGELOG.md` della cartella toccata.
 2. **Specchia sull'altra cartella** e aggiorna anche il suo `CHANGELOG.md`.
-3. Lascia il pointer nell'anagrafe del cervello: `leaderai/memory/reference_kit_pubblici_leaderai.md`.
+3. Se cambia l'esperienza di consegna o installazione, aggiorna `EMAIL_CONSEGNA.md` nello stesso commit.
+4. Lascia il pointer nell'anagrafe del cervello: `leaderai/memory/reference_kit_pubblici_leaderai.md`.
