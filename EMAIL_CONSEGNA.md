@@ -13,6 +13,7 @@ nel testo mostrato a Sal e nella copia Gmail inviata.
 Prima di mostrare l'email a Sal, sostituisci tutti i campi tra parentesi quadre:
 
 - `[NOME]`: nome del destinatario;
+- `[EMAIL_DESTINATARIO]`: indirizzo verificato del destinatario;
 - `[LINK_ARCHIVIO_VERIFICATO]`: URL esatto del commit o della release provata
   con lo stesso accesso del destinatario;
 - `[AGENTE_CLIENTE]`: Claude Code oppure Codex, verificato sul computer;
@@ -27,6 +28,29 @@ Percorsi standard:
 Un percorso personalizzato entra nell'email dopo una verifica sul computer o in
 un rapporto precedente del cliente.
 
+## Formato di invio
+
+Il blocco email e' scritto in Markdown ed e' la fonte unica per entrambe le
+parti del messaggio:
+
+- il corpo HTML mostra il link come testo cliccabile;
+- il fallback `text/plain` contiene lo stesso testo e l'URL esteso;
+- il connettore Gmail riceve il blocco Markdown;
+- `tools/gmail/gmail_send.py` riceve insieme `--body-file` e `--html-file`;
+- nell'HTML il link usa
+  `<a href="[LINK_ARCHIVIO_VERIFICATO]">Scarica Voce Windows</a>` oppure
+  `<a href="[LINK_ARCHIVIO_VERIFICATO]">Scarica Voce Mac</a>`.
+
+Prima della composizione apri `commerciale/INDEX.md`, lo stato del cliente e
+verifica quale agente tiene il filo. Cerca poi Gmail con:
+
+```text
+in:sent newer_than:1d to:[EMAIL_DESTINATARIO]
+```
+
+Confronta oggetto, sistema, versione e scopo. Il nuovo invio parte quando la
+ricerca conferma che quella consegna e' ancora da eseguire.
+
 ## Email Windows
 
 **Oggetto prima consegna:** `Voce Windows: installazione guidata`
@@ -39,8 +63,7 @@ Ciao [NOME],
 con questa email installi la versione verificata di Voce Windows e completi le
 prove insieme a [AGENTE_CLIENTE].
 
-1. Scarica Voce da questo link:
-[LINK_ARCHIVIO_VERIFICATO]
+1. [Scarica Voce Windows, versione verificata]([LINK_ARCHIVIO_VERIFICATO]).
 
 2. Apri Download, seleziona il file ZIP e scegli "Estrai tutto".
 
@@ -100,8 +123,7 @@ Ciao [NOME],
 con questa email installi la versione verificata di Voce Mac e completi le
 prove insieme a [AGENTE_CLIENTE].
 
-1. Scarica Voce da questo link:
-[LINK_ARCHIVIO_VERIFICATO]
+1. [Scarica Voce Mac, versione verificata]([LINK_ARCHIVIO_VERIFICATO]).
 
 2. Apri Download e fai doppio clic sul file ZIP per estrarlo.
 
@@ -151,19 +173,28 @@ Sal & [FIRMA_AGENTE]
 
 ## Controllo prima dell'invio
 
-1. Apri lo stato corrente della repo e scegli Windows oppure Mac.
-2. Crea il commit della versione da consegnare.
-3. Costruisci l'URL esatto dell'archivio da quel commit o dalla release.
-4. Scarica l'archivio con lo stesso accesso del destinatario.
-5. Verifica che il launcher e `INSTALLA_CON_AI.md` siano presenti.
-6. Prova il primo avvio sul sistema previsto e registra
+1. Apri `commerciale/INDEX.md`, lo stato cliente e identifica l'agente che
+   tiene il filo.
+2. Cerca `in:sent newer_than:1d to:[EMAIL_DESTINATARIO]` e confronta oggetto,
+   sistema, versione e scopo.
+3. Apri lo stato corrente della repo e scegli Windows oppure Mac.
+4. Crea il commit della versione da consegnare.
+5. Costruisci l'URL esatto dell'archivio da quel commit o dalla release.
+6. Scarica l'archivio con lo stesso accesso del destinatario.
+7. Verifica che il launcher e `INSTALLA_CON_AI.md` siano presenti.
+8. Prova il primo avvio sul sistema previsto e registra
    `PROVA_DESTINATARIO_OK`.
-7. Compila tutti i campi del modello e rileggi ogni link e percorso.
-8. Mostra a Sal destinatario, oggetto e testo integrale.
-9. Dopo il suo comando di invio, registra `INVIO_OK` e manda una sola nuova
+9. Compila tutti i campi del modello e rileggi ogni link e percorso.
+10. Genera HTML e fallback testuale dalla stessa fonte; nell'HTML il link
+    appare come testo cliccabile.
+11. Controlla `tu`, frasi affermative, firma a due nomi e zero em dash.
+12. Mostra a Sal destinatario, oggetto e testo integrale.
+13. Dopo il suo comando di invio, registra `INVIO_OK` e manda una sola nuova
    email con oggetto autonomo.
-10. Rileggi la copia in Sent, applica la label `Clienti`, aggiorna la scheda del
-    cliente e verifica la sua Inbox.
+14. Rileggi la copia in Sent e conferma una sola nuova email per quella
+    consegna.
+15. Applica la label `Clienti`, aggiorna la scheda del cliente e verifica la
+    sua Inbox.
 
 ## Miglioramento continuo
 
@@ -177,4 +208,3 @@ Quando una consegna incontra un ostacolo:
 4. aggiorna i changelog Mac e Windows;
 5. ripeti il percorso completo del destinatario;
 6. pubblica un nuovo commit e usa il nuovo link nell'invio successivo.
-

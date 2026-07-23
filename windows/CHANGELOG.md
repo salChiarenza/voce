@@ -1,5 +1,13 @@
 # Changelog
 
+## Non rilasciato - 23/07/2026 — pre-invio completo
+
+- L'email di consegna usa un link cliccabile nell'HTML e conserva l'URL esteso
+  nel fallback testuale.
+- Aggiunti verifica dell'agente che tiene il cliente, controllo Gmail Sent
+  prima e dopo l'invio, conferma di una sola copia, tono, firma e controllo
+  degli em dash.
+
 ## Non rilasciato - 23/07/2026 — email di consegna versionata
 
 - Aggiunto `EMAIL_CONSEGNA.md` nella radice della repo come fonte unica dell'email Mac e Windows: link esatto, percorso a clic, conferme del sistema, passaggio all'agente locale, ramo di recupero e collaudo.
