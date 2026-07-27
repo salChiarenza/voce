@@ -8,9 +8,33 @@ import logging
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-BASE = Path(__file__).parent
+
+def _base_operativa(module_file=None, argv0=None, cwd=None):
+    """Trova la cartella runtime anche quando gli script sono symlink.
+
+    Python risolve il percorso fisico dello script prima di costruire
+    ``sys.path``. Sul Mac di Sal, quindi, ``__file__`` puo' puntare alla repo
+    pubblica anche se l'app e' stata avviata da ``tools/voce``: config locale
+    e flag VOICE_ON/MANI_LIBERE_ON resterebbero invisibili. ``sys.argv[0]``
+    conserva invece il percorso realmente invocato.
+    """
+    modulo = Path(module_file or __file__)
+    invocato = Path(argv0 if argv0 is not None else sys.argv[0]).expanduser()
+    if not invocato.is_absolute():
+        invocato = Path(cwd or Path.cwd()) / invocato
+    candidato = invocato.parent
+    try:
+        if (candidato / "voce_lib.py").resolve() == modulo.resolve():
+            return candidato
+    except OSError:
+        pass
+    return modulo.parent
+
+
+BASE = _base_operativa()
 SOURCE_BASE = Path(__file__).resolve().parent
 CONFIG_DEFAULT = SOURCE_BASE / "config.json"
 CONFIG_LOCAL = BASE / "config.local.json"

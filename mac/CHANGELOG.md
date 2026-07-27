@@ -1,5 +1,15 @@
 # Changelog
 
+## Non rilasciato - 27/07/2026 — conversazione veloce anche tramite symlink
+
+- Corretto il percorso runtime dell'app viva di Sal: quando Python avviava
+  `detta.py` o `voce_hook.py` attraverso i symlink di `tools/voce`, poteva
+  cercare `VOICE_ON`, `MANI_LIBERE_ON` e `config.local.json` nella repo fisica.
+  L'app non riconosceva quindi la conversazione attiva e aggiungeva fino a
+  3-4 secondi di detta pulito. Ora conserva la cartella realmente invocata e
+  salta la pulizia come previsto, mantenendo la pausa personale di Sal prima
+  dell'Invio per rileggere o aggiungere una seconda frase.
+
 ## Non rilasciato - 23/07/2026 — pre-invio completo
 
 - L'email di consegna usa un link cliccabile nell'HTML e conserva l'URL esteso
