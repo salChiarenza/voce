@@ -17,16 +17,12 @@ from voce_lib import voce_attiva, estrai_ultima_risposta
 from parla import parla
 
 
-PERSONAL_CONFIG_KEYS = {
-    "hotkey",
-    "glossario",
-    "sostituzioni",
-    "debug_dettature",
-    "max_registrazione_sec",
-    "mani_libere_soglia_voce",
-    "mani_libere_soglia_stop",
-}
-VOICE_APP_MARKERS = ("VoiceDettaturaMac", "VoiceDettaturaWindows")
+VOICE_APP_MARKERS = (
+    "VoiceDettaturaMac",
+    "VoiceDettaturaWindows",
+    "/tools/voce/",
+    "\\tools\\voce\\",
+)
 
 
 def unisci_config(default_path: str, current_path: str) -> None:
@@ -37,11 +33,13 @@ def unisci_config(default_path: str, current_path: str) -> None:
     if current_file.exists():
         current = json.loads(current_file.read_text(encoding="utf-8"))
         shutil.copy2(current_file, current_file.with_name("config.pre-aggiornamento.json"))
-    merged = dict(current)  # conserva anche eventuali chiavi future/personali
-    merged.update(defaults)  # il prodotto nuovo porta i suoi default aggiornati
-    for key in PERSONAL_CONFIG_KEYS:
-        if key in current:
-            merged[key] = current[key]
+    # I nuovi default aggiungono solo cio' che manca. Tutte le scelte gia'
+    # presenti restano: voce, comando voce, tasti, detta pulito, ritardi,
+    # glossario e calibrazione. Il profilo LeaderAI e' consigliato, non imposto.
+    merged = dict(defaults)
+    merged.update(current)
+    if "brand" in defaults:
+        merged["brand"] = defaults["brand"]
     current_file.parent.mkdir(parents=True, exist_ok=True)
     temp = current_file.with_suffix(".tmp")
     temp.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -128,14 +126,13 @@ def installa_hook_agenti() -> list[tuple[str, Path]]:
     if _agente_presente("codex"):
         path = home / ".codex" / "hooks.json"
         collega_hook(path)
-        codex = shutil.which("codex")
-        if codex:
-            subprocess.run([codex, "features", "enable", "hooks"], check=True, capture_output=True, text=True)
         collegati.append(("Codex", path))
     if not collegati:
         raise RuntimeError("Non trovo Claude Code o Codex da collegare.")
     for nome, path in collegati:
-        print(f"{nome}: voce collegata in {path}")
+        print(f"{nome}: configurazione voce scritta in {path}")
+        if nome == "Codex":
+            print("Codex: apri /hooks, verifica il comando Voce e concedi fiducia.")
     return collegati
 
 
@@ -148,7 +145,10 @@ def controlla_hook_agenti() -> bool:
     ):
         if presente:
             ok = hook_collegato(path)
-            print(f"{nome}: {'collegato' if ok else 'NON collegato'}")
+            stato = "configurato" if ok else "NON configurato"
+            print(f"{nome}: {stato}")
+            if nome == "Codex" and ok:
+                print("Codex: la prova reale richiede fiducia da /hooks e una risposta letta ad alta voce.")
             trovati.append(ok)
     return bool(trovati) and all(trovati)
 

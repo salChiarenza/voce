@@ -51,18 +51,22 @@ L'agente lavora sulla cartella locale gia' installata:
 
 Obiettivo: portare Voce fino a una prova reale, conservando la configurazione personale esistente.
 
-1. Verifica la presenza di `voice_dettatura_windows.py`, `voce_hook.py`, `config.json`, `.venv` e `Voce Dettatura.bat`.
+1. Verifica la presenza di `VERSION`, `voice_dettatura_windows.py`, `voce_hook.py`, `config.json`, `.venv` e `Voce Dettatura.bat`.
 2. Verifica Python, PowerShell, microfono, tasto Ctrl destro, tasto Menu, rete e spazio disponibile.
 3. Controlla che l'aggiornamento abbia conservato glossario, sostituzioni, tasti, modello, voce scelta e calibrazione gia' presenti.
 4. Esegui la verifica sintattica dei file Python con l'interprete della cartella `.venv`.
-5. Esegui `voce_hook.py --check-hooks` con l'interprete della cartella `.venv`; ripara il collegamento locale se il controllo fallisce e ripeti la verifica.
+5. Esegui `voce_hook.py --check-hooks` con l'interprete della cartella `.venv`; ripara la configurazione locale se il controllo fallisce e ripeti la verifica.
 6. Avvia Voce dall'icona sulla Scrivania.
 7. Guida il proprietario nella prova in Blocco note: Ctrl destro tenuto, frase dettata, rilascio, testo inserito e pannello `salchiarenza.ai` visibile con il sorriso verde.
 8. Elenca le voci italiane disponibili con `voce_hook.py --list-voices`.
 9. Falle ascoltare una alla volta con `voce_hook.py --test-voice "NOME"` e salva quella scelta con `voce_hook.py --set-voice "NOME"`.
-10. Prova il tasto Menu e la lettura completa di una risposta dell'agente.
-11. Quando Windows richiede microfono o altre conferme, indica al proprietario il gesto preciso e riprendi il collaudo subito dopo.
-12. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
+10. Per Codex fai aprire `/hooks` al proprietario, verifica il comando
+    `voce_hook.py` e chiedi la fiducia esplicita se richiesta.
+11. Prova il tasto Menu e una risposta completa dell'agente; verifica che venga
+    letta davvero con la voce scelta. Il solo `--check-hooks` prova la
+    configurazione, non l'esecuzione autorizzata.
+12. Quando Windows richiede microfono o altre conferme, indica al proprietario il gesto preciso e riprendi il collaudo subito dopo.
+13. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
 
 ## Profilo LeaderAI consigliato
 
@@ -85,7 +89,7 @@ Mostra al proprietario:
 - dettatura con Ctrl destro;
 - pannello `salchiarenza.ai`;
 - tasto Menu e voce agenti;
-- collegamento a Claude Code o Codex;
+- collegamento configurato a Claude Code o Codex e prova audio reale;
 - voce italiana scelta;
 - configurazione precedente conservata;
 - eventuale gesto umano ancora richiesto.

@@ -24,7 +24,11 @@ L'installer crea o aggiorna:
 ~/VoiceDettaturaMac
 ```
 
-e aggiunge i launcher di Voce sulla Scrivania.
+e aggiunge sulla Scrivania:
+
+- `Voce Dettatura.command`, avvio semplice;
+- `Voce Attiva Tutto.command`, un clic per avviare e commutare voce agenti e
+  mani libere.
 
 ## Messaggio diretto per l'agente dopo l'installazione
 
@@ -52,17 +56,21 @@ L'agente lavora sulla cartella locale gia' installata:
 Obiettivo: portare Voce fino a una prova reale, conservando la configurazione personale esistente.
 
 1. Verifica compatibilita' del Mac, sistema operativo, Python, microfono, permessi e spazio.
-2. Verifica la presenza di `detta.py`, `parla.py`, `voce_hook.py`, `voce_lib.py`, `config.json`, `.venv` e `Voce LeaderAI firmato.shortcut`.
+2. Verifica la presenza di `VERSION`, `detta.py`, `parla.py`, `voce_hook.py`, `voce_lib.py`, `config.json`, `.venv` e `Voce LeaderAI firmato.shortcut`.
 3. Controlla che l'aggiornamento abbia conservato glossario, sostituzioni, tasti, modello, voce scelta e calibrazione gia' presenti.
 4. Esegui la verifica sintattica dei file Python con l'interprete della cartella `.venv`.
-5. Esegui `voce_hook.py --check-hooks` con l'interprete della cartella `.venv`; ripara il collegamento locale se il controllo fallisce e ripeti la verifica.
-6. Verifica che i launcher siano presenti sulla Scrivania.
+5. Esegui `voce_hook.py --check-hooks` con l'interprete della cartella `.venv`; ripara la configurazione locale se il controllo fallisce e ripeti la verifica.
+6. Verifica che `Voce Dettatura.command` e `Voce Attiva Tutto.command` siano presenti sulla Scrivania.
 7. Se il proprietario sceglie il Profilo LeaderAI, verifica `Voce LeaderAI firmato` in Comandi Rapidi e guidalo nel clic `Aggiungi comando rapido` quando richiesto.
 8. Guida la prova reale in un campo di testo con Cmd destro e verifica il pannello `salchiarenza.ai`.
 9. Prova Option + freccia sinistra per la voce e Cmd destro + Option per la modalita' mani libere.
-10. Prova una risposta completa con la voce scelta.
-11. Quando macOS richiede microfono, accessibilita' o monitoraggio input, indica al proprietario il gesto preciso e riprendi il collaudo subito dopo.
-12. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
+10. Per Codex fai aprire `/hooks` al proprietario, verifica il comando
+    `voce_hook.py` e chiedi la fiducia esplicita se richiesta.
+11. Prova una risposta completa dell'agente e verifica che venga letta davvero
+    con la voce scelta: il solo `--check-hooks` prova la configurazione, non
+    l'esecuzione autorizzata.
+12. Quando macOS richiede microfono, accessibilita' o monitoraggio input, indica al proprietario il gesto preciso e riprendi il collaudo subito dopo.
+13. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
 
 ## Profilo LeaderAI consigliato
 
@@ -86,7 +94,7 @@ Mostra al proprietario:
 - dettatura con Cmd destro;
 - pannello `salchiarenza.ai`;
 - voce agenti e mani libere;
-- collegamento a Claude Code o Codex;
+- collegamento configurato a Claude Code o Codex e prova audio reale;
 - voce scelta;
 - configurazione precedente conservata;
 - eventuale gesto umano ancora richiesto.

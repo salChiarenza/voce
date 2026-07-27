@@ -1,8 +1,11 @@
-# Voice Dettatura Mac v1.0.2
+# Voce LeaderAI per Mac
 
 Dettatura locale per Mac: tieni premuto un tasto, parli, rilasci, e il testo viene scritto dove hai il cursore.
 
 Risorsa gratuita per la community **AI con Sal**.
+
+La versione esatta dell'archivio è nel file `../VERSION` e viene copiata nella
+cartella installata.
 
 ## Cosa fa
 
@@ -57,12 +60,13 @@ L'installer crea la cartella:
 
 e aggiunge due launcher sulla Scrivania:
 
-- `Voice Dettatura Mac.command`
-- `Voice On-Off.command`
+- `Voce Dettatura.command`: avvio semplice della dettatura;
+- `Voce Attiva Tutto.command`: avvia Voce e commuta insieme voce agenti e
+  mani libere, come il controllo rapido usato da Sal.
 
 ## Uso rapido
 
-1. Apri `Voice Dettatura Mac.command`.
+1. Apri `Voce Dettatura.command`.
 2. Tieni premuto `Cmd destro`.
 3. Parla.
 4. Rilascia il tasto.
@@ -71,7 +75,8 @@ Il testo viene scritto dove hai il cursore.
 
 - `Option + freccia sinistra`: accende o spegne la voce delle risposte.
 - `Cmd destro + Option`: accende o spegne la modalità mani libere.
-- `Voice On-Off.command`: alternativa cliccabile per accendere o spegnere la voce.
+- `Voce Attiva Tutto.command`: controllo rapido per accendere o spegnere voce
+  agenti e mani libere insieme.
 
 ## Permessi macOS
 
@@ -102,8 +107,8 @@ Chiudi il launcher e cancella:
 
 ```text
 ~/VoiceDettaturaMac
-~/Desktop/Voice Dettatura Mac.command
-~/Desktop/Voice On-Off.command
+~/Desktop/Voce Dettatura.command
+~/Desktop/Voce Attiva Tutto.command
 ```
 
 ## Licenza

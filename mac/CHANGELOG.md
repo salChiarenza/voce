@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0-rc.1 - 27/07/2026 — repo cliente autosufficiente
+
+- La stessa sorgente usata ogni giorno da Sal e' ora accompagnata nella repo da
+  versione unica, prove automatiche, installazione conservativa e modello di
+  consegna.
+- L'installer copia `VERSION` nella cartella cliente; la missione locale ne
+  verifica la presenza prima del collaudo.
+- L'aggiornamento conserva tutte le scelte gia' presenti; il Profilo LeaderAI
+  viene proposto dall'agente dopo l'installazione e non e' piu' imposto dal
+  launcher.
+- Il controllo rapido `Voce Attiva Tutto.command` usato da Sal e' ora
+  ripetibile anche nell'installazione cliente.
+- Il collaudo Codex include revisione da `/hooks` e una risposta realmente
+  letta ad alta voce.
+- La versione resta candidata finche' importazione, primo avvio, permessi,
+  dettatura e voce non vengono riprovati partendo dall'archivio su un secondo
+  Mac.
+
 ## Non rilasciato - 27/07/2026 — conversazione veloce anche tramite symlink
 
 - Corretto il percorso runtime dell'app viva di Sal: quando Python avviava

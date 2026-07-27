@@ -1,6 +1,7 @@
 # Privacy
 
-Voice Dettatura Windows v1.0 beta e' uno strumento gratuito sperimentale.
+Voce LeaderAI per Windows e' uno strumento gratuito sperimentale. La versione
+esatta installata e' riportata nel file `VERSION`.
 
 ## Dati trattati
 

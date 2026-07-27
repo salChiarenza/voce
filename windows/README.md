@@ -1,10 +1,13 @@
-# Voice Dettatura Windows v1.3 (in preparazione)
+# Voce LeaderAI per Windows (candidata)
 
 Dettatura locale per Windows: tieni premuto `Ctrl destro`, parli, rilasci, e il testo viene scritto dove hai il cursore.
 
 Mentre parli, in basso al centro compare la pill **salchiarenza.ai** con la barra di lineette verdi ad arco "a sorriso" che si muovono col volume. L'overlay non ruba il focus: continui a scrivere dove sei.
 
 Risorsa gratuita per la community **AI con Sal**.
+
+La versione esatta dell'archivio è nel file `../VERSION` e viene copiata nella
+cartella installata.
 
 ## Stato
 

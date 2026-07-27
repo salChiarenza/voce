@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.0-rc.1 - 27/07/2026 — repo cliente autosufficiente
+
+- La repo contiene ora versione unica, prove automatiche, installazione
+  conservativa e modello di consegna nello stesso archivio Mac + Windows.
+- L'installer copia `VERSION` nella cartella cliente; la missione locale ne
+  verifica la presenza prima del collaudo.
+- L'aggiornamento conserva tutte le scelte gia' presenti, compresi voce,
+  modello, detta pulito, ritardi e calibrazione.
+- Specchiate dal Mac le protezioni contro frasi-fantasma/collassi di Whisper e
+  contro l'Invio automatico mentre il proprietario preme un tasto o ricomincia
+  a dettare.
+- Il collaudo Codex include revisione da `/hooks` e una risposta realmente
+  letta ad alta voce.
+- La versione resta candidata finche' tasti, microfono, dettatura e voce
+  italiana non vengono provati su un PC Windows reale partendo dall'archivio.
+
 ## Non rilasciato - 23/07/2026 — pre-invio completo
 
 - L'email di consegna usa un link cliccabile nell'HTML e conserva l'URL esteso

@@ -1,4 +1,14 @@
 $ErrorActionPreference = "Stop"
+$Source = Split-Path -Parent $MyInvocation.MyCommand.Path
+$VersionFile = Join-Path (Split-Path -Parent $Source) "VERSION"
+if (-not (Test-Path $VersionFile)) {
+    throw "File VERSION mancante: scarica l'archivio completo della repo Voce."
+}
+$Version = (Get-Content $VersionFile -Raw).Trim()
+$AppDir = Join-Path $HOME "VoiceDettaturaWindows"
+New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
+Copy-Item (Join-Path $Source "INSTALLA_CON_AI.md") $AppDir -Force
+Copy-Item $VersionFile $AppDir -Force
 
 function Assert-LastExit([string]$Step) {
     if ($LASTEXITCODE -ne 0) {
@@ -6,7 +16,7 @@ function Assert-LastExit([string]$Step) {
     }
 }
 
-Write-Host "Voice Dettatura Windows v1.3"
+Write-Host "Voce LeaderAI $Version (Windows)"
 Write-Host ""
 
 if ($env:OS -ne "Windows_NT") {
@@ -19,20 +29,17 @@ if (-not $PythonCommand) {
     $PythonCommand = Get-Command py -ErrorAction SilentlyContinue
 }
 if (-not $PythonCommand) {
-    Write-Host "Python non trovato. Installa Python 3 da python.org o Microsoft Store, poi rilancia."
+    Write-Host "Python non trovato."
+    Write-Host "Le istruzioni sono state copiate in $AppDir."
+    Write-Host "Chiedi al tuo agente di installare Python 3, poi rilancia install.bat."
     exit 1
 }
 
-$Source = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AppDir = Join-Path $HOME "VoiceDettaturaWindows"
 $VenvPython = Join-Path $AppDir ".venv\Scripts\python.exe"
-
-New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
 
 Copy-Item (Join-Path $Source "voice_dettatura_windows.py") $AppDir -Force
 Copy-Item (Join-Path $Source "voce_hook.py") $AppDir -Force
 Copy-Item (Join-Path $Source "requirements.txt") $AppDir -Force
-Copy-Item (Join-Path $Source "INSTALLA_CON_AI.md") $AppDir -Force
 & $PythonCommand.Source (Join-Path $Source "voce_hook.py") --merge-config (Join-Path $Source "config.json") (Join-Path $AppDir "config.json")
 Assert-LastExit "Aggiornamento conservativo della configurazione"
 

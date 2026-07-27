@@ -102,7 +102,9 @@ su install.bat. Riprendi poi il collaudo dalla cartella
 [CARTELLA_LOCALE].
 
 Al termine [AGENTE_CLIENTE] ti mostrera' il rapporto con icona, Ctrl destro,
-pannello salchiarenza.ai, tasto Menu, voce italiana e lettura delle risposte.
+pannello salchiarenza.ai, tasto Menu, voce italiana e una risposta realmente
+letta ad alta voce. Se usi Codex, durante il collaudo aprirai anche `/hooks`
+per verificare e autorizzare il comando Voce.
 Dopo la tua conferma, fagli inviare il rapporto a sal@salchiarenza.ai e fagli
 archiviare questa email.
 
@@ -161,8 +163,11 @@ nella correzione della causa e indicami quando eseguire di nuovo il doppio clic
 su "Installa Voce.command". Riprendi poi il collaudo dalla cartella
 [CARTELLA_LOCALE].
 
-Al termine [AGENTE_CLIENTE] ti mostrera' il rapporto con launcher, Cmd destro,
-pannello salchiarenza.ai, voce agenti, Comando Rapido e lettura delle risposte.
+Al termine [AGENTE_CLIENTE] ti mostrera' il rapporto con i launcher `Voce
+Dettatura` e `Voce Attiva Tutto`, Cmd destro, pannello salchiarenza.ai, voce
+agenti, Comando Rapido e una risposta realmente letta ad alta voce. Se usi
+Codex, durante il collaudo aprirai anche `/hooks` per verificare e autorizzare
+il comando Voce.
 Dopo la tua conferma, fagli inviare il rapporto a sal@salchiarenza.ai e fagli
 archiviare questa email.
 

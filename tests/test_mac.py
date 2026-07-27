@@ -1,0 +1,602 @@
+"""Test delle funzioni pure della versione Mac di Voce."""
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "mac"))
+import voce_lib
+import voce_hook
+import parla
+
+
+def test_base_operativa_conserva_la_cartella_dei_symlink(tmp_path):
+    sorgente = tmp_path / "repo" / "mac"
+    runtime = tmp_path / "leaderai" / "tools" / "voce"
+    sorgente.mkdir(parents=True)
+    runtime.mkdir(parents=True)
+    modulo = sorgente / "voce_lib.py"
+    modulo.touch()
+    (runtime / "voce_lib.py").symlink_to(modulo)
+
+    base = voce_lib._base_operativa(
+        module_file=modulo,
+        argv0=runtime / "detta.py",
+    )
+
+    assert base == runtime
+
+
+def test_carica_config():
+    cfg = voce_lib.carica_config()
+    assert cfg["lingua"] == "it"
+    assert cfg["hotkey"] == "cmd_r"  # detta: Cmd destro; voce/mani libere usano i combo fissi dell'app
+    assert cfg["modello"].startswith("mlx-community/")
+
+
+def test_config_prodotto_unico_con_override_personale(tmp_path, monkeypatch):
+    defaults = tmp_path / "config.json"
+    local = tmp_path / "config.local.json"
+    defaults.write_text(
+        json.dumps({"voce": "Siri (Voce 2)", "glossario": ["LeaderAI"], "soglia": 1}),
+        encoding="utf-8",
+    )
+    local.write_text(
+        json.dumps({"glossario": ["Cliente personale"], "soglia_locale": 2}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(voce_lib, "CONFIG_DEFAULT", defaults)
+    monkeypatch.setattr(voce_lib, "CONFIG_LOCAL", local)
+
+    cfg = voce_lib.carica_config()
+
+    assert cfg["voce"] == "Siri (Voce 2)"
+    assert cfg["glossario"] == ["Cliente personale"]
+    assert cfg["soglia"] == 1
+    assert cfg["soglia_locale"] == 2
+
+
+def test_aggiornamento_config_conserva_tutte_le_scelte_personali(tmp_path):
+    defaults = tmp_path / "defaults.json"
+    current = tmp_path / "config.json"
+    defaults.write_text(
+        json.dumps(
+            {
+                "voce": "Siri (Voce 2)",
+                "comando_voce": "Voce LeaderAI firmato",
+                "glossario": ["LeaderAI"],
+                "mani_libere_soglia_voce": 0.01,
+                "detta_pulito": True,
+                "invio_automatico_ritardo_conversazione_sec": 0.3,
+                "nuovo_default": "entra",
+            }
+        ),
+        encoding="utf-8",
+    )
+    current.write_text(
+        json.dumps(
+            {
+                "voce": "Alice",
+                "comando_voce": "Voce Siri",
+                "glossario": ["Cliente X"],
+                "mani_libere_soglia_voce": 0.077,
+                "detta_pulito": False,
+                "invio_automatico_ritardo_conversazione_sec": 1.2,
+                "chiave_cliente": "resta",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    voce_hook.unisci_config(str(defaults), str(current))
+    merged = json.loads(current.read_text(encoding="utf-8"))
+
+    assert merged["voce"] == "Alice"
+    assert merged["comando_voce"] == "Voce Siri"
+    assert merged["glossario"] == ["Cliente X"]
+    assert merged["mani_libere_soglia_voce"] == 0.077
+    assert merged["detta_pulito"] is False
+    assert merged["invio_automatico_ritardo_conversazione_sec"] == 1.2
+    assert merged["chiave_cliente"] == "resta"
+    assert merged["nuovo_default"] == "entra"
+    assert (tmp_path / "config.pre-aggiornamento.json").exists()
+
+
+def test_reinstallazione_hook_rimuove_anche_il_vecchio_path_tools(tmp_path):
+    settings = tmp_path / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "Stop": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "python /Users/sal/leaderai/tools/voce/voce_hook.py",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    voce_hook.collega_hook(settings)
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    commands = [
+        hook.get("command", "")
+        for gruppo in data["hooks"]["Stop"]
+        for hook in gruppo.get("hooks", [])
+    ]
+
+    assert sum("voce_hook.py" in command for command in commands) == 1
+
+
+def test_collegamento_hook_conserva_hook_esistenti(tmp_path):
+    settings = tmp_path / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "Stop": [
+                        {"hooks": [{"type": "command", "command": "echo esistente"}]}
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    voce_hook.collega_hook(settings)
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    commands = [
+        hook.get("command", "")
+        for gruppo in data["hooks"]["Stop"]
+        for hook in gruppo.get("hooks", [])
+    ]
+
+    assert "echo esistente" in commands
+    assert any("voce_hook.py" in command for command in commands)
+    assert settings.with_name("settings.json.pre-voce.bak").exists()
+
+
+def test_monitor_voce_non_muore_prima_di_togliere_flag(tmp_path, monkeypatch):
+    flag = tmp_path / "PARLANDO"
+    thread_creato = {}
+
+    class StdinFinto:
+        def write(self, _data):
+            pass
+
+        def close(self):
+            pass
+
+    class ProcessoFinto:
+        stdin = StdinFinto()
+
+    class ThreadFinto:
+        def __init__(self, **kwargs):
+            thread_creato.update(kwargs)
+
+        def start(self):
+            thread_creato["avviato"] = True
+
+    monkeypatch.setattr(parla, "FLAG_PARLANDO", flag)
+    monkeypatch.setattr(parla, "ferma", lambda: None)
+    monkeypatch.setattr(parla, "carica_config", lambda: {"voce": "Alice", "velocita": 195})
+    monkeypatch.setattr(parla.subprocess, "Popen", lambda *_args, **_kwargs: ProcessoFinto())
+    monkeypatch.setattr(parla.threading, "Thread", ThreadFinto)
+
+    parla.parla("Voce LeaderAI pronta")
+
+    assert flag.exists()
+    assert thread_creato["daemon"] is False
+    assert thread_creato["avviato"] is True
+
+
+def test_monitor_voce_rimuove_flag_quando_audio_finito(tmp_path, monkeypatch):
+    flag = tmp_path / "PARLANDO"
+    flag.touch()
+    attese = []
+
+    class ProcessoFinto:
+        def wait(self):
+            attese.append(True)
+
+    monkeypatch.setattr(parla, "FLAG_PARLANDO", flag)
+    parla._segna_fine_a_processo_finito(ProcessoFinto())
+
+    assert attese == [True]
+    assert not flag.exists()
+
+
+def test_voce_attiva_segue_il_flag(tmp_path, monkeypatch):
+    flag = tmp_path / "VOICE_ON"
+    monkeypatch.setattr(voce_lib, "FLAG_VOICE_ON", flag)
+    assert voce_lib.voce_attiva() is False
+    flag.touch()
+    assert voce_lib.voce_attiva() is True
+
+
+def test_pulisci_per_voce_toglie_il_markdown():
+    testo = (
+        "## Titolo\n"
+        "Ecco **grassetto** e *corsivo* e `codice`.\n"
+        "```python\nprint('x')\n```\n"
+        "- punto elenco\n"
+        "Un [link](https://example.com) e https://nudo.it/pagina fine."
+    )
+    pulito = voce_lib.pulisci_per_voce(testo)
+    assert "**" not in pulito and "`" not in pulito and "#" not in pulito
+    assert "print" not in pulito          # il codice non si legge a voce
+    assert "codice omesso" in pulito
+    assert "link" in pulito               # il testo del link resta
+    assert "https://" not in pulito       # gli URL no
+    assert "grassetto" in pulito and "corsivo" in pulito
+
+
+def test_pulisci_per_voce_testo_vuoto():
+    assert voce_lib.pulisci_per_voce("") == ""
+
+
+def test_estrai_ultima_risposta(tmp_path):
+    transcript = tmp_path / "t.jsonl"
+    righe = [
+        '{"type":"user","message":{"content":"ciao"}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"prima risposta"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"ultima risposta"}]}}',
+        "riga non json da ignorare",
+    ]
+    transcript.write_text("\n".join(righe))
+    assert voce_lib.estrai_ultima_risposta(str(transcript)) == "ultima risposta"
+
+
+# --- cancello sull'energia: distingue parlato da silenzio/rumore di fondo ---
+
+def test_c_e_voce_scarta_silenzio_e_rumore_basso():
+    assert voce_lib.c_e_voce(np.zeros(16000, dtype="float32")) is False
+    np.random.seed(0)
+    rumore = (np.random.randn(16000) * 0.003).astype("float32")  # respiro / fruscio
+    assert voce_lib.c_e_voce(rumore) is False
+
+
+def test_c_e_voce_accetta_parlato():
+    np.random.seed(0)
+    parlato = (np.random.randn(16000) * 0.05).astype("float32")  # energia da voce
+    assert voce_lib.c_e_voce(parlato) is True
+
+
+def test_c_e_voce_audio_vuoto():
+    assert voce_lib.c_e_voce(np.array([], dtype="float32")) is False
+
+
+# --- rete di sicurezza: frasi-fantasma che Whisper inventa sul silenzio ---
+
+def test_e_allucinazione_riconosce_le_frasi_fantasma():
+    for f in ["Grazie.", " Grazie a tutti. ", "grazie", "GRAZIE!",
+              "Sottotitoli e revisione a cura di QTSS", "",
+              "Yeah.", "yeah", "Thank you."]:
+        assert voce_lib.e_allucinazione(f) is True, f
+
+
+def test_e_allucinazione_non_scarta_testo_vero():
+    for f in ["Apri il file e correggi la funzione di pagamento.",
+              "Grazie mille per la proposta, la rivediamo domani."]:
+        assert voce_lib.e_allucinazione(f) is False, f
+
+
+def test_e_allucinazione_riconosce_ripetizione_patologica():
+    # collasso reale visto 05/07: audio di 1.7s -> centinaia di "мент" ripetuto
+    assert voce_lib.e_allucinazione(("мент " * 200).strip()) is True
+    assert voce_lib.e_allucinazione(("Pier " * 200).strip()) is True
+
+
+def test_e_allucinazione_riconosce_ripetizione_senza_spazi():
+    # collasso reale visto 06/07: "Ecologia" + "版" (cinese) ripetuto senza
+    # spazi -> lo split per parole lo vede come "1 parola sola", serve il
+    # controllo a livello di carattere
+    assert voce_lib.e_allucinazione("Ecologia" + "版" * 200) is True
+
+
+def test_e_allucinazione_non_scarta_ripetizioni_legittime():
+    # una parola ripetuta poche volte in una frase vera non deve scattare
+    assert voce_lib.e_allucinazione(
+        "No no no, non intendevo quello, fammi ripetere la domanda per bene."
+    ) is False
+
+
+# --- callback blindata: un errore non deve mai spegnere l'hotkey ---
+
+def test_esegui_sicuro_esegue_e_passa_gli_argomenti():
+    raccolti = []
+    voce_lib.esegui_sicuro(raccolti.append, "ciao")
+    assert raccolti == ["ciao"]
+
+
+def test_esegui_sicuro_ingoia_le_eccezioni():
+    def esplode():
+        raise RuntimeError("boom")
+    # non deve sollevare: il thread della tastiera deve sopravvivere all'errore
+    voce_lib.esegui_sicuro(esplode)
+
+
+# --- airbag anti-incanto: logica testabile senza microfono/CoreAudio ---
+
+def test_timeout_registrazione_scade_solo_oltre_limite():
+    assert voce_lib.timeout_scaduto(True, 10.0, 101.0, 90.0) is True
+    assert voce_lib.timeout_scaduto(True, 10.0, 99.0, 90.0) is False
+    assert voce_lib.timeout_scaduto(False, 10.0, 101.0, 90.0) is False
+    assert voce_lib.timeout_scaduto(True, None, 101.0, 90.0) is False
+
+
+def test_stop_audio_bloccato_scade_solo_oltre_limite():
+    assert voce_lib.timeout_scaduto(True, 20.0, 31.0, 10.0) is True
+    assert voce_lib.timeout_scaduto(True, 20.0, 29.0, 10.0) is False
+
+
+# --- glossario: nomi propri e termini del mestiere scritti giusti ---
+
+def test_glossario_iniziale_costruisce_il_prompt_per_whisper():
+    cfg = {"glossario": ["LeaderAI", "salchiarenza.ai", "Systeme.io"]}
+    prompt = voce_lib.glossario_iniziale(cfg)
+    assert "LeaderAI" in prompt and "Systeme.io" in prompt
+
+
+def test_glossario_iniziale_vuoto_o_assente():
+    assert voce_lib.glossario_iniziale({}) is None
+    assert voce_lib.glossario_iniziale({"glossario": []}) is None
+
+
+def test_applica_sostituzioni_parola_intera_e_case_insensitive():
+    mappa = {"sistemi io": "Systeme.io", "leader ai": "LeaderAI"}
+    testo = "Apri Sistemi Io e controlla leader ai, poi i sistemi ionici."
+    esito = voce_lib.applica_sostituzioni(testo, mappa)
+    assert "Systeme.io" in esito and "LeaderAI" in esito
+    assert "sistemi ionici" in esito     # sostituisce solo la parola intera
+
+
+def test_applica_sostituzioni_senza_mappa_non_tocca_nulla():
+    assert voce_lib.applica_sostituzioni("testo com'e'", {}) == "testo com'e'"
+
+
+# --- detta pulito: solo se attivo e solo su dettature lunghe ---
+
+def test_serve_pulizia_solo_se_attiva_e_testo_lungo():
+    lungo = "parola " * 20
+    corto = "apri il file di ieri"
+    assert voce_lib.serve_pulizia(lungo, {"detta_pulito": True}) is True
+    assert voce_lib.serve_pulizia(corto, {"detta_pulito": True}) is False
+    assert voce_lib.serve_pulizia(lungo, {"detta_pulito": False}) is False
+    assert voce_lib.serve_pulizia(lungo, {}) is False
+
+
+def test_serve_pulizia_rispetta_la_soglia_configurata():
+    testo = "una due tre quattro cinque"
+    assert voce_lib.serve_pulizia(testo, {"detta_pulito": True, "pulizia_min_parole": 5}) is True
+    assert voce_lib.serve_pulizia(testo, {"detta_pulito": True, "pulizia_min_parole": 6}) is False
+
+
+def test_prompt_pulizia_contiene_testo_e_glossario():
+    p = voce_lib.prompt_pulizia("ci vediamo martedì anzi mercoledì", ["LeaderAI"])
+    assert "martedì anzi mercoledì" in p
+    assert "LeaderAI" in p
+    # la formulazione imperativa faceva appendere il glossario al testo (bug 03/07)
+    assert "Scrivi correttamente questi nomi" not in p
+    assert "Non aggiungere mai nomi" in p
+
+
+# --- guardia anti-eco: la pulizia non deve inventare nomi mai dettati ---
+
+GLOSSARIO_8 = ["LeaderAI", "salchiarenza.ai", "Systeme.io", "Claude Code",
+               "Codex", "Anthropic", "DVR Assistant", "AI con Sal"]
+
+
+def test_pulizia_inventa_nomi_scatta_sul_glossario_appeso():
+    grezzo = "Poi prendi la call che abbiamo fatto e la guardiamo insieme."
+    pulito = grezzo + " LeaderAI, salchiarenza.ai, Systeme.io, Claude Code, Codex, Anthropic, DVR Assistant, AI con Sal."
+    assert voce_lib.pulizia_inventa_nomi(grezzo, pulito, GLOSSARIO_8) is True
+
+
+def test_pulizia_inventa_nomi_tollera_una_correzione_di_grafia():
+    grezzo = "scrivilo su leader ai per favore"
+    pulito = "Scrivilo su LeaderAI per favore."
+    assert voce_lib.pulizia_inventa_nomi(grezzo, pulito, GLOSSARIO_8) is False
+
+
+def test_pulizia_inventa_nomi_ok_se_i_nomi_erano_dettati():
+    grezzo = "apri claude code e codex e controlla"
+    pulito = "Apri Claude Code e Codex e controlla."
+    assert voce_lib.pulizia_inventa_nomi(grezzo, pulito, GLOSSARIO_8) is False
+
+
+def test_pulizia_sospetta_scatta_sul_collasso_del_testo():
+    grezzo = ("Poi prendi la call che abbiamo fatto, apri Docs, ti guardi la call, "
+              "c'è una procedura che avevano detto, così la prossima la guardiamo insieme.")
+    # visto dal vivo 03/07: il modellino risponde solo con l'esempio della regola 1
+    assert voce_lib.pulizia_sospetta(grezzo, "mercoledí", GLOSSARIO_8) is True
+
+
+def test_pulizia_sospetta_accetta_una_pulizia_normale():
+    grezzo = "Ok, ehm, ora da un po' mi da questa qua, cioè, non funziona più come prima."
+    pulito = "Ok, ora da un po' mi da questa qua, non funziona più come prima."
+    assert voce_lib.pulizia_sospetta(grezzo, pulito, GLOSSARIO_8) is False
+
+
+def test_pulisci_con_agente_scarta_output_con_glossario_inventato(monkeypatch):
+    grezzo = "una frase dettata senza nomi di brand dentro"
+    eco = grezzo + " LeaderAI, Systeme.io, Codex."
+
+    class Esito:
+        returncode = 0
+        stdout = eco
+
+    monkeypatch.setattr(voce_lib.subprocess, "run", lambda *a, **k: Esito())
+    assert voce_lib.pulisci_con_agente(grezzo, ["finto"], glossario=GLOSSARIO_8) == grezzo
+
+
+# --- agente locale per la pulizia: claude prima, codex come riserva ---
+
+def test_comando_agente_preferisce_claude(monkeypatch):
+    monkeypatch.setattr(voce_lib.shutil, "which", lambda n: "/usr/local/bin/claude" if n == "claude" else None)
+    cmd = voce_lib.comando_agente()
+    assert cmd[0] == "claude"
+    # avvio "spoglio": niente MCP, tool, settings o sessione su disco (~2-3s in meno)
+    for flag in ("--strict-mcp-config", "--no-session-persistence", "--tools", "--setting-sources"):
+        assert flag in cmd, flag
+
+
+def test_comando_agente_ripiega_su_codex(monkeypatch):
+    monkeypatch.setattr(voce_lib.shutil, "which", lambda n: "/usr/local/bin/codex" if n == "codex" else None)
+    assert voce_lib.comando_agente()[0] == "codex"
+
+
+def test_comando_agente_nessun_agente_installato(monkeypatch):
+    monkeypatch.setattr(voce_lib.shutil, "which", lambda n: None)
+    assert voce_lib.comando_agente() is None
+
+
+def test_pulisci_con_agente_usa_l_output_del_comando():
+    esito = voce_lib.pulisci_con_agente(
+        "testo grezzo", ["/bin/sh", "-c", "echo testo sistemato"], timeout=5
+    )
+    assert esito == "testo sistemato"
+
+
+def test_pulisci_con_agente_tiene_l_originale_se_il_comando_fallisce():
+    originale = "testo grezzo da tenere"
+    assert voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "exit 1"], timeout=5) == originale
+    assert voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "true"], timeout=5) == originale
+
+
+def test_pulisci_con_agente_tiene_l_originale_su_timeout():
+    originale = "testo grezzo da tenere"
+    esito = voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "sleep 5"], timeout=0.2)
+    assert esito == originale
+
+
+# --- corsia veloce: modello Apple on-device via Comando Rapido (solo Mac) ---
+
+def test_shortcut_pulizia_disponibile(monkeypatch):
+    class Esito:
+        stdout = "Voce Pulita\nVoce LeaderAI firmato\n"
+        returncode = 0
+    monkeypatch.setattr(voce_lib.shutil, "which", lambda n: "/usr/bin/shortcuts" if n == "shortcuts" else None)
+    monkeypatch.setattr(voce_lib.subprocess, "run", lambda *a, **k: Esito())
+    assert voce_lib.shortcut_pulizia_disponibile("Voce Pulita") is True
+    assert voce_lib.shortcut_pulizia_disponibile("Non Esiste") is False
+
+
+def test_shortcut_pulizia_non_disponibile_senza_cli(monkeypatch):
+    monkeypatch.setattr(voce_lib.shutil, "which", lambda n: None)  # es. Windows
+    assert voce_lib.shortcut_pulizia_disponibile("Voce Pulita") is False
+
+
+def test_pulisci_con_shortcut_usa_l_output(monkeypatch, tmp_path):
+    def finto_run(cmd, **kw):
+        # il comando è ["shortcuts","run",nome,"-i",input,"-o",output,...]: scrive l'output
+        out = cmd[cmd.index("-o") + 1]
+        with open(out, "w") as f:
+            f.write("Testo sistemato dal modello locale.")
+        class E: returncode = 0
+        return E()
+    monkeypatch.setattr(voce_lib.subprocess, "run", finto_run)
+    esito = voce_lib.pulisci_con_shortcut("testo grezzo", "Voce Pulita", timeout=5)
+    assert esito == "Testo sistemato dal modello locale."
+
+
+# --- apprendimento automatico: Voce impara le parole che sbaglia sempre ---
+
+def test_estrai_grezzi_dal_log(tmp_path):
+    log = tmp_path / "voce.log"
+    log.write_text(
+        "2026-07-02 15:10:04,597 INFO grezzo: Prima frase dettata.\n"
+        "2026-07-02 15:10:05,885 INFO pulizia shortcut 1.3s: ok\n"
+        "2026-07-02 15:12:47,848 INFO grezzo: Seconda frase dettata.\n"
+        "2026-07-02 15:13:02,225 INFO pulito: Seconda frase pulita.\n"
+    )
+    grezzi = voce_lib.estrai_grezzi_dal_log(log)
+    assert grezzi == ["Prima frase dettata.", "Seconda frase dettata."]
+
+
+def test_estrai_grezzi_dal_log_limite_e_file_mancante(tmp_path):
+    log = tmp_path / "voce.log"
+    log.write_text("".join(f"x INFO grezzo: frase {i}\n" for i in range(60)))
+    assert len(voce_lib.estrai_grezzi_dal_log(log, massimo=50)) == 50
+    assert voce_lib.estrai_grezzi_dal_log(tmp_path / "non_esiste.log") == []
+
+
+def test_unisci_sostituzioni_non_sovrascrive_e_scarta_spazzatura():
+    attuali = {"leader ai": "LeaderAI"}
+    nuove = {
+        "leader ai": "ALTRO",          # gia' presente: non si tocca
+        "giornato": "giornale",        # buona: entra
+        "uguale": "uguale",            # identita': scartata
+        "": "vuoto",                   # chiave vuota: scartata
+        "x" * 60: "troppo lunga",      # sproporzionata: scartata
+    }
+    esito = voce_lib.unisci_sostituzioni(attuali, nuove)
+    assert esito == {"giornato": "giornale"}
+    assert attuali == {"leader ai": "LeaderAI"}  # l'originale resta intatto
+
+
+def test_estrai_json_dalla_risposta():
+    testo = 'Ecco le coppie:\n{"giornato": "giornale", "stema": "sistema"}\nfine.'
+    assert voce_lib.estrai_json(testo) == {"giornato": "giornale", "stema": "sistema"}
+    assert voce_lib.estrai_json("nessun json qui") == {}
+
+
+def test_impara_sostituzioni_aggiorna_il_config(tmp_path):
+    log = tmp_path / "voce.log"
+    log.write_text("x INFO grezzo: il giornato di oggi\nx INFO grezzo: apri il giornato\n")
+    config = tmp_path / "config.json"
+    config.write_text('{"sostituzioni": {}}')
+    comando = ["/bin/sh", "-c", 'echo \'{"giornato": "giornale"}\'']
+    nuove = voce_lib.impara_sostituzioni(log, config, comando, timeout=10)
+    assert nuove == {"giornato": "giornale"}
+    import json
+    assert json.loads(config.read_text())["sostituzioni"] == {"giornato": "giornale"}
+
+
+def test_impara_sostituzioni_senza_grezzi_non_fa_nulla(tmp_path):
+    config = tmp_path / "config.json"
+    config.write_text('{"sostituzioni": {}}')
+    nuove = voce_lib.impara_sostituzioni(tmp_path / "vuoto.log", config, ["/bin/true"], timeout=5)
+    assert nuove == {}
+
+
+def test_audio_fuori_scala_scarta_lo_stream_corrotto():
+    # Caso 09/07: per ~20s CoreAudio ha consegnato sample fuori da [-1, 1]
+    # (rms 2.7-4.4 contro lo 0.15 del parlato) e Whisper allucinava.
+    assert voce_lib.audio_fuori_scala(3.2381) is True
+    assert voce_lib.audio_fuori_scala(4.4269) is True
+    # parlato vero, anche urlato con clipping, resta fisicamente <= 1.0
+    assert voce_lib.audio_fuori_scala(0.16) is False
+    assert voce_lib.audio_fuori_scala(1.0) is False
+
+
+def test_aggiorna_scarti_fuori_scala_riavvia_solo_se_persiste():
+    # dettatura sana: contatore azzerato, niente scarto ne' riavvio
+    assert voce_lib.aggiorna_scarti_fuori_scala(1, 0.16) == (0, False, False)
+    # primo fuori scala: scarta ma non riavvia (transitorio che si riassorbe da solo)
+    assert voce_lib.aggiorna_scarti_fuori_scala(0, 3.2) == (1, True, False)
+    # secondo di fila: la corruzione persiste, scarta e riavvia lo stream
+    assert voce_lib.aggiorna_scarti_fuori_scala(1, 4.4) == (2, True, True)
+
+
+def test_pulisci_con_shortcut_none_su_errore_o_vuoto(monkeypatch):
+    def esplode(cmd, **kw):
+        raise voce_lib.subprocess.TimeoutExpired(cmd, 1)
+    monkeypatch.setattr(voce_lib.subprocess, "run", esplode)
+    assert voce_lib.pulisci_con_shortcut("testo", "Voce Pulita", timeout=1) is None
+
+    def vuoto(cmd, **kw):
+        class E: returncode = 0
+        return E()  # non scrive nessun output
+    monkeypatch.setattr(voce_lib.subprocess, "run", vuoto)
+    assert voce_lib.pulisci_con_shortcut("testo", "Voce Pulita", timeout=1) is None

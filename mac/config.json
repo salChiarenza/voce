@@ -1,4 +1,5 @@
 {
+  "brand": "salchiarenza.ai",
   "hotkey": "cmd_r",
   "modello": "mlx-community/whisper-large-v3-turbo",
   "lingua": "it",

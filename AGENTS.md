@@ -2,11 +2,12 @@
 
 > Repo UNICA del prodotto "Voce". Due app gemelle, una cartella per sistema.
 > **Leggere TUTTO questo file PRIMA di toccare qualsiasi cosa.** Vale per Claude Code e Codex.
-> `CLAUDE.md` qui accanto è un symlink di questo file.
+> `CLAUDE.md` qui accanto contiene `@AGENTS.md`: e' un ponte portabile anche
+> negli archivi estratti su Windows.
 
 ## Cosa è
 
-"Voce" è l'app di dettatura locale di Sal (brand **salchiarenza.ai**). Tieni premuto un tasto, parli, e il testo si incolla dove hai il cursore. Tutto in **locale**, niente cloud. C'è anche la modalità **voce agenti**: legge ad alta voce le risposte dell'agente (Claude/Codex), così ci parli e ti risponde a voce.
+"Voce" è l'app di dettatura locale di Sal (brand **salchiarenza.ai**). Tieni premuto un tasto, parli, e il testo si incolla dove hai il cursore. Audio e trascrizione Whisper restano sul computer. La pulizia testo opzionale puo' usare Apple Intelligence o l'agente del proprietario, secondo la configurazione dichiarata nei file `PRIVACY.md`. C'è anche la modalità **voce agenti**: legge ad alta voce le risposte dell'agente (Claude/Codex), così ci parli e ti risponde a voce.
 
 Due versioni, **stessa anima**:
 - `mac/` → app per Mac. **È il MASTER** (la usa Sal ogni giorno).
@@ -27,12 +28,24 @@ Due versioni, **stessa anima**:
 3. Funziona ovunque: tieni premuto il tasto-detta, parli, il testo si incolla dove sei.
 4. Due tasti: **detta** = tasto destro dedicato; **voce on/off** = secondo tasto.
 5. Voce agenti opzionale: legge ad alta voce le risposte dell'agente (hook `voce_hook.py`).
-6. Trascrizione locale in italiano, niente cloud.
+6. Audio e trascrizione Whisper locali in italiano; gli eventuali passaggi
+   online della pulizia testo opzionale sono dichiarati e disattivabili.
 7. Marchio, colore, forma pill in `config.json` con gli **stessi valori**.
 8. **Glossario**: chiavi `glossario` (initial_prompt di Whisper) e `sostituzioni` in `config.json` — nomi propri e brand scritti giusti. Stessi nomi-chiave sulle due app.
-9. **Detta pulito**: chiavi `detta_pulito`, `pulizia_min_parole`, `pulizia_timeout_sec`, `pulizia_shortcut`, `pulizia_timeout_shortcut_sec`. Le dettature lunghe si ripuliscono (via ripetizioni/ripensamenti, punteggiatura sistemata); la pill mostra "Sistemo…". Catena: **Mac** prima il modello Apple Intelligence (di default su Private Cloud Compute, il cloud privato Apple: gratis, niente token, dati non conservati da Apple; dall'editor del comando si può scegliere "Su dispositivo") via Comando Rapido "Voce Pulita" (~1s; differenza obbligata: su Windows non esiste) → agente locale (`claude -p` spoglio, riserva `codex exec`) → grezzo. **Windows**: solo agente → grezzo. Qualsiasi problema → si incolla il grezzo: la dettatura non si perde MAI. Il prompt di pulizia è UNO (`prompt_pulizia`, regole numerate su riga singola): stesso testo su entrambe.
+9. **Detta pulito**: le due app espongono `detta_pulito`,
+   `pulizia_min_parole` e `pulizia_timeout_sec`; il Mac aggiunge la corsia
+   Apple `pulizia_shortcut` / `pulizia_timeout_shortcut_sec`, con default nel
+   codice quando le chiavi non sono scritte nel config. Catena: **Mac** prima
+   Apple Intelligence, su dispositivo o tramite Private Cloud Compute secondo
+   la configurazione del proprietario, poi l'agente come riserva, poi il
+   grezzo. **Windows**: agente → grezzo. Qualsiasi problema → si incolla il
+   grezzo. Il prompt di pulizia vive nel codice con lo stesso testo su entrambe.
 10. **Profilo voce consigliato = versione di Sal**: la distribuzione Mac include il Comando Rapido Apple firmato `mac/Voce LeaderAI firmato.shortcut`, con Siri `Voce 2`, e propone gli stessi valori `voce` / `comando_voce` della configurazione viva di Sal. E' la scelta raccomandata, non imposta: il proprietario puo' scegliere un'alternativa, che va configurata e provata senza sostituzioni silenziose.
 11. **Installazione completa, non base da ricostruire**: su entrambi i sistemi l'aggiornamento conserva glossario, sostituzioni, preferenze e calibrazione; installa `voce_hook.py`, lo collega senza cancellare gli hook esistenti a Claude Code e/o Codex e verifica il collegamento. Il cliente non deve rimontare a mano la funzione voce agenti.
+12. **Prova hook reale**: la presenza del comando nel file di configurazione
+   non basta. Claude Code deve leggere davvero una risposta; su Codex il
+   proprietario apre `/hooks`, verifica e autorizza il comando Voce, poi prova
+   una risposta completa. Senza audio reale il report resta parziale.
 
 ## COSA PUÒ DIFFERIRE (obbligato dal sistema, non forzarlo uguale)
 
@@ -69,7 +82,10 @@ Percorso tecnico richiesto per l'agente del cliente:
 5. **Non fermarti al primo errore:** prova una strada alternativa ragionevole, leggi gli errori, correggi e riprova. Se un modulo non passa ma l'altro puo' funzionare, monta quello che puo' funzionare.
 6. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
 7. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase, verifica che il testo compaia dove sta il cursore e che il pannello `salchiarenza.ai` si veda. Su Mac prova il profilo accettato; su Windows elenca, fa ascoltare e salva la voce italiana scelta.
-8. **Report finale breve:** installata si/no, dettatura si/no, voce agenti si/no, Profilo LeaderAI accettato/modificato e voce scelta, launcher creato si/no, problemi non recuperabili.
+8. **Report finale breve:** versione, installata si/no, dettatura si/no, voce
+   agenti configurata si/no e provata realmente si/no, Profilo LeaderAI
+   accettato/modificato e voce scelta, launcher creato si/no, problemi non
+   recuperabili.
 
 ## DIVIETI (qui è dove un agente "crea a cazzo" — NON farlo)
 
@@ -84,7 +100,10 @@ Percorso tecnico richiesto per l'agente del cliente:
 
 ## QUANDO FINISCI una modifica
 
-1. Aggiorna il `CHANGELOG.md` della cartella toccata.
-2. **Specchia sull'altra cartella** e aggiorna anche il suo `CHANGELOG.md`.
-3. Se cambia l'esperienza di consegna o installazione, aggiorna `EMAIL_CONSEGNA.md` nello stesso commit.
-4. Lascia il pointer nell'anagrafe del cervello: `leaderai/memory/reference_kit_pubblici_leaderai.md`.
+1. Esegui `python -m pytest tests -q` dalla radice della repo.
+2. Aggiorna il `CHANGELOG.md` della cartella toccata.
+3. **Specchia sull'altra cartella** e aggiorna anche il suo `CHANGELOG.md`.
+4. Aggiorna `VERSION` e il `CHANGELOG.md` generale quando nasce una versione
+   consegnabile.
+5. Se cambia l'esperienza di consegna o installazione, aggiorna `EMAIL_CONSEGNA.md` nello stesso commit.
+6. Lascia il pointer nell'anagrafe del cervello: `leaderai/memory/reference_kit_pubblici_leaderai.md`.

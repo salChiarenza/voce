@@ -74,7 +74,7 @@ MAX_REGISTRAZIONE_SEC = float(cfg.get("max_registrazione_sec", 90))
 # --- pannello di stato nativo (NonactivatingPanel: mai il focus) ---
 
 LARGHEZZA, ALTEZZA = 300, 72
-BRAND = "salchiarenza.ai"
+BRAND = cfg.get("brand", "salchiarenza.ai")
 
 app = AppKit.NSApplication.sharedApplication()
 app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)  # niente icona Dock
@@ -339,7 +339,8 @@ def suono(nome):
 
 GLOSSARIO_PROMPT = glossario_iniziale(cfg)  # nomi/brand scritti giusti da Whisper
 # detta pulito, cercato una volta all'avvio: prima il modello Apple on-device
-# via Comando Rapido (~1s, zero cloud), poi l'agente locale come riserva.
+# via Comando Rapido (~1s; on-device o Private Cloud Compute secondo la
+# configurazione Apple), poi l'agente del proprietario come riserva.
 SHORTCUT_PULIZIA = cfg.get("pulizia_shortcut", "Voce Pulita")
 if not (cfg.get("detta_pulito", False) and shortcut_pulizia_disponibile(SHORTCUT_PULIZIA)):
     SHORTCUT_PULIZIA = None

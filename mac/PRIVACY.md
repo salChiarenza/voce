@@ -1,6 +1,7 @@
 # Privacy
 
-Voice Dettatura Mac v1.0 e' uno strumento gratuito sperimentale.
+Voce LeaderAI per Mac e' uno strumento gratuito sperimentale. La versione
+esatta installata e' riportata nel file `VERSION`.
 
 ## Dati trattati
 

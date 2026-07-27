@@ -72,6 +72,7 @@ key_down = False
 voice_key_down = False                         # debounce del tasto on/off voce
 recording_started_at: float | None = None
 model: WhisperModel | None = None
+ultima_pressione_utente = 0.0                  # annulla l'Invio automatico in attesa
 
 
 # --- voce in uscita "agenti": interruttore + TTS di Windows, tutto in questo file ---
@@ -406,6 +407,68 @@ def audio_fuori_scala(rms: float, massimo: float = 1.0) -> bool:
     return rms > massimo
 
 
+_FRASI_FANTASMA = {
+    "grazie",
+    "grazie a tutti",
+    "grazie a voi",
+    "grazie mille a tutti",
+    "grazie per la visione",
+    "grazie per l attenzione",
+    "grazie per aver guardato il video",
+    "ciao a tutti",
+    "buona giornata a tutti",
+    "yeah",
+    "yes",
+    "bye",
+    "thank you",
+    "thanks for watching",
+}
+
+
+def _normalizza(testo: str) -> str:
+    return re.sub(r"[\s.,;:!?\-–—\"'`…()]+", " ", testo.lower()).strip()
+
+
+def _ripetizione_patologica(
+    testo: str, soglia_ripetizioni: int = 8, soglia_quota: float = 0.6
+) -> bool:
+    """Riconosce i collassi di Whisper a parole o caratteri ripetuti."""
+    parole = testo.split()
+    if len(parole) >= soglia_ripetizioni:
+        conteggi: dict[str, int] = {}
+        for parola in parole:
+            chiave = parola.lower()
+            conteggi[chiave] = conteggi.get(chiave, 0) + 1
+        piu_frequente = max(conteggi.values())
+        if (
+            piu_frequente >= soglia_ripetizioni
+            and piu_frequente / len(parole) >= soglia_quota
+        ):
+            return True
+    return re.search(r"(.)\1{%d,}" % (soglia_ripetizioni - 1), testo) is not None
+
+
+def e_allucinazione(testo: str) -> bool:
+    """Scarta frasi-fantasma e collassi di Whisper prima dell'incolla."""
+    normalizzato = _normalizza(testo)
+    if not normalizzato:
+        return True
+    if normalizzato in _FRASI_FANTASMA:
+        return True
+    if "sottotitoli" in normalizzato and (
+        "a cura di" in normalizzato or "creati dalla comunit" in normalizzato
+    ):
+        return True
+    return _ripetizione_patologica(testo)
+
+
+def invio_da_annullare(
+    ultima_pressione: float, riferimento: float, nuova_registrazione: bool
+) -> bool:
+    """Qualsiasi tasto fisico o nuova dettatura blocca l'Enter automatico."""
+    return ultima_pressione > riferimento or nuova_registrazione
+
+
 def has_voice(audio: np.ndarray) -> bool:
     flat = np.asarray(audio, dtype="float32").reshape(-1)
     if flat.size == 0:
@@ -513,6 +576,10 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             initial_prompt=GLOSSARIO_PROMPT,
         )
         text = " ".join(segment.text.strip() for segment in segments).strip()
+        if e_allucinazione(text):
+            logging.info("scartato come allucinazione (%d caratteri)", len(text))
+            eventi.put("nascosto")
+            return
         text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
         # In conversazione (voce ON) la pulizia costa secondi su quasi ogni
         # turno per un guadagno che l'agente non ha bisogno di avere (gemello Mac).
@@ -541,9 +608,32 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
         # dal contesto: a voce ON e' conversazione vera con l'agente (botta e
         # risposta), a voce OFF serve tempo per correggere il testo incollato.
         if INVIO_AUTOMATICO:
-            time.sleep(RITARDO_INVIO_CONVERSAZIONE if voce_attiva() else RITARDO_INVIO_AUTOMATICO)
-            keyboard_controller.press(Key.enter)
-            keyboard_controller.release(Key.enter)
+            attesa = (
+                RITARDO_INVIO_CONVERSAZIONE
+                if voce_attiva()
+                else RITARDO_INVIO_AUTOMATICO
+            )
+            time.sleep(0.15)  # il Ctrl+V sintetico non conta come gesto dell'utente
+            riferimento = time.monotonic()
+            trascorso = 0.0
+            annullato = False
+            while trascorso < attesa:
+                time.sleep(min(0.1, attesa - trascorso))
+                trascorso = time.monotonic() - riferimento
+                if invio_da_annullare(
+                    ultima_pressione_utente, riferimento, recording
+                ):
+                    annullato = True
+                    break
+            if annullato:
+                logging.info(
+                    "invio automatico ANNULLATO "
+                    "(tasto premuto o nuova dettatura in corso)"
+                )
+            else:
+                keyboard_controller.press(Key.enter)
+                keyboard_controller.release(Key.enter)
+                logging.info("invio automatico premuto")
         print("Inserito:", text)
     except Exception:
         logging.exception("errore trascrizione/incolla")
@@ -608,7 +698,8 @@ def commuta_voce() -> None:
 
 
 def on_press(key) -> None:
-    global key_down, voice_key_down
+    global key_down, voice_key_down, ultima_pressione_utente
+    ultima_pressione_utente = time.monotonic()
     if key == HOTKEY and not key_down:
         key_down = True
         commands.put("start")
