@@ -1,5 +1,7 @@
 """Test delle funzioni pure della versione Mac di Voce."""
 import json
+import plistlib
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -58,7 +60,7 @@ def test_config_prodotto_unico_con_override_personale(tmp_path, monkeypatch):
     assert cfg["soglia_locale"] == 2
 
 
-def test_aggiornamento_config_conserva_tutte_le_scelte_personali(tmp_path):
+def test_aggiornamento_config_applica_fotocopia_e_conserva_solo_dati_personali(tmp_path):
     defaults = tmp_path / "defaults.json"
     current = tmp_path / "config.json"
     defaults.write_text(
@@ -67,9 +69,10 @@ def test_aggiornamento_config_conserva_tutte_le_scelte_personali(tmp_path):
                 "voce": "Siri (Voce 2)",
                 "comando_voce": "Voce LeaderAI firmato",
                 "glossario": ["LeaderAI"],
-                "mani_libere_soglia_voce": 0.01,
+                "sostituzioni": {},
+                "mani_libere_soglia_voce": 0.018,
                 "detta_pulito": True,
-                "invio_automatico_ritardo_conversazione_sec": 0.3,
+                "invio_automatico_ritardo_conversazione_sec": 2.5,
                 "nuovo_default": "entra",
             }
         ),
@@ -81,6 +84,7 @@ def test_aggiornamento_config_conserva_tutte_le_scelte_personali(tmp_path):
                 "voce": "Alice",
                 "comando_voce": "Voce Siri",
                 "glossario": ["Cliente X"],
+                "sostituzioni": {"pronotare": "prenotare"},
                 "mani_libere_soglia_voce": 0.077,
                 "detta_pulito": False,
                 "invio_automatico_ritardo_conversazione_sec": 1.2,
@@ -93,15 +97,90 @@ def test_aggiornamento_config_conserva_tutte_le_scelte_personali(tmp_path):
     voce_hook.unisci_config(str(defaults), str(current))
     merged = json.loads(current.read_text(encoding="utf-8"))
 
-    assert merged["voce"] == "Alice"
-    assert merged["comando_voce"] == "Voce Siri"
+    assert merged["voce"] == "Siri (Voce 2)"
+    assert merged["comando_voce"] == "Voce LeaderAI firmato"
     assert merged["glossario"] == ["Cliente X"]
-    assert merged["mani_libere_soglia_voce"] == 0.077
-    assert merged["detta_pulito"] is False
-    assert merged["invio_automatico_ritardo_conversazione_sec"] == 1.2
-    assert merged["chiave_cliente"] == "resta"
+    assert merged["sostituzioni"] == {"pronotare": "prenotare"}
+    assert merged["mani_libere_soglia_voce"] == 0.018
+    assert merged["detta_pulito"] is True
+    assert merged["invio_automatico_ritardo_conversazione_sec"] == 2.5
+    assert "chiave_cliente" not in merged
     assert merged["nuovo_default"] == "entra"
     assert (tmp_path / "config.pre-aggiornamento.json").exists()
+
+
+def _crea_db_shortcut(tmp_path, voce_id, velocita=None, tono=None):
+    db = tmp_path / "Shortcuts.sqlite"
+    params = {
+        "WFSpeakTextVoice": voce_id,
+        "WFText": "test",
+    }
+    if velocita is not None:
+        params["WFSpeakTextRate"] = velocita
+    if tono is not None:
+        params["WFSpeakTextPitch"] = tono
+    actions = [
+        {
+            "WFWorkflowActionIdentifier": "is.workflow.actions.speaktext",
+            "WFWorkflowActionParameters": params,
+        }
+    ]
+    with sqlite3.connect(db) as conn:
+        conn.execute("CREATE TABLE ZSHORTCUT (Z_PK INTEGER, ZNAME TEXT)")
+        conn.execute("CREATE TABLE ZSHORTCUTACTIONS (ZSHORTCUT INTEGER, ZDATA BLOB)")
+        conn.execute(
+            "INSERT INTO ZSHORTCUT (Z_PK, ZNAME) VALUES (?, ?)",
+            (1, "Voce LeaderAI firmato"),
+        )
+        conn.execute(
+            "INSERT INTO ZSHORTCUTACTIONS (ZSHORTCUT, ZDATA) VALUES (?, ?)",
+            (1, plistlib.dumps(actions, fmt=plistlib.FMT_BINARY)),
+        )
+    return db
+
+
+def test_profilo_shortcut_accetta_la_fotocopia_esatta(tmp_path):
+    db = _crea_db_shortcut(
+        tmp_path,
+        voce_id="com.apple.siri.natural.Francesca",
+    )
+    cfg = {
+        "comando_voce": "Voce LeaderAI firmato",
+        "voce_shortcut_id": "com.apple.siri.natural.Francesca",
+        "voce_shortcut_velocita": 0.5,
+        "voce_shortcut_tono": 1.0,
+    }
+
+    profilo = voce_hook.controlla_profilo_shortcut(db_path=db, cfg=cfg)
+
+    assert profilo == {
+        "voce_id": "com.apple.siri.natural.Francesca",
+        "velocita": 0.5,
+        "tono": 1.0,
+    }
+
+
+def test_profilo_shortcut_blocca_voce_o_velocita_diverse(tmp_path):
+    db = _crea_db_shortcut(
+        tmp_path,
+        voce_id="com.apple.siri.natural.Paolo",
+        velocita=0.35,
+    )
+    cfg = {
+        "comando_voce": "Voce LeaderAI firmato",
+        "voce_shortcut_id": "com.apple.siri.natural.Francesca",
+        "voce_shortcut_velocita": 0.5,
+        "voce_shortcut_tono": 1.0,
+    }
+
+    try:
+        voce_hook.controlla_profilo_shortcut(db_path=db, cfg=cfg)
+    except RuntimeError as exc:
+        assert "Profilo voce diverso" in str(exc)
+        assert "voce_id" in str(exc)
+        assert "velocita" in str(exc)
+    else:
+        raise AssertionError("Il profilo diverso doveva essere bloccato")
 
 
 def test_reinstallazione_hook_rimuove_anche_il_vecchio_path_tools(tmp_path):

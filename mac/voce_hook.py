@@ -7,13 +7,15 @@ Non deve mai bloccare l'agente: ogni errore esce in silenzio con exit 0.
 """
 import json
 import os
+import plistlib
 import shlex
 import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 
-from voce_lib import voce_attiva, estrai_ultima_risposta
+from voce_lib import carica_config, voce_attiva, estrai_ultima_risposta
 from parla import parla
 
 
@@ -24,26 +26,91 @@ VOICE_APP_MARKERS = (
     "\\tools\\voce\\",
 )
 
+PERSONAL_CONFIG_KEYS = (
+    "glossario",
+    "sostituzioni",
+    "debug_dettature",
+)
+SHORTCUT_DB = Path.home() / "Library" / "Shortcuts" / "Shortcuts.sqlite"
+SPEAK_TEXT_ACTION = "is.workflow.actions.speaktext"
+
 
 def unisci_config(default_path: str, current_path: str) -> None:
-    """Aggiorna il prodotto senza azzerare dati personali e calibrazione."""
+    """Applica la fotocopia funzionale di Sal e conserva solo i dati personali.
+
+    Tasti, voce, tempi, modalita' e soglie sono parte del prodotto Mac: un
+    aggiornamento li riallinea ai default verificati. Glossario, sostituzioni
+    apprese e scelta di log restano invece del proprietario.
+    """
     default_file, current_file = Path(default_path), Path(current_path)
     defaults = json.loads(default_file.read_text(encoding="utf-8"))
     current = {}
     if current_file.exists():
         current = json.loads(current_file.read_text(encoding="utf-8"))
         shutil.copy2(current_file, current_file.with_name("config.pre-aggiornamento.json"))
-    # I nuovi default aggiungono solo cio' che manca. Tutte le scelte gia'
-    # presenti restano: voce, comando voce, tasti, detta pulito, ritardi,
-    # glossario e calibrazione. Il profilo LeaderAI e' consigliato, non imposto.
     merged = dict(defaults)
-    merged.update(current)
-    if "brand" in defaults:
-        merged["brand"] = defaults["brand"]
+    for key in PERSONAL_CONFIG_KEYS:
+        if key in current:
+            merged[key] = current[key]
     current_file.parent.mkdir(parents=True, exist_ok=True)
     temp = current_file.with_suffix(".tmp")
     temp.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     temp.replace(current_file)
+
+
+def leggi_profilo_shortcut(
+    db_path: Path = SHORTCUT_DB,
+    shortcut_name: str = "Voce LeaderAI firmato",
+) -> dict:
+    """Legge in sola lettura voce, velocita' e tono del Comando Rapido vivo."""
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+        row = conn.execute(
+            "SELECT Z_PK FROM ZSHORTCUT WHERE ZNAME = ?",
+            (shortcut_name,),
+        ).fetchone()
+        if not row:
+            raise RuntimeError(f"Comando Rapido assente: {shortcut_name}")
+        data = conn.execute(
+            "SELECT ZDATA FROM ZSHORTCUTACTIONS WHERE ZSHORTCUT = ?",
+            (row[0],),
+        ).fetchone()
+    if not data:
+        raise RuntimeError(f"Azioni assenti nel Comando Rapido: {shortcut_name}")
+    for action in plistlib.loads(data[0]):
+        if action.get("WFWorkflowActionIdentifier") != SPEAK_TEXT_ACTION:
+            continue
+        params = action.get("WFWorkflowActionParameters", {})
+        return {
+            "voce_id": params.get("WFSpeakTextVoice"),
+            "velocita": float(params.get("WFSpeakTextRate", 0.5)),
+            "tono": float(params.get("WFSpeakTextPitch", 1.0)),
+        }
+    raise RuntimeError(f"Azione 'Leggi ad alta voce' assente: {shortcut_name}")
+
+
+def controlla_profilo_shortcut(
+    db_path: Path = SHORTCUT_DB,
+    cfg: dict | None = None,
+) -> dict:
+    """Blocca il collaudo se la voce importata differisce dalla fotocopia Sal."""
+    cfg = cfg or carica_config()
+    profilo = leggi_profilo_shortcut(
+        db_path=db_path,
+        shortcut_name=cfg.get("comando_voce", "Voce LeaderAI firmato"),
+    )
+    atteso = {
+        "voce_id": cfg.get("voce_shortcut_id"),
+        "velocita": float(cfg.get("voce_shortcut_velocita", 0.5)),
+        "tono": float(cfg.get("voce_shortcut_tono", 1.0)),
+    }
+    errori = [
+        f"{key}: atteso {atteso[key]!r}, trovato {profilo[key]!r}"
+        for key in atteso
+        if profilo[key] != atteso[key]
+    ]
+    if errori:
+        raise RuntimeError("Profilo voce diverso dalla fotocopia Sal: " + "; ".join(errori))
+    return profilo
 
 
 def _comando_hook() -> str:
@@ -177,6 +244,17 @@ if __name__ == "__main__":
         installa_hook_agenti()
     elif len(sys.argv) == 2 and sys.argv[1] == "--check-hooks":
         raise SystemExit(0 if controlla_hook_agenti() else 1)
+    elif len(sys.argv) == 2 and sys.argv[1] == "--check-profile":
+        try:
+            profilo = controlla_profilo_shortcut()
+        except Exception as exc:
+            print(f"FOTOCOPIA_SAL_NON_PASSA: {exc}")
+            raise SystemExit(1)
+        print(
+            "FOTOCOPIA_SAL_OK: "
+            f"voce={profilo['voce_id']}, "
+            f"velocita={profilo['velocita']}, tono={profilo['tono']}"
+        )
     elif len(sys.argv) == 2 and sys.argv[1] == "--test-voice":
         parla("Voce LeaderAI pronta.")
     else:

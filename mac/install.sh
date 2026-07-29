@@ -84,6 +84,6 @@ echo "2. Se macOS chiede permessi, abilita Microfono, Accessibilita' e Monitorag
 echo "3. Tieni premuto Cmd destro, parla, rilascia."
 echo "4. Option + freccia sinistra: attiva la voce agenti."
 echo "5. Cmd destro + Option: attiva la modalita' mani libere."
-echo "6. Il tuo agente ti proporra' il Profilo LeaderAI e completera' la prova voce."
+echo "6. Il tuo agente verifichera' FOTOCOPIA_SAL_OK e completera' la prova voce."
 echo
 echo "Cartella installata: $APP_DIR"

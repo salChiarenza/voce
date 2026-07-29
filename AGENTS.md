@@ -40,7 +40,14 @@ Due versioni, **stessa anima**:
    la configurazione del proprietario, poi l'agente come riserva, poi il
    grezzo. **Windows**: agente → grezzo. Qualsiasi problema → si incolla il
    grezzo. Il prompt di pulizia vive nel codice con lo stesso testo su entrambe.
-10. **Profilo voce consigliato = versione di Sal**: la distribuzione Mac include il Comando Rapido Apple firmato `mac/Voce LeaderAI firmato.shortcut`, con Siri `Voce 2`, e propone gli stessi valori `voce` / `comando_voce` della configurazione viva di Sal. E' la scelta raccomandata, non imposta: il proprietario puo' scegliere un'alternativa, che va configurata e provata senza sostituzioni silenziose.
+10. **Mac = fotocopia funzionale della versione di Sal**: la distribuzione
+    include il Comando Rapido Apple firmato
+    `mac/Voce LeaderAI firmato.shortcut`, con Siri `Voce 2`, stessa voce
+    interna, velocita', tono, tasti, tempi, toggle e soglie della
+    configurazione viva di Sal. L'installer riallinea questi valori anche
+    durante un aggiornamento e conserva soltanto glossario, sostituzioni
+    apprese e preferenza di log. Il gate `FOTOCOPIA_SAL_OK` e la prova audio
+    reale sono obbligatori.
 11. **Installazione completa, non base da ricostruire**: su entrambi i sistemi l'aggiornamento conserva glossario, sostituzioni, preferenze e calibrazione; installa `voce_hook.py`, lo collega senza cancellare gli hook esistenti a Claude Code e/o Codex e verifica il collegamento. Il cliente non deve rimontare a mano la funzione voce agenti.
 12. **Prova hook reale**: la presenza del comando nel file di configurazione
    non basta. Claude Code deve leggere davvero una risposta; su Codex il
@@ -52,7 +59,10 @@ Due versioni, **stessa anima**:
 - Pannello: AppKit (Mac) vs Tkinter (Windows).
 - Trascrizione: mlx-whisper large (Mac) vs faster-whisper medium (Windows).
 - Voce in uscita: `say` (Mac) vs System.Speech/PowerShell (Windows).
-- Qualita' e disponibilita' delle voci: su Mac il profilo consigliato e' `Voce LeaderAI firmato`; su Windows l'agente elenca e fa ascoltare le voci italiane installate tramite System.Speech, poi salva quella scelta dal proprietario.
+- Qualita' e disponibilita' delle voci: su Mac lo standard e'
+  `Voce LeaderAI firmato` e deve superare `FOTOCOPIA_SAL_OK`; su Windows
+  l'agente elenca e fa ascoltare le voci italiane installate tramite
+  System.Speech, poi salva quella scelta dal proprietario.
 - Tasti: **Mac** Cmd dx detta / **Option + freccia sinistra** voce / Cmd+Option mani libere. **Windows** Ctrl dx detta / **Menu** voce. Su Windows MAI tasti F (sui portatili fanno volume/luminosità).
 
 ## CONSEGNA AL CLIENTE
@@ -77,15 +87,21 @@ Percorso tecnico richiesto per l'agente del cliente:
 1. **Autodiagnosi:** identifica Mac o Windows, cartella corretta (`mac/` o `windows/`), versione del sistema, Python/runtime, microfono, tasti disponibili, permessi, rete e spazio disco.
 2. **Auto-riparazione:** installa o sistema tutto cio' che e' software recuperabile: runtime, dipendenze, venv, modello di trascrizione, launcher/icona, configurazione e aggiornamento di una installazione gia' presente.
    L'aggiornamento deve fondere il nuovo prodotto con la configurazione esistente: mai sovrascrivere glossario, sostituzioni, tasti personalizzati o calibrazione macchina; mai lasciare scollegato `voce_hook.py`.
-3. **Proponi, non imporre le preferenze:** alla prima installazione presenta in una sola domanda il Profilo LeaderAI consigliato (tasti, detta pulito e voce naturale), spiegandone il vantaggio. Applica la scelta del proprietario; sono obbligatori solo i requisiti tecnici senza cui la funzione scelta non puo' lavorare.
+3. **Applica lo standard corretto:** su Mac installa la fotocopia funzionale
+   di Sal e conserva i soli dati personali. Su Windows applica i comportamenti
+   compatibili e fa scegliere una voce italiana realmente disponibile, perche'
+   la voce Apple non esiste su quel sistema.
 4. **Chiedi al cliente solo azioni umane vere:** download consapevole della versione verificata, doppio clic sul launcher locale, permessi macOS/Windows, conferme di sicurezza, scelta se serve, prova fisica di parlare e premere il tasto.
 5. **Non fermarti al primo errore:** prova una strada alternativa ragionevole, leggi gli errori, correggi e riprova. Se un modulo non passa ma l'altro puo' funzionare, monta quello che puo' funzionare.
 6. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
-7. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase, verifica che il testo compaia dove sta il cursore e che il pannello `salchiarenza.ai` si veda. Su Mac prova il profilo accettato; su Windows elenca, fa ascoltare e salva la voce italiana scelta.
+7. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase,
+   verifica che il testo compaia dove sta il cursore e che il pannello
+   `salchiarenza.ai` si veda. Su Mac ottieni `FOTOCOPIA_SAL_OK` e prova
+   l'audio; su Windows elenca, fa ascoltare e salva la voce italiana scelta.
 8. **Report finale breve:** versione, installata si/no, dettatura si/no, voce
-   agenti configurata si/no e provata realmente si/no, Profilo LeaderAI
-   accettato/modificato e voce scelta, launcher creato si/no, problemi non
-   recuperabili.
+   agenti configurata si/no e provata realmente si/no, gate
+   `FOTOCOPIA_SAL_OK` su Mac o voce scelta su Windows, launcher creato si/no,
+   problemi non recuperabili.
 
 ## DIVIETI (qui è dove un agente "crea a cazzo" — NON farlo)
 

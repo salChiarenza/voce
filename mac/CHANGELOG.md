@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0-rc.2 - 29/07/2026 — fotocopia funzionale di Sal
+
+- Il profilo Mac distribuito coincide con quello effettivamente usato da Sal:
+  Siri `Voce 2`, voce interna `com.apple.siri.natural.Francesca`, velocita'
+  `0.5`, tono `1.0`, stessi tasti, stessi toggle e stessi tempi.
+- Corretto l'Invio a voce ON da `0.3s` a `2.5s`; corrette le soglie mani
+  libere da `0.010` / `0.005` a `0.018` / `0.013`.
+- Il merge di aggiornamento riallinea il comportamento standard e conserva
+  solo glossario, sostituzioni apprese e preferenza di log.
+- `voce_hook.py --check-profile` legge in sola lettura il Comando Rapido
+  installato e produce `FOTOCOPIA_SAL_OK` soltanto quando voce, velocita' e
+  tono coincidono.
+- Aggiunto un gate locale che confronta i parametri pubblici con l'app viva di
+  Sal e blocca future derive.
+
 ## 1.3.0-rc.1 - 27/07/2026 — repo cliente autosufficiente
 
 - La stessa sorgente usata ogni giorno da Sal e' ora accompagnata nella repo da

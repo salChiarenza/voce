@@ -27,6 +27,11 @@ Il collaudo della voce agenti include una risposta realmente ascoltata. Su
 Codex il proprietario verifica e autorizza il comando da `/hooks`: trovare il
 comando nel file di configurazione non prova che sia già fidato ed eseguito.
 
+Su Mac il prodotto consegnato è la **fotocopia funzionale** della versione
+usata da Sal: stessa voce Apple, stessi tasti, stessi tempi, stessi toggle e
+stesso comportamento. Glossario, sostituzioni apprese e log restano personali.
+Il collaudo si chiude solo con `FOTOCOPIA_SAL_OK` e prova audio reale.
+
 ## Per chi sviluppa
 
 Le due app sono **gemelle**: il Mac è il master, Windows è il riflesso. Regole, lista parità e divieti in [`AGENTS.md`](AGENTS.md). Leggerlo prima di toccare qualsiasi cosa.

@@ -3,7 +3,7 @@
   "tasto_voce": "menu",
   "invio_automatico": true,
   "invio_automatico_ritardo_sec": 2.5,
-  "invio_automatico_ritardo_conversazione_sec": 0.3,
+  "invio_automatico_ritardo_conversazione_sec": 2.5,
   "voce_nome": "",
   "voce_rate": 0,
   "model": "medium",

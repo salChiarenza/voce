@@ -4,6 +4,18 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.2 - 29/07/2026
+
+- Corretto il contratto Mac: la consegna e' una fotocopia funzionale dell'app
+  viva di Sal, con stessa voce, tasti, tempi, toggle e soglie.
+- Riallineati i default pubblici ai valori effettivi: Invio automatico dopo
+  `2.5s` anche a voce ON, soglie mani libere `0.018` / `0.013`.
+- L'aggiornamento Mac applica lo standard e conserva soltanto glossario,
+  sostituzioni apprese e preferenza di log.
+- Aggiunto il gate `FOTOCOPIA_SAL_OK`, che legge il Comando Rapido importato e
+  blocca voce interna, velocita' o tono differenti.
+- Allineato a `2.5s` anche il comportamento di Invio su Windows.
+
 ## 1.3.0-rc.1 - 27/07/2026
 
 - Portata nella repo unica la stessa sorgente Mac usata ogni giorno da Sal:

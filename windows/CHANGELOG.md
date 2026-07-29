@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.2 - 29/07/2026 — tempo di invio allineato
+
+- Allineato a `2.5s` il ritardo dell'Invio automatico anche in conversazione,
+  come nel profilo operativo Mac di Sal. Tasto e voce restano specifici di
+  Windows e vengono collaudati sul PC destinatario.
+
 ## 1.3.0-rc.1 - 27/07/2026 — repo cliente autosufficiente
 
 - La repo contiene ora versione unica, prove automatiche, installazione

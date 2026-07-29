@@ -1,7 +1,10 @@
 """Contratto minimo della repo consegnabile Voce."""
 
+import json
 import re
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,3 +85,69 @@ def test_email_impone_versione_esatta_e_prova_destinatario():
 def test_nessuna_configurazione_personale_nella_repo():
     assert not list(ROOT.glob("**/config.local.json"))
     assert not list(ROOT.glob("**/voce.log"))
+
+
+def test_profilo_mac_pubblico_e_la_fotocopia_funzionale_di_sal():
+    cfg = json.loads((ROOT / "mac/config.json").read_text(encoding="utf-8"))
+    assert cfg["hotkey"] == "cmd_r"
+    assert cfg["voce"] == "Siri (Voce 2)"
+    assert cfg["comando_voce"] == "Voce LeaderAI firmato"
+    assert cfg["voce_shortcut_id"] == "com.apple.siri.natural.Francesca"
+    assert cfg["voce_shortcut_velocita"] == 0.5
+    assert cfg["voce_shortcut_tono"] == 1.0
+    assert cfg["invio_automatico"] is True
+    assert cfg["invio_automatico_ritardo_sec"] == 2.5
+    assert cfg["invio_automatico_ritardo_conversazione_sec"] == 2.5
+    assert cfg["mani_libere_soglia_voce"] == 0.018
+    assert cfg["mani_libere_soglia_stop"] == 0.013
+    codice = (ROOT / "mac/detta.py").read_text(encoding="utf-8")
+    assert "TASTO = getattr(Key, cfg[\"hotkey\"])" in codice
+    assert "TASTO_COMBO_VOCE = Key.left" in codice
+    assert "_option_giu()" in codice
+    assert "_cmd_giu()" in codice
+    missione = (ROOT / "mac/INSTALLA_CON_AI.md").read_text(encoding="utf-8")
+    assert "Cmd destro per dettare" in missione
+    assert "Option + freccia sinistra per la voce" in missione
+    assert "Cmd destro + Option per le mani libere" in missione
+    assert "FOTOCOPIA_SAL_OK" in missione
+
+
+def test_comportamento_invio_gemello_su_windows():
+    mac = json.loads((ROOT / "mac/config.json").read_text(encoding="utf-8"))
+    windows = json.loads((ROOT / "windows/config.json").read_text(encoding="utf-8"))
+    assert windows["invio_automatico_ritardo_sec"] == mac["invio_automatico_ritardo_sec"]
+    assert (
+        windows["invio_automatico_ritardo_conversazione_sec"]
+        == mac["invio_automatico_ritardo_conversazione_sec"]
+    )
+
+
+def test_app_viva_sal_non_puo_derivare_dal_profilo_pubblico():
+    runtime = Path.home() / "leaderai" / "tools" / "voce"
+    locale = runtime / "config.local.json"
+    if not locale.exists():
+        pytest.skip("Controllo disponibile solo sulla macchina di Sal")
+
+    defaults = json.loads((ROOT / "mac/config.json").read_text(encoding="utf-8"))
+    overrides = json.loads(locale.read_text(encoding="utf-8"))
+    effettiva = defaults | overrides
+    chiavi_standard = (
+        "hotkey",
+        "voce",
+        "comando_voce",
+        "invio_automatico",
+        "invio_automatico_ritardo_sec",
+        "invio_automatico_ritardo_conversazione_sec",
+        "detta_pulito",
+        "pulizia_in_conversazione",
+        "mani_libere_attivazione_sec",
+        "mani_libere_silenzio_sec",
+        "mani_libere_soglia_voce",
+        "mani_libere_soglia_stop",
+        "mani_libere_autospegnimento_min",
+    )
+    assert {key: effettiva[key] for key in chiavi_standard} == {
+        key: defaults[key] for key in chiavi_standard
+    }
+    for file_name in ("detta.py", "parla.py", "voce_hook.py", "voce_lib.py", "voce"):
+        assert (runtime / file_name).resolve() == (ROOT / "mac" / file_name).resolve()

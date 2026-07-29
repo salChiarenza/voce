@@ -14,7 +14,10 @@ cartella installata.
 - Gira sul Mac con trascrizione locale.
 - Glossario personale: i tuoi nomi e brand escono scritti giusti (`glossario` in `config.json`).
 - Detta pulito (opzionale): le dettature lunghe passano dal tuo agente AI (Claude Code o Codex) che toglie ripetizioni e ripensamenti e sistema la punteggiatura. Si spegne con `"detta_pulito": false`.
-- Profilo voce consigliato: su Mac propone lo stesso Comando Rapido Siri collaudato da Sal, distribuito come `Voce LeaderAI firmato.shortcut`. Il proprietario puo' accettarlo o scegliere un'alternativa, che non viene mai sostituita silenziosamente.
+- Fotocopia funzionale di Sal: il Mac riceve lo stesso Comando Rapido Siri
+  collaudato da Sal, distribuito come `Voce LeaderAI firmato.shortcut`, e gli
+  stessi tasti, tempi, toggle e soglie. Il collaudo verifica anche voce
+  interna, velocita' e tono.
 - Aggiornamento vero: conserva glossario, sostituzioni e calibrazione gia' presenti, aggiorna la parte di prodotto e collega automaticamente la voce delle risposte a Claude Code e/o Codex senza cancellare gli altri collegamenti.
 - Sorgente unica: il codice in questa cartella e' lo stesso codice usato ogni giorno da Sal; non esiste piu' una seconda copia interna da riallineare.
 - Include un installer guidato.
@@ -41,7 +44,11 @@ INSTALLA_CON_AI.md
 
 Scarica la versione verificata, apri la cartella `mac/` e fai doppio clic su `Installa Voce.command`. L'installer copia anche le istruzioni nella cartella locale. Da quel momento l'agente controlla il Mac, conserva cio' che hai personalizzato, ripara la parte locale, collega la voce e chiude con una prova finale.
 
-Alla prima installazione l'agente propone in una sola domanda il Profilo LeaderAI consigliato. Se lo accetti, macOS chiede un solo gesto umano: quando si apre Comandi Rapidi, clicca **Aggiungi comando rapido**. Se preferisci un'altra voce, l'agente rispetta la scelta. In entrambi i casi l'installazione si chiude solo dopo una prova audio reale.
+L'installer applica la fotocopia funzionale di Sal e conserva glossario,
+sostituzioni apprese e preferenza di log. macOS chiede un solo gesto umano:
+quando si apre Comandi Rapidi, clicca **Aggiungi comando rapido**. L'agente
+esegue poi `voce_hook.py --check-profile` e chiude solo con
+`FOTOCOPIA_SAL_OK` e una prova audio reale.
 
 ### Installazione
 
