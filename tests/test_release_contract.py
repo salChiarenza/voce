@@ -150,4 +150,4 @@ def test_app_viva_sal_non_puo_derivare_dal_profilo_pubblico():
         key: defaults[key] for key in chiavi_standard
     }
     for file_name in ("detta.py", "parla.py", "voce_hook.py", "voce_lib.py", "voce"):
-        assert (runtime / file_name).resolve() == (ROOT / "mac" / file_name).resolve()
+        assert (runtime / file_name).read_bytes() == (ROOT / "mac" / file_name).read_bytes()
