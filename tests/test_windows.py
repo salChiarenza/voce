@@ -27,7 +27,8 @@ def _funzioni_pure_app(*nomi):
             and any(
                 isinstance(target, ast.Name)
                 and target.id in ("_FRASI_FANTASMA", "_CSHARP_MIC",
-                                  "GUADAGNO_INGRESSO_MINIMO", "GUADAGNO_INGRESSO_TARGET")
+                                  "GUADAGNO_INGRESSO_MINIMO", "GUADAGNO_INGRESSO_TARGET",
+                                  "SOGLIA_GUASTI_CORSIA", "RIPOSO_CORSIA_SEC")
                 for target in nodo.targets
             )
         )
@@ -205,3 +206,21 @@ def test_script_volume_ingresso_non_esce_dai_limiti():
     spazio = _funzioni_pure_app("script_volume_ingresso")
     assert "[Mic]::Set(1.0)" in spazio["script_volume_ingresso"](250)
     assert "[Mic]::Set(0.0)" in spazio["script_volume_ingresso"](-40)
+
+
+def test_corsia_pulizia_windows_gemella_del_mac():
+    """Pausa e ritorno devono decidere come sul Mac (regola di parita')."""
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+
+    spazio = _funzioni_pure_app("corsia_utilizzabile", "registra_esito_corsia")
+    assert spazio["SOGLIA_GUASTI_CORSIA"] == voce_lib.SOGLIA_GUASTI_CORSIA
+    assert spazio["RIPOSO_CORSIA_SEC"] == voce_lib.RIPOSO_CORSIA_SEC
+    casi = [(0, None, 1000), (1, 900, 1000), (2, 1000, 1000),
+            (2, 1000, 1000 + voce_lib.RIPOSO_CORSIA_SEC)]
+    for guasti, ultimo, ora in casi:
+        assert spazio["corsia_utilizzabile"](guasti, ultimo, ora) == \
+            voce_lib.corsia_utilizzabile(guasti, ultimo, ora), (guasti, ultimo, ora)
+    assert spazio["registra_esito_corsia"](1, True, 500) == voce_lib.registra_esito_corsia(1, True, 500)
+    assert spazio["registra_esito_corsia"](1, False, 500) == voce_lib.registra_esito_corsia(1, False, 500)

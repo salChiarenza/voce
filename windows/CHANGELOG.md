@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0-rc.4 - 01/08/2026 — la pulizia non resta lenta per giorni
+
+Riflesso della rete nata sul Mac. Windows non aveva alcun contatore: ogni
+dettatura pagava fino a `20s` di timeout, per sempre.
+
+- `corsia_utilizzabile()` / `registra_esito_corsia()` gemelli del Mac, con un
+  test di parita' che confronta le due implementazioni caso per caso.
+- `pulisci_con_agente()` torna `None` quando fallisce (prima tornava il grezzo
+  e il guasto era invisibile). Il chiamante fa `pulito or text`: la dettatura
+  non si perde.
+
 ## 1.3.0-rc.3 - 01/08/2026 — il microfono abbassato non ferma piu' l'app
 
 Riflesso della stessa rete nata sul Mac il 01/08/2026 (regola di parita':

@@ -138,6 +138,36 @@ GUADAGNO_INGRESSO_MINIMO = 60
 GUADAGNO_INGRESSO_TARGET = 75
 
 
+SOGLIA_GUASTI_CORSIA = 2
+RIPOSO_CORSIA_SEC = 600  # 10 minuti
+
+
+def corsia_utilizzabile(guasti, ultimo_guasto, ora,
+                        soglia=SOGLIA_GUASTI_CORSIA, riposo=RIPOSO_CORSIA_SEC):
+    """Una corsia di pulizia (Comando Rapido o agente locale) si spegne dopo
+    `soglia` fallimenti di fila, per non regalare secondi morti a ogni
+    dettatura. Ma deve poter TORNARE: dopo `riposo` secondi si riprova.
+
+    Caso 27-29/07/2026: la corsia veloce si spegneva e basta, e il processo di
+    Sal restava in piedi 2 giorni e 16 ore. Risultato: per giorni interi ogni
+    dettatura passava dall'agente lento (12 timeout da 20s il solo 29/07), e
+    dopo quei 20s si incollava comunque il grezzo. Uno spegnimento senza via di
+    ritorno, in un processo che vive per giorni, e' uno spegnimento definitivo."""
+    if guasti < soglia:
+        return True
+    if ultimo_guasto is None:
+        return False
+    return (ora - ultimo_guasto) >= riposo
+
+
+def registra_esito_corsia(guasti, riuscito, ora):
+    """Torna (nuovi_guasti, momento_ultimo_guasto). Un successo azzera tutto:
+    contano solo i fallimenti DI FILA, non quelli sparsi nel tempo."""
+    if riuscito:
+        return 0, None
+    return guasti + 1, ora
+
+
 def diagnosi_audio_muto(rms, guadagno_ingresso, soglia_voce=SOGLIA_VOCE,
                         minimo=GUADAGNO_INGRESSO_MINIMO, target=GUADAGNO_INGRESSO_TARGET):
     """Audio tornato sotto soglia: di chi e' la colpa? Torna (causa, guadagno_da_impostare).
@@ -414,9 +444,15 @@ def comando_agente(_quale=None):
 
 
 def pulisci_con_agente(testo, comando, timeout=10, glossario=()):
-    """Passa il dettato all'agente locale e torna il testo sistemato.
-    Qualsiasi problema (errore, output vuoto, timeout) -> testo originale:
-    la dettatura non deve MAI perdersi per colpa della pulizia."""
+    """Passa il dettato all'agente locale e torna il testo sistemato, oppure
+    None se non ce l'ha fatta (errore, output vuoto, timeout, pulizia sospetta).
+
+    Stesso contratto di pulisci_con_shortcut: None = corsia fallita. Il
+    chiamante fa sempre `testo = pulito or testo`, quindi la dettatura non si
+    perde MAI; in piu' cosi' la corsia SA di aver fallito e puo' mettersi in
+    pausa invece di ripresentare il conto di 20s di timeout a ogni dettatura
+    (prima tornava il grezzo e il guasto risultava indistinguibile da un
+    successo)."""
     try:
         esito = subprocess.run(
             comando + [prompt_pulizia(testo, glossario)],
@@ -424,13 +460,13 @@ def pulisci_con_agente(testo, comando, timeout=10, glossario=()):
         )
         pulito = (esito.stdout or "").strip()
         if esito.returncode != 0 or not pulito:
-            return testo
+            return None
         if pulizia_sospetta(testo, pulito, glossario):
-            return testo
+            return None
         return pulito
     except Exception:
         logging.getLogger("voce").exception("pulizia con agente fallita: tengo il grezzo")
-        return testo
+        return None
 
 
 # --- apprendimento automatico: Voce impara le parole che sbaglia sempre ---

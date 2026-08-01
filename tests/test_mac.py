@@ -390,6 +390,41 @@ def test_diagnosi_audio_muto_audio_sano_non_e_un_guasto():
     assert da_impostare is None
 
 
+# --- corsie di pulizia: spegnersi si', ma con una via di ritorno ---
+# Caso 27-29/07/2026: la corsia veloce si spegne dopo 2 fallimenti di fila e non
+# torna piu' fino al riavvio. Il processo di Sal e' rimasto su 2 giorni e 16 ore,
+# quindi per giorni ogni dettatura e' passata dall'agente lento (12 timeout da
+# 20s il solo 29/07, e dopo 20s si incolla comunque il grezzo).
+
+def test_corsia_utilizzabile_finche_i_guasti_sono_pochi():
+    assert voce_lib.corsia_utilizzabile(0, None, 1000) is True
+    assert voce_lib.corsia_utilizzabile(1, 900, 1000) is True
+
+
+def test_corsia_si_spegne_dopo_due_guasti_di_fila():
+    assert voce_lib.corsia_utilizzabile(2, 1000, 1000) is False
+
+
+def test_corsia_torna_da_sola_dopo_il_riposo():
+    ultimo = 1000
+    riposo = voce_lib.RIPOSO_CORSIA_SEC
+    assert voce_lib.corsia_utilizzabile(2, ultimo, ultimo + riposo - 1) is False
+    assert voce_lib.corsia_utilizzabile(2, ultimo, ultimo + riposo) is True
+
+
+def test_un_successo_azzera_i_guasti():
+    assert voce_lib.registra_esito_corsia(1, True, 500) == (0, None)
+
+
+def test_un_fallimento_conta_e_segna_il_momento():
+    assert voce_lib.registra_esito_corsia(1, False, 500) == (2, 500)
+
+
+def test_riposo_corsia_non_dura_quanto_una_sessione():
+    # il difetto era proprio questo: spegnimento di fatto permanente
+    assert 0 < voce_lib.RIPOSO_CORSIA_SEC <= 1800
+
+
 def test_guadagno_target_tiene_il_rumore_ambiente_nella_banda_calibrata():
     # il target deve stare sopra il minimo e non al massimo: a 100 il rumore
     # ambiente misurato saliva a 0.0120, sopra SOGLIA_VOCE e vicino alla
@@ -558,7 +593,9 @@ def test_pulisci_con_agente_scarta_output_con_glossario_inventato(monkeypatch):
         stdout = eco
 
     monkeypatch.setattr(voce_lib.subprocess, "run", lambda *a, **k: Esito())
-    assert voce_lib.pulisci_con_agente(grezzo, ["finto"], glossario=GLOSSARIO_8) == grezzo
+    # None = corsia fallita (stesso contratto della corsia veloce): il
+    # chiamante fa `pulito or testo`, quindi il grezzo non si perde.
+    assert voce_lib.pulisci_con_agente(grezzo, ["finto"], glossario=GLOSSARIO_8) is None
 
 
 # --- agente locale per la pulizia: claude prima, codex come riserva ---
@@ -589,16 +626,17 @@ def test_pulisci_con_agente_usa_l_output_del_comando():
     assert esito == "testo sistemato"
 
 
-def test_pulisci_con_agente_tiene_l_originale_se_il_comando_fallisce():
+def test_pulisci_con_agente_dichiara_il_fallimento_del_comando():
     originale = "testo grezzo da tenere"
-    assert voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "exit 1"], timeout=5) == originale
-    assert voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "true"], timeout=5) == originale
+    assert voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "exit 1"], timeout=5) is None
+    assert voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "true"], timeout=5) is None
 
 
-def test_pulisci_con_agente_tiene_l_originale_su_timeout():
+def test_pulisci_con_agente_dichiara_il_fallimento_su_timeout():
     originale = "testo grezzo da tenere"
     esito = voce_lib.pulisci_con_agente(originale, ["/bin/sh", "-c", "sleep 5"], timeout=0.2)
-    assert esito == originale
+    assert esito is None
+    assert (esito or originale) == originale  # il grezzo resta garantito dal chiamante
 
 
 # --- corsia veloce: modello Apple on-device via Comando Rapido (solo Mac) ---

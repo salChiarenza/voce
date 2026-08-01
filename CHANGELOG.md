@@ -4,6 +4,16 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.4 - 01/08/2026
+
+- La pulizia del testo non resta lenta per giorni: gli interruttori delle
+  corsie ora si mettono in **pausa 10 minuti** invece di spegnersi fino al
+  riavvio. Su un processo che vive giorni, "spento" voleva dire per sempre.
+- Il Comando Rapido non viene piu' cercato solo all'avvio: se compare dopo,
+  l'app se ne accorge da sola (25-26-28/07: tre giorni di sola corsia lenta).
+- Una corsia che fallisce ora lo dichiara, quindi puo' essere messa in pausa:
+  prima un timeout da 20s era indistinguibile da un successo.
+
 ## 1.3.0-rc.3 - 01/08/2026
 
 - L'app riconosce e ripara da sola il volume d'ingresso del microfono

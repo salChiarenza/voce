@@ -278,10 +278,13 @@ def pulizia_sospetta(grezzo: str, pulito: str, glossario=()) -> bool:
     return len(pulito.split()) * 3 < len(grezzo.split())
 
 
-def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()) -> str:
-    """Passa il dettato all'agente locale e torna il testo sistemato.
-    Qualsiasi problema (errore, output vuoto, timeout) -> testo originale:
-    la dettatura non deve MAI perdersi per colpa della pulizia."""
+def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()):
+    """Passa il dettato all'agente locale e torna il testo sistemato, oppure
+    None se non ce l'ha fatta (errore, output vuoto, timeout, pulizia sospetta).
+
+    Gemello Mac. Il chiamante fa sempre `pulito or testo`, quindi la dettatura
+    non si perde MAI; in piu' cosi' la corsia SA di aver fallito e puo' mettersi
+    in pausa invece di ripresentare 20s di timeout a ogni dettatura."""
     try:
         esito = subprocess.run(
             comando + [prompt_pulizia(testo, glossario)],
@@ -289,18 +292,21 @@ def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()) -> s
         )
         pulito = (esito.stdout or "").strip()
         if esito.returncode != 0 or not pulito:
-            return testo
+            return None
         if pulizia_sospetta(testo, pulito, glossario):
-            return testo
+            return None
         return pulito
     except Exception:
         logging.exception("pulizia con agente fallita: tengo il grezzo")
-        return testo
+        return None
 
 
 GLOSSARIO_PROMPT = glossario_iniziale(CFG)  # nomi/brand scritti giusti da Whisper
 # agente locale per "detta pulito": cercato una volta all'avvio
 COMANDO_PULIZIA = comando_agente() if CFG.get("detta_pulito", False) else None
+# Interruttore della corsia di pulizia: pausa, non spegnimento (gemello Mac).
+_guasti_agente = 0
+_ultimo_guasto_agente = None
 
 
 def pulisci_per_voce(testo: str) -> str:
@@ -515,6 +521,29 @@ def audio_fuori_scala(rms: float, massimo: float = 1.0) -> bool:
 GUADAGNO_INGRESSO_MINIMO = 60
 GUADAGNO_INGRESSO_TARGET = 75
 
+SOGLIA_GUASTI_CORSIA = 2
+RIPOSO_CORSIA_SEC = 600  # 10 minuti
+
+
+def corsia_utilizzabile(guasti, ultimo_guasto, ora,
+                        soglia: int = 2, riposo: int = 600) -> bool:
+    """Gemello Mac. La corsia di pulizia si spegne dopo `soglia` fallimenti di
+    fila per non regalare 20s morti a ogni dettatura, ma deve poter TORNARE:
+    dopo `riposo` secondi si riprova. Uno spegnimento senza via di ritorno, in
+    un processo che vive giorni, e' uno spegnimento definitivo."""
+    if guasti < soglia:
+        return True
+    if ultimo_guasto is None:
+        return False
+    return (ora - ultimo_guasto) >= riposo
+
+
+def registra_esito_corsia(guasti, riuscito, ora):
+    """Torna (nuovi_guasti, momento_ultimo_guasto). Un successo azzera tutto."""
+    if riuscito:
+        return 0, None
+    return guasti + 1, ora
+
 
 def diagnosi_audio_muto(rms: float, guadagno_ingresso, soglia_voce: float = 0.004,
                         minimo: int = 60, target: int = 75):
@@ -720,14 +749,24 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             if debug:
                 logging.info("grezzo: %s", text)
             inizio_pulizia = time.monotonic()
-            text = pulisci_con_agente(
-                text, COMANDO_PULIZIA,
-                timeout=float(CFG.get("pulizia_timeout_sec", 20)),
-                glossario=CFG.get("glossario", []),
-            )
-            logging.info("pulizia agente %.1fs", time.monotonic() - inizio_pulizia)
-            if debug:
-                logging.info("pulito: %s", text)
+            global _guasti_agente, _ultimo_guasto_agente
+            if corsia_utilizzabile(_guasti_agente, _ultimo_guasto_agente, inizio_pulizia):
+                pulito = pulisci_con_agente(
+                    text, COMANDO_PULIZIA,
+                    timeout=float(CFG.get("pulizia_timeout_sec", 20)),
+                    glossario=CFG.get("glossario", []),
+                )
+                logging.info("pulizia agente %.1fs", time.monotonic() - inizio_pulizia)
+                prima = _guasti_agente
+                _guasti_agente, _ultimo_guasto_agente = registra_esito_corsia(
+                    _guasti_agente, bool(pulito), inizio_pulizia)
+                if prima < SOGLIA_GUASTI_CORSIA <= _guasti_agente:
+                    logging.warning(
+                        "agente di pulizia in pausa %d minuti (2 fallimenti di fila)",
+                        RIPOSO_CORSIA_SEC // 60)
+                text = pulito or text  # il grezzo non si perde mai
+                if debug:
+                    logging.info("pulito: %s", text)
         eventi.put("nascosto")
         if not text:
             return

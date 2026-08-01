@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.0-rc.4 - 01/08/2026 — la pulizia non resta lenta per giorni
+
+Misure sui log del 25/07-01/08 (495 dettature): la trascrizione e' veloce
+(mediana `0.6s`), la lentezza sta tutta nella pulizia del testo. Attesa dal
+rilascio del tasto al testo incollato: mediana `1.9s` nei giorni buoni, ma
+`7.2s` oggi con punte a `28.3s`.
+
+Causa: gli interruttori delle corsie di pulizia sapevano solo spegnersi.
+
+- La corsia veloce (Comando Rapido Apple, mediana `1.3s`) si spegneva dopo 2
+  fallimenti di fila **fino al riavvio del processo**. Il processo di Sal e'
+  rimasto in piedi 2 giorni e 16 ore: 27/07 e 29/07 si e' spenta e da li' ogni
+  dettatura e' passata dall'agente lento, con 12 timeout da `20s` il solo 29/07.
+- Peggio: `SHORTCUT_PULIZIA` veniva cercato **una volta sola all'avvio** e
+  azzerato per sempre se in quell'istante non c'era. Il 25, 26 e 28/07 la
+  corsia veloce non e' stata usata nemmeno una volta: 123 pulizie tutte lente.
+- `corsia_utilizzabile()` / `registra_esito_corsia()`: ora lo spegnimento e'
+  una **pausa di 10 minuti**, poi si riprova. Vale per entrambe le corsie, e
+  anche per il Comando Rapido assente all'avvio (puo' comparire dopo).
+- `pulisci_con_agente()` ora torna `None` quando fallisce, come gia' faceva
+  `pulisci_con_shortcut()`. Prima tornava il grezzo, quindi un timeout da 20s
+  era indistinguibile da un successo e nessun contatore poteva accorgersene.
+  Il grezzo resta garantito dal chiamante (`pulito or testo`).
+
 ## 1.3.0-rc.3 - 01/08/2026 — il microfono abbassato non ferma piu' l'app
 
 Caso reale del 01/08/2026: il volume d'ingresso di sistema e' sceso da solo a
