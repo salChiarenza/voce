@@ -126,6 +126,39 @@ def c_e_voce(audio, soglia=SOGLIA_VOCE):
     return float(np.sqrt(np.mean(a * a))) >= soglia
 
 
+# Le soglie dell'app (SOGLIA_VOCE 0.004, mani libere 0.018) sono calibrate su un
+# guadagno d'ingresso di sistema "normale". Se il Mac abbassa il volume del
+# microfono, tutto scende insieme e l'app diventa muta senza che nulla sia rotto.
+# Misure del 01/08/2026 nella stanza di Sal, rumore ambiente:
+#   guadagno 36 -> 0.0021 | 55 -> 0.0028 | 65 -> 0.0040 | 75 -> 0.0062-0.0074 | 100 -> 0.0120
+# Sotto 60 il parlato normale (0.012-0.024 a guadagno giusto) scivola verso
+# SOGLIA_VOCE e non raggiunge mai la soglia mani libere. A 100 il solo rumore
+# ambiente supera SOGLIA_VOCE e sfiora 0.018: il VAD si auto-innescherebbe.
+GUADAGNO_INGRESSO_MINIMO = 60
+GUADAGNO_INGRESSO_TARGET = 75
+
+
+def diagnosi_audio_muto(rms, guadagno_ingresso, soglia_voce=SOGLIA_VOCE,
+                        minimo=GUADAGNO_INGRESSO_MINIMO, target=GUADAGNO_INGRESSO_TARGET):
+    """Audio tornato sotto soglia: di chi e' la colpa? Torna (causa, guadagno_da_impostare).
+
+    Due guasti diversi si presentano identici nel log ("volume sotto soglia"),
+    ma hanno rimedi opposti:
+      - "guadagno_basso": il volume d'ingresso di sistema e' sceso (caso
+        01/08/2026: 36/100, parlato a rms 0.0014). Si rialza e basta. Riavviare
+        il processo NON serve, il guadagno resta abbassato anche dopo.
+      - "stream_muto": il guadagno e' a posto, quindi e' lo stream CoreAudio
+        incantato sotto il device (caso 08/07: Microfono di iPhone). Rimedio:
+        il riavvio pulito del processo.
+    Guadagno illeggibile (non-Mac, osascript fallito) = non lo si puo'
+    incolpare: si ricade sul vecchio rimedio, mai peggio di prima."""
+    if rms >= soglia_voce:
+        return "ok", None
+    if guadagno_ingresso is not None and guadagno_ingresso < minimo:
+        return "guadagno_basso", target
+    return "stream_muto", None
+
+
 _FRASI_FANTASMA = {
     "grazie",
     "grazie a tutti",

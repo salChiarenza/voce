@@ -355,6 +355,48 @@ def test_c_e_voce_audio_vuoto():
     assert voce_lib.c_e_voce(np.array([], dtype="float32")) is False
 
 
+# --- audio muto: distinguere il guadagno d'ingresso abbassato dallo stream incantato ---
+# Caso 01/08/2026: volume d'ingresso di sistema sceso da solo a 36/100, parlato
+# a rms 0.0012-0.0014 (sotto SOGLIA_VOCE) e app muta senza diagnosi. Il vecchio
+# airbag riavviava il processo, rimedio inutile contro un guadagno abbassato.
+
+def test_diagnosi_audio_muto_riconosce_il_guadagno_abbassato():
+    causa, da_impostare = voce_lib.diagnosi_audio_muto(0.0014, 36)
+    assert causa == "guadagno_basso"
+    assert da_impostare == voce_lib.GUADAGNO_INGRESSO_TARGET
+
+
+def test_diagnosi_audio_muto_col_guadagno_giusto_incolpa_lo_stream():
+    causa, da_impostare = voce_lib.diagnosi_audio_muto(0.0014, 75)
+    assert causa == "stream_muto"
+    assert da_impostare is None
+
+
+def test_diagnosi_audio_muto_al_minimo_esatto_non_tocca_il_guadagno():
+    causa, _ = voce_lib.diagnosi_audio_muto(0.0014, voce_lib.GUADAGNO_INGRESSO_MINIMO)
+    assert causa == "stream_muto"
+
+
+def test_diagnosi_audio_muto_senza_lettura_del_guadagno_ricade_sullo_stream():
+    # non-Mac o osascript fallito: non si puo' incolpare il guadagno
+    causa, da_impostare = voce_lib.diagnosi_audio_muto(0.0014, None)
+    assert causa == "stream_muto"
+    assert da_impostare is None
+
+
+def test_diagnosi_audio_muto_audio_sano_non_e_un_guasto():
+    causa, da_impostare = voce_lib.diagnosi_audio_muto(0.0128, 36)
+    assert causa == "ok"
+    assert da_impostare is None
+
+
+def test_guadagno_target_tiene_il_rumore_ambiente_nella_banda_calibrata():
+    # il target deve stare sopra il minimo e non al massimo: a 100 il rumore
+    # ambiente misurato saliva a 0.0120, sopra SOGLIA_VOCE e vicino alla
+    # soglia mani libere 0.018 (si auto-innescava).
+    assert voce_lib.GUADAGNO_INGRESSO_MINIMO < voce_lib.GUADAGNO_INGRESSO_TARGET < 100
+
+
 # --- rete di sicurezza: frasi-fantasma che Whisper inventa sul silenzio ---
 
 def test_e_allucinazione_riconosce_le_frasi_fantasma():

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.0-rc.3 - 01/08/2026 — il microfono abbassato non ferma piu' l'app
+
+Caso reale del 01/08/2026: il volume d'ingresso di sistema e' sceso da solo a
+`36/100` mentre Sal dettava. Il parlato arrivava a rms `0.0012-0.0014` contro
+una `SOGLIA_VOCE` di `0.004`, quindi ogni dettatura veniva scartata in
+silenzio. Niente era rotto: l'app non sentiva piu'.
+
+- `diagnosi_audio_muto()` in `voce_lib.py` separa le due cause che il log
+  confondeva sotto lo stesso "volume sotto soglia": guadagno d'ingresso basso
+  contro stream CoreAudio incantato.
+- `ripara_guadagno_ingresso()` rialza il volume d'ingresso a `75` e **non**
+  riavvia il processo: contro un guadagno abbassato il riavvio non serviva,
+  produceva solo un ciclo di riavvii inutili.
+- `allinea_volume_ingresso()` fa lo stesso controllo all'avvio.
+- La pill mostra `🎤 Alzo il microfono…`: prima la dettatura spariva senza
+  spiegazione a schermo.
+- `airbag_stream_muto()` resta per lo stream morto, ma non e' piu' l'unica
+  rete: guardava solo le dettature oltre i 3 secondi e le prove di Sal erano
+  da 0,5 e 1,2 secondi, quindi non poteva vedere nulla.
+- Livelli scelti su misure vere nella stanza di Sal (rumore ambiente): a `36`
+  dava `0.0021`, a `75` `0.0062-0.0074`, a `100` `0.0120` — cioe' sopra
+  `SOGLIA_VOCE` e vicino alla soglia mani libere `0.018`, con il VAD che si
+  sarebbe auto-innescato. Da qui minimo `60`, target `75`.
+
 ## 1.3.0-rc.2 - 29/07/2026 — fotocopia funzionale di Sal
 
 - Il profilo Mac distribuito coincide con quello effettivamente usato da Sal:

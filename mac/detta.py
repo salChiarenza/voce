@@ -28,6 +28,7 @@ from voce_lib import (
     carica_config, config_scrivibile, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
     mani_libere_attive, FLAG_MANI_LIBERE_ON,
     c_e_voce, aggiorna_scarti_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
+    diagnosi_audio_muto, GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, pulisci_con_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
@@ -309,6 +310,16 @@ class GestorePannello(AppKit.NSObject):
                 elif nuovo == "sistemo":
                     etichetta.setStringValue_("✨ Sistemo…")
                     etichetta.setHidden_(False)
+                elif nuovo == "mic_basso":
+                    # la pill qui e' gia' stata nascosta: va rimessa davanti,
+                    # altrimenti l'utente non vedrebbe mai perche' e' saltata
+                    # la dettatura (era il vero difetto del caso 01/08).
+                    posiziona_pannello()
+                    onda.setHidden_(True)
+                    brand.setHidden_(False)
+                    etichetta.setStringValue_("🎤 Alzo il microfono…")
+                    etichetta.setHidden_(False)
+                    pannello.orderFrontRegardless()
                 elif nuovo == "nascosto":
                     pannello.orderOut_(None)
         except queue.Empty:
@@ -498,6 +509,79 @@ def nome_device_input():
         return sd.query_devices(kind="input")["name"]
     except Exception:
         return None
+
+
+def volume_ingresso_sistema():
+    """Volume d'ingresso del microfono di sistema, 0-100 (None se illeggibile:
+    mai far esplodere il chiamante per questo). E' il guadagno che il Mac
+    applica PRIMA dello stream, quindi lo vede anche un processo gia' avviato:
+    rialzarlo ha effetto subito, senza riaprire il device."""
+    try:
+        letto = subprocess.run(
+            ["osascript", "-e", "input volume of (get volume settings)"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return int(letto.stdout.strip())
+    except Exception:
+        return None
+
+
+def imposta_volume_ingresso(valore):
+    """Rialza il volume d'ingresso di sistema e torna il valore RILETTO (None se
+    non riuscito). Si rilegge sempre invece di fidarsi: il Mac quantizza il
+    livello a passi suoi e su alcuni device l'ingresso non e' regolabile."""
+    try:
+        subprocess.run(
+            ["osascript", "-e", f"set volume input volume {int(valore)}"],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+    except Exception:
+        return None
+    return volume_ingresso_sistema()
+
+
+def ripara_guadagno_ingresso(rms):
+    """Audio sotto soglia mentre il volume d'ingresso di sistema e' abbassato:
+    il guasto e' quello, non lo stream. Lo rialza e torna True perche' il
+    chiamante NON riavvii il processo: il guadagno resterebbe basso anche dopo,
+    e si otterrebbe solo un ciclo di riavvii inutili.
+
+    Caso 01/08/2026: ingresso sceso da solo a 36/100 mentre Sal dettava, parlato
+    a rms 0.0014 contro una soglia di 0.004, ogni dettatura scartata in
+    silenzio. airbag_stream_muto non poteva vederlo: guarda solo le dettature
+    oltre i 3 secondi, e le prove di Sal erano da 0,5 e 1,2 secondi."""
+    causa, target = diagnosi_audio_muto(
+        rms, volume_ingresso_sistema(), cfg.get("soglia_voce", SOGLIA_VOCE)
+    )
+    if causa != "guadagno_basso":
+        return False
+    eventi.put("mic_basso")
+    nascondi = threading.Timer(2.5, lambda: eventi.put("nascosto"))
+    nascondi.daemon = True  # non trattenere l'uscita del processo
+    nascondi.start()
+    riletto = imposta_volume_ingresso(target)
+    if riletto is None:
+        logging.getLogger("voce").error(
+            "volume d'ingresso del microfono basso e non rialzabile da qui: "
+            "alzalo da Impostazioni di Sistema > Suono > Ingresso"
+        )
+    else:
+        logging.getLogger("voce").warning(
+            "volume d'ingresso del microfono era basso: rialzato a %s", riletto
+        )
+    return True
+
+
+def allinea_volume_ingresso():
+    """All'avvio: con l'ingresso sotto il minimo l'app nasce muta e sembra
+    rotta. Meglio scoprirlo qui che alla prima dettatura persa."""
+    attuale = volume_ingresso_sistema()
+    if attuale is None or attuale >= GUADAGNO_INGRESSO_MINIMO:
+        return
+    riletto = imposta_volume_ingresso(GUADAGNO_INGRESSO_TARGET)
+    logging.getLogger("voce").warning(
+        "volume d'ingresso del microfono a %s all'avvio: rialzato a %s", attuale, riletto
+    )
 
 
 device_input_apertura = None  # device che avevamo quando lo stream e' stato aperto
@@ -690,7 +774,10 @@ def ferma_e_trascrivi():
     if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
         logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
         _nascondi_o_arma()
-        airbag_stream_muto(len(audio) / FREQ)
+        # prima si controlla il guadagno d'ingresso: se e' lui, riavviare il
+        # processo non risolverebbe nulla (vedi ripara_guadagno_ingresso).
+        if not ripara_guadagno_ingresso(rms):
+            airbag_stream_muto(len(audio) / FREQ)
         return
     threading.Thread(
         target=_trascrivi_e_incolla, args=(audio, app_bersaglio, scheda_bersaglio), daemon=True
@@ -1074,6 +1161,7 @@ if __name__ == "__main__":
     )
     logging.getLogger("voce").info("avvio dettatura")
     _avvisa_se_non_autorizzato()
+    allinea_volume_ingresso()  # ingresso basso = app muta senza motivo apparente
     avvia_stream()  # microfono aperto una volta sola, per tutta la vita del processo
     threading.Thread(target=worker_audio, daemon=True).start()  # possiede lo start/stop registrazione
     threading.Thread(target=watchdog_audio, daemon=True).start()  # recupera stop persi/CoreAudio bloccato

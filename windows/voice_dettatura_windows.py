@@ -341,6 +341,106 @@ def _ps_voce(rate: int, voice_name: str = "") -> list[str]:
     return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]
 
 
+_CSHARP_MIC = (
+    "using System;using System.Runtime.InteropServices;"
+    '[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"),'
+    "InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]"
+    "public interface IAudioEndpointVolume{"
+    "int A();int B();int GetChannelCount(out int c);"
+    "int SetMasterVolumeLevel(float l,Guid g);"
+    "int SetMasterVolumeLevelScalar(float l,Guid g);"
+    "int GetMasterVolumeLevel(out float l);"
+    "int GetMasterVolumeLevelScalar(out float l);}"
+    '[Guid("D666063F-1587-4E43-81F1-B948E807363F"),'
+    "InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]"
+    "public interface IMMDevice{int Activate(ref Guid iid,int ctx,IntPtr p,"
+    "[MarshalAs(UnmanagedType.IUnknown)] out object o);}"
+    '[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"),'
+    "InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]"
+    "public interface IMMDeviceEnumerator{int A();"
+    "int GetDefaultAudioEndpoint(int flow,int role,out IMMDevice dev);}"
+    '[ComImport,Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]'
+    "public class MMDeviceEnumerator{}"
+    "public class Mic{"
+    "static IAudioEndpointVolume E(){"
+    "IMMDeviceEnumerator e=(IMMDeviceEnumerator)(new MMDeviceEnumerator());"
+    "IMMDevice d;e.GetDefaultAudioEndpoint(1,1,out d);"  # 1 = eCapture (microfono)
+    "Guid iid=typeof(IAudioEndpointVolume).GUID;object o;"
+    "d.Activate(ref iid,1,IntPtr.Zero,out o);return (IAudioEndpointVolume)o;}"
+    "public static float Get(){float v;E().GetMasterVolumeLevelScalar(out v);return v;}"
+    "public static void Set(float v){E().SetMasterVolumeLevelScalar(v,Guid.Empty);}}"
+)
+
+
+def script_volume_ingresso(nuovo=None) -> str:
+    """Script PowerShell che legge (e se richiesto imposta) il volume del
+    microfono di sistema, 0-100. Usa Core Audio via C# inline: sta dentro .NET
+    di Windows, quindi niente pip sul PC del cliente — stessa scelta del TTS.
+    Stampa sempre il valore RILETTO, cosi' il chiamante non si fida della
+    scrittura: su alcuni device l'ingresso non e' regolabile."""
+    corpo = "$ErrorActionPreference='Stop';Add-Type -TypeDefinition @\"\n" + _CSHARP_MIC + "\n\"@;"
+    if nuovo is not None:
+        corpo += "[Mic]::Set(%s);" % round(max(0, min(100, int(nuovo))) / 100, 4)
+    return corpo + "[Math]::Round([Mic]::Get()*100)"
+
+
+def _volume_ingresso(nuovo=None):
+    """Esegue lo script e torna il volume riletto 0-100 (None se non si puo')."""
+    try:
+        esito = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", script_volume_ingresso(nuovo)],
+            capture_output=True, text=True, timeout=15,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return int(esito.stdout.strip())
+    except Exception:
+        return None
+
+
+def volume_ingresso_sistema():
+    """Volume d'ingresso del microfono di sistema, 0-100 (None se illeggibile)."""
+    return _volume_ingresso()
+
+
+def imposta_volume_ingresso(valore):
+    """Rialza il volume d'ingresso e torna il valore riletto (None se fallito)."""
+    return _volume_ingresso(valore)
+
+
+def ripara_guadagno_ingresso(rms: float) -> bool:
+    """Audio sotto soglia col volume d'ingresso abbassato: il guasto e' quello.
+    Lo rialza e torna True. Gemello di mac/detta.py (caso 01/08/2026)."""
+    causa, target = diagnosi_audio_muto(
+        rms, volume_ingresso_sistema(), VOICE_THRESHOLD,
+        GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
+    )
+    if causa != "guadagno_basso":
+        return False
+    riletto = imposta_volume_ingresso(target)
+    if riletto is None:
+        logging.error(
+            "volume d'ingresso del microfono basso e non rialzabile da qui: "
+            "alzalo da Impostazioni > Sistema > Audio > Ingresso"
+        )
+    else:
+        logging.warning(
+            "volume d'ingresso del microfono era basso: rialzato a %s", riletto
+        )
+    return True
+
+
+def allinea_volume_ingresso() -> None:
+    """All'avvio: con l'ingresso sotto il minimo l'app nasce muta e sembra rotta."""
+    attuale = volume_ingresso_sistema()
+    if attuale is None or attuale >= GUADAGNO_INGRESSO_MINIMO:
+        return
+    riletto = imposta_volume_ingresso(GUADAGNO_INGRESSO_TARGET)
+    logging.warning(
+        "volume d'ingresso del microfono a %s all'avvio: rialzato a %s", attuale, riletto
+    )
+
+
 def ferma_voce() -> None:
     """Ferma la lettura in corso (uccide il PowerShell precedente)."""
     try:
@@ -405,6 +505,31 @@ def audio_fuori_scala(rms: float, massimo: float = 1.0) -> bool:
     sotto lo stream e consegna dati corrotti (caso Mac 09/07: rms 3-4 per ~20s,
     Whisper allucinava). Meglio scartare che trascrivere spazzatura."""
     return rms > massimo
+
+
+# Gemello della logica Mac (caso 01/08/2026, vedi mac/voce_lib.py): le soglie
+# sono calibrate su un guadagno d'ingresso "normale". Se il sistema abbassa il
+# volume del microfono scende tutto insieme e l'app diventa muta senza che nulla
+# sia rotto. Livelli misurati su Mac; su Windows il guadagno e' la stessa scala
+# percentuale, quindi valgono gli stessi due numeri.
+GUADAGNO_INGRESSO_MINIMO = 60
+GUADAGNO_INGRESSO_TARGET = 75
+
+
+def diagnosi_audio_muto(rms: float, guadagno_ingresso, soglia_voce: float = 0.004,
+                        minimo: int = 60, target: int = 75):
+    """Audio tornato sotto soglia: di chi e' la colpa? Torna (causa, guadagno_da_impostare).
+
+    - "guadagno_basso": il volume d'ingresso di sistema e' sceso. Si rialza e
+      basta; riavviare non serve, il guadagno resta basso anche dopo.
+    - "stream_muto": guadagno a posto, quindi e' lo stream del driver morto.
+    Guadagno illeggibile = non lo si puo' incolpare: si ricade sul vecchio
+    comportamento, mai peggio di prima."""
+    if rms >= soglia_voce:
+        return "ok", None
+    if guadagno_ingresso is not None and guadagno_ingresso < minimo:
+        return "guadagno_basso", target
+    return "stream_muto", None
 
 
 _FRASI_FANTASMA = {
@@ -558,7 +683,11 @@ def stop_recording() -> None:
         eventi.put("nascosto")
         return
     if not has_voice(audio):
+        # il Mac lo scriveva, qui si scartava in silenzio: senza questa riga
+        # una dettatura persa non lasciava alcuna traccia da diagnosticare.
+        logging.info("scartato: volume sotto soglia (mic muto/occupato?)")
         eventi.put("nascosto")
+        ripara_guadagno_ingresso(rms)
         return
 
     eventi.put("trascrivo")
@@ -851,6 +980,7 @@ def main() -> None:
     print("Ctrl destro: tieni premuto, parla, rilascia -> il testo viene incollato.")
     print("Tasto Menu: accende/spegne la voce agenti (legge le risposte ad alta voce).")
     print("Chiudi questa finestra per fermare la dettatura.")
+    allinea_volume_ingresso()  # ingresso basso = app muta senza motivo apparente
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=watchdog, daemon=True).start()
     threading.Thread(target=load_model, daemon=True).start()

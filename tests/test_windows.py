@@ -25,7 +25,9 @@ def _funzioni_pure_app(*nomi):
             and nodo.name in nomi
             or isinstance(nodo, ast.Assign)
             and any(
-                isinstance(target, ast.Name) and target.id == "_FRASI_FANTASMA"
+                isinstance(target, ast.Name)
+                and target.id in ("_FRASI_FANTASMA", "_CSHARP_MIC",
+                                  "GUADAGNO_INGRESSO_MINIMO", "GUADAGNO_INGRESSO_TARGET")
                 for target in nodo.targets
             )
         )
@@ -144,3 +146,62 @@ def test_windows_annulla_enter_su_tasto_o_nuova_dettatura():
     assert funzione(10.1, 10.0, False) is True
     assert funzione(9.9, 10.0, True) is True
     assert funzione(9.9, 10.0, False) is False
+
+
+# --- audio muto: guadagno d'ingresso abbassato vs stream morto (gemello Mac) ---
+# Caso 01/08/2026: su Mac il volume d'ingresso di sistema e' sceso da solo a
+# 36/100 e l'app e' diventata muta senza diagnosi. Stessa rete su Windows.
+
+def test_diagnosi_audio_muto_windows_riconosce_il_guadagno_abbassato():
+    spazio = _funzioni_pure_app("diagnosi_audio_muto")
+    causa, target = spazio["diagnosi_audio_muto"](0.0014, 36)
+    assert causa == "guadagno_basso"
+    assert target == spazio["GUADAGNO_INGRESSO_TARGET"]
+
+
+def test_diagnosi_audio_muto_windows_col_guadagno_giusto_incolpa_lo_stream():
+    spazio = _funzioni_pure_app("diagnosi_audio_muto")
+    assert spazio["diagnosi_audio_muto"](0.0014, 75) == ("stream_muto", None)
+
+
+def test_diagnosi_audio_muto_windows_senza_lettura_ricade_sullo_stream():
+    spazio = _funzioni_pure_app("diagnosi_audio_muto")
+    assert spazio["diagnosi_audio_muto"](0.0014, None) == ("stream_muto", None)
+
+
+def test_diagnosi_audio_muto_windows_audio_sano_non_e_un_guasto():
+    spazio = _funzioni_pure_app("diagnosi_audio_muto")
+    assert spazio["diagnosi_audio_muto"](0.0128, 36) == ("ok", None)
+
+
+def test_diagnosi_audio_muto_gemella_del_mac():
+    """Le due app devono decidere allo stesso modo: regola di parita' Mac<->Windows."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+
+    spazio = _funzioni_pure_app("diagnosi_audio_muto")
+    assert spazio["GUADAGNO_INGRESSO_MINIMO"] == voce_lib.GUADAGNO_INGRESSO_MINIMO
+    assert spazio["GUADAGNO_INGRESSO_TARGET"] == voce_lib.GUADAGNO_INGRESSO_TARGET
+    for rms, guadagno in [(0.0014, 36), (0.0014, 75), (0.0014, None), (0.0128, 36)]:
+        assert spazio["diagnosi_audio_muto"](rms, guadagno) == \
+            voce_lib.diagnosi_audio_muto(rms, guadagno), (rms, guadagno)
+
+
+def test_script_volume_ingresso_legge_e_scrive_la_percentuale():
+    spazio = _funzioni_pure_app("script_volume_ingresso")
+    lettura = spazio["script_volume_ingresso"]()
+    assert "[Mic]::Set" not in lettura          # sola lettura: non tocca nulla
+    assert "[Math]::Round([Mic]::Get()*100)" in lettura
+    assert "eCapture" in lettura or "GetDefaultAudioEndpoint(1,1" in lettura
+
+    scrittura = spazio["script_volume_ingresso"](75)
+    assert "[Mic]::Set(0.75)" in scrittura
+    assert scrittura.rstrip().endswith("[Math]::Round([Mic]::Get()*100)")  # rilegge sempre
+
+
+def test_script_volume_ingresso_non_esce_dai_limiti():
+    spazio = _funzioni_pure_app("script_volume_ingresso")
+    assert "[Mic]::Set(1.0)" in spazio["script_volume_ingresso"](250)
+    assert "[Mic]::Set(0.0)" in spazio["script_volume_ingresso"](-40)

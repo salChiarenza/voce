@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0-rc.3 - 01/08/2026 — il microfono abbassato non ferma piu' l'app
+
+Riflesso della stessa rete nata sul Mac il 01/08/2026 (regola di parita':
+Mac master, Windows gemello).
+
+- `diagnosi_audio_muto()` decide come sul Mac, con gli stessi numeri: minimo
+  `60`, target `75`. Un test di parita' confronta le due funzioni caso per
+  caso e fallisce se divergono.
+- `ripara_guadagno_ingresso()` e `allinea_volume_ingresso()` leggono e
+  rialzano il volume del microfono via Core Audio in C# inline dentro
+  PowerShell: sta nel .NET di Windows, quindi **niente pip** sul PC del
+  cliente, stessa scelta gia' fatta per il TTS.
+- Aggiunta la riga di log mancante quando una dettatura viene scartata sotto
+  soglia: prima su Windows spariva senza lasciare traccia da diagnosticare.
+- **Da provare su un PC Windows reale**: l'interop Core Audio non e'
+  collaudabile da macOS. Ogni errore ricade sul comportamento precedente
+  (nessuna riparazione), mai peggio di prima.
+
 ## 1.3.0-rc.2 - 29/07/2026 — tempo di invio allineato
 
 - Allineato a `2.5s` il ritardo dell'Invio automatico anche in conversazione,

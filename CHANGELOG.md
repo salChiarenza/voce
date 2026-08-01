@@ -4,6 +4,16 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.3 - 01/08/2026
+
+- L'app riconosce e ripara da sola il volume d'ingresso del microfono
+  abbassato: prima diventava muta e sembrava rotta, senza dire perche'.
+- La diagnosi distingue due guasti che nel log erano identici: guadagno
+  d'ingresso basso (si rialza) e stream audio morto (si riavvia). Il vecchio
+  rimedio unico, il riavvio, contro il guadagno basso non serviva a nulla.
+- Il controllo parte anche all'avvio, cosi' il guasto non si scopre alla prima
+  dettatura persa.
+
 ## 1.3.0-rc.2 - 29/07/2026
 
 - Corretto il contratto Mac: la consegna e' una fotocopia funzionale dell'app
