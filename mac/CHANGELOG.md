@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0-rc.5 - 01/08/2026 — testo immediato e significato protetto
+
+Il log reale ha separato i due problemi: Whisper trascriveva in `0.4-1.7s`,
+ma dopo un rifiuto Apple la riserva Claude teneva la frase ferma fino a `20s`.
+Inoltre la pulizia Apple aveva trasformato OpenAI in LeaderAI e cancellato
+intere parti di alcune frasi senza superare la vecchia soglia di sicurezza.
+
+- ChatGPT, Claude e Codex, sia come app sia nelle schede Chrome/Safari, usano
+  sempre il grezzo immediato.
+- Fuori dalle chat agente resta solo la corsia Apple, con tetto `2s`; errore,
+  rifiuto o controllo fallito portano subito al grezzo. Nessun agente viene
+  piu' avviato durante una dettatura.
+- La guardia blocca una variazione di parole oltre il 25% e qualsiasi nome del
+  glossario aggiunto senza una forma davvero simile nel grezzo.
+
 ## 1.3.0-rc.4 - 01/08/2026 — la pulizia non resta lenta per giorni
 
 Misure sui log del 25/07-01/08 (495 dettature): la trascrizione e' veloce

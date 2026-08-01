@@ -4,6 +4,16 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.5 - 01/08/2026
+
+- Nelle chat ChatGPT, Claude e Codex il testo grezzo viene incollato subito:
+  nessun secondo modello puo' rallentare o cambiare il significato.
+- Tolto Claude/Codex dal percorso interattivo di pulizia. Sul Mac resta solo
+  il Comando Rapido Apple, massimo 2 secondi; se fallisce arriva il grezzo.
+  Su Windows arriva sempre il grezzo con glossario e sostituzioni locali.
+- La guardia Apple ora blocca anche frasi ridotte o ampliate oltre il 25% e un
+  solo nome del glossario inventato, incluso il caso reale OpenAI -> LeaderAI.
+
 ## 1.3.0-rc.4 - 01/08/2026
 
 - La pulizia del testo non resta lenta per giorni: gli interruttori delle

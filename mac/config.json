@@ -27,7 +27,7 @@
   "mani_libere_attivazione_sec": 0.2,
   "mani_libere_silenzio_sec": 1.4,
   "pulizia_min_parole": 15,
-  "pulizia_timeout_sec": 20,
+  "pulizia_timeout_shortcut_sec": 2,
   "mani_libere_grazia_dopo_voce_sec": 0.7,
   "mani_libere_soglia_voce": 0.018,
   "mani_libere_soglia_stop": 0.013,

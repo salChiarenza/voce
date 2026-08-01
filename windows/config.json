@@ -25,9 +25,5 @@
     "LeaderAI",
     "salchiarenza.ai"
   ],
-  "sostituzioni": {},
-  "detta_pulito": true,
-  "pulizia_in_conversazione": false,
-  "pulizia_min_parole": 15,
-  "pulizia_timeout_sec": 20
+  "sostituzioni": {}
 }

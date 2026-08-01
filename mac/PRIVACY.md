@@ -18,7 +18,11 @@ L'audio viene passato al motore di trascrizione locale installato sul Mac. Il te
 
 ## Detta pulito (opzionale)
 
-Se in `config.json` c'e' `"detta_pulito": true`, le dettature lunghe vengono passate all'agente AI gia' installato dal proprietario (Claude Code o Codex) per togliere ripetizioni e sistemare la punteggiatura. Sul Mac, se esiste il Comando Rapido "Voce Pulita", la pulizia usa prima Apple Intelligence: di default il testo va a **Private Cloud Compute** (cloud privato Apple, dati non conservati da Apple); scegliendo "Su dispositivo" nel comando resta tutto sul Mac. In riserva il testo viaggia verso il servizio del TUO agente, col TUO account e le sue condizioni — non verso server di Sal Chiarenza o LeaderAI. Per una dettatura al 100% locale: `"detta_pulito": false`.
+Se in `config.json` c'e' `"detta_pulito": true`, fuori da ChatGPT, Claude e Codex le dettature lunghe possono passare dal Comando Rapido "Voce Pulita". Apple Intelligence puo' lavorare su dispositivo o tramite **Private Cloud Compute**, secondo la scelta nel Comando Rapido. La prova dura al massimo 2 secondi; se non riesce, viene usato subito il testo locale di Whisper. Claude Code e Codex non vengono mai chiamati come ripiego durante una dettatura. Per evitare anche il passaggio Apple: `"detta_pulito": false`.
+
+Se il proprietario attiva `"debug_dettature": true`, il log locale conserva i
+testi grezzi e l'apprendimento giornaliero puo' proporre correzioni tramite il
+suo agente. Il comportamento e' disattivato nella configurazione standard.
 
 ## Permessi richiesti
 

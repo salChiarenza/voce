@@ -7,7 +7,7 @@
 
 ## Cosa è
 
-"Voce" è l'app di dettatura locale di Sal (brand **salchiarenza.ai**). Tieni premuto un tasto, parli, e il testo si incolla dove hai il cursore. Audio e trascrizione Whisper restano sul computer. La pulizia testo opzionale puo' usare Apple Intelligence o l'agente del proprietario, secondo la configurazione dichiarata nei file `PRIVACY.md`. C'è anche la modalità **voce agenti**: legge ad alta voce le risposte dell'agente (Claude/Codex), così ci parli e ti risponde a voce.
+"Voce" è l'app di dettatura locale di Sal (brand **salchiarenza.ai**). Tieni premuto un tasto, parli, e il testo si incolla dove hai il cursore. Audio e trascrizione Whisper restano sul computer. Nelle chat AI arriva sempre il grezzo immediato; sul Mac, fuori da quelle chat, la pulizia opzionale usa soltanto Apple Intelligence con un tetto breve. C'è anche la modalità **voce agenti**: legge ad alta voce le risposte dell'agente (Claude/Codex), così ci parli e ti risponde a voce.
 
 Due versioni, **stessa anima**:
 - `mac/` → app per Mac. **È il MASTER** (la usa Sal ogni giorno).
@@ -32,14 +32,14 @@ Due versioni, **stessa anima**:
    online della pulizia testo opzionale sono dichiarati e disattivabili.
 7. Marchio, colore, forma pill in `config.json` con gli **stessi valori**.
 8. **Glossario**: chiavi `glossario` (initial_prompt di Whisper) e `sostituzioni` in `config.json` — nomi propri e brand scritti giusti. Stessi nomi-chiave sulle due app.
-9. **Detta pulito**: le due app espongono `detta_pulito`,
-   `pulizia_min_parole` e `pulizia_timeout_sec`; il Mac aggiunge la corsia
-   Apple `pulizia_shortcut` / `pulizia_timeout_shortcut_sec`, con default nel
-   codice quando le chiavi non sono scritte nel config. Catena: **Mac** prima
+9. **Testo immediato e pulizia sicura**: ChatGPT, Claude e Codex ricevono
+   sempre il grezzo, anche a voce e mani libere spente. Nessun agente viene
+   avviato nel percorso interattivo. Fuori dalle chat AI il **Mac** puo' usare
    Apple Intelligence, su dispositivo o tramite Private Cloud Compute secondo
-   la configurazione del proprietario, poi l'agente come riserva, poi il
-   grezzo. **Windows**: agente → grezzo. Qualsiasi problema → si incolla il
-   grezzo. Il prompt di pulizia vive nel codice con lo stesso testo su entrambe.
+   la configurazione del proprietario, con tetto `2s`; fallimento o guardia
+   negativa → grezzo immediato. **Windows**, privo di una corsia locale
+   equivalente, usa il grezzo con glossario e sostituzioni. La guardia gemella
+   blocca variazioni oltre il 25% e nomi del glossario inventati.
 10. **Mac = fotocopia funzionale della versione di Sal**: la distribuzione
     include il Comando Rapido Apple firmato
     `mac/Voce LeaderAI firmato.shortcut`, con Siri `Voce 2`, stessa voce

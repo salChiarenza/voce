@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0-rc.5 - 01/08/2026 — nessuna attesa interattiva dell'agente
+
+- Tolta la pulizia Claude/Codex dal percorso della dettatura: poteva fermare
+  il testo fino a `20s`. Windows non ha il Comando Rapido Apple, quindi incolla
+  subito il grezzo con glossario e sostituzioni locali.
+- Allineata la guardia di sicurezza Mac/Windows: variazioni oltre il 25% e un
+  solo nome del glossario inventato vengono rifiutati.
+
 ## 1.3.0-rc.4 - 01/08/2026 — la pulizia non resta lenta per giorni
 
 Riflesso della rete nata sul Mac. Windows non aveva alcun contatore: ogni

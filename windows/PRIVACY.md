@@ -16,9 +16,14 @@ L'audio viene passato al motore di trascrizione locale installato sul PC. Il tes
 - Non controlliamo il tuo schermo.
 - Non inviamo audio o testo a server di Sal Chiarenza o LeaderAI.
 
-## Detta pulito (opzionale)
+## Testo immediato
 
-Se in `config.json` c'e' `"detta_pulito": true`, le dettature lunghe vengono passate all'agente AI gia' installato dal proprietario (Claude Code o Codex) per togliere ripetizioni e sistemare la punteggiatura. In quel caso il testo viaggia verso il servizio del TUO agente, col TUO account e le sue condizioni — non verso server di Sal Chiarenza o LeaderAI. Per una dettatura al 100% locale: `"detta_pulito": false`.
+Windows incolla il testo locale di Whisper con glossario e sostituzioni. Claude
+Code e Codex non vengono chiamati durante la dettatura.
+
+Se il proprietario aggiunge `"debug_dettature": true`, il log locale conserva
+i testi grezzi e l'apprendimento giornaliero puo' proporre correzioni tramite
+il suo agente. Il comportamento e' disattivato nella configurazione standard.
 
 ## Permessi richiesti
 

@@ -74,7 +74,7 @@ Alla prima installazione proponi in una sola domanda:
 
 - Ctrl destro per dettare;
 - tasto Menu per la voce;
-- detta pulito attivo;
+- testo grezzo immediato con glossario e sostituzioni locali;
 - voce agenti inizialmente spenta;
 - scelta guidata della voce italiana percepita come piu' naturale.
 

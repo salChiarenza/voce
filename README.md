@@ -1,6 +1,6 @@
 # Voce — dettatura locale LeaderAI
 
-App di dettatura locale di **salchiarenza.ai**: tieni premuto un tasto, parli, il testo si scrive dove hai il cursore. Audio e trascrizione Whisper restano sul computer. La pulizia testo opzionale può usare Apple Intelligence o il tuo agente, secondo la configurazione scelta. In più, modalità **voce agenti**: legge ad alta voce le risposte del tuo assistente.
+App di dettatura locale di **salchiarenza.ai**: tieni premuto un tasto, parli, il testo si scrive dove hai il cursore. Audio e trascrizione Whisper restano sul computer. Nelle chat AI arriva subito il testo grezzo; sul Mac, negli altri programmi, una pulizia Apple opzionale ha un tetto di 2 secondi e non usa l'agente come riserva. In più, modalità **voce agenti**: legge ad alta voce le risposte del tuo assistente.
 
 Mentre parli compare in basso al centro una pill con il marchio **salchiarenza.ai** e una barra di lineette verdi ad arco "a sorriso" che si muove col volume.
 

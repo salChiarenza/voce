@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+from difflib import SequenceMatcher
 from pathlib import Path
 
 
@@ -319,6 +320,23 @@ def serve_pulizia(testo, cfg):
     return len(testo.split()) >= minimo
 
 
+def destinazione_agente(nome_app="", url=""):
+    """True quando il testo e' destinato a una chat con un agente AI.
+
+    In queste chat il grezzo di Whisper e' gia' l'input migliore: arriva
+    subito e l'agente capisce esitazioni e ripensamenti senza affidare il
+    significato a un secondo modello di pulizia.
+    """
+    nome = str(nome_app or "").strip().lower()
+    indirizzo = str(url or "").strip().lower()
+    if any(marcatore in nome for marcatore in ("chatgpt", "claude", "codex")):
+        return True
+    return any(
+        dominio in indirizzo
+        for dominio in ("chatgpt.com", "chat.openai.com", "claude.ai")
+    )
+
+
 def prompt_pulizia(testo, glossario=()):
     """Istruzioni per chi sistema il dettato (modello locale o agente).
     Formulazione numerata con esempio esplicito: e' quella che fa risolvere
@@ -344,21 +362,48 @@ def prompt_pulizia(testo, glossario=()):
 
 def pulizia_inventa_nomi(grezzo, pulito, glossario):
     """True se la pulizia ha aggiunto nomi del glossario mai dettati: il
-    modellino a volte rigurgita la lista della regola 5 in coda al testo.
-    Un nome solo puo' essere una correzione legittima di grafia: soglia 2."""
+    modellino a volte sostituisce un nome vero con uno del glossario.
+
+    Una correzione di grafia resta ammessa solo se nel grezzo esiste una forma
+    davvero simile ("leader ai" -> "LeaderAI", "AI Consal" -> "AI con Sal").
+    Questo blocca il caso reale "OpenAI" -> "LeaderAI" del 01/08/2026.
+    """
     g = grezzo.lower()
     p = pulito.lower()
-    aggiunti = [v for v in glossario if v.lower() in p and v.lower() not in g]
-    return len(aggiunti) >= 2
+    parole_grezze = re.findall(r"[\w]+", g, flags=re.UNICODE)
+
+    def forma_compatibile(nome):
+        nome_compatto = "".join(re.findall(r"[\w]+", nome.lower(), flags=re.UNICODE))
+        if not nome_compatto:
+            return False
+        numero_parole = max(1, len(re.findall(r"[\w]+", nome, flags=re.UNICODE)))
+        for ampiezza in range(max(1, numero_parole - 2), numero_parole + 3):
+            for indice in range(0, len(parole_grezze) - ampiezza + 1):
+                candidato = "".join(parole_grezze[indice:indice + ampiezza])
+                if SequenceMatcher(None, nome_compatto, candidato).ratio() >= 0.82:
+                    return True
+        return False
+
+    for nome in glossario:
+        if nome.lower() in p and nome.lower() not in g and not forma_compatibile(nome):
+            return True
+    return False
 
 
 def pulizia_sospetta(grezzo, pulito, glossario=()):
     """La pulizia va scartata (si tiene il grezzo) se inventa nomi mai dettati
-    o se collassa il testo: togliere intercalari e ripensamenti non puo'
-    mangiarsi oltre due terzi delle parole."""
+    o cambia troppo la lunghezza: togliere intercalari e ripensamenti non puo'
+    cancellare un quarto del messaggio ne' aggiungerne un quarto."""
     if pulizia_inventa_nomi(grezzo, pulito, glossario):
         return True
-    return len(pulito.split()) * 3 < len(grezzo.split())
+    parole_grezzo = len(grezzo.split())
+    parole_pulito = len(pulito.split())
+    if parole_grezzo == 0:
+        return bool(parole_pulito)
+    return (
+        parole_pulito * 4 < parole_grezzo * 3
+        or parole_pulito * 4 > parole_grezzo * 5
+    )
 
 
 def shortcut_pulizia_disponibile(nome):

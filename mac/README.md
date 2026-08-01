@@ -13,7 +13,10 @@ cartella installata.
 - Usa una piccola barra verde mentre ascolta.
 - Gira sul Mac con trascrizione locale.
 - Glossario personale: i tuoi nomi e brand escono scritti giusti (`glossario` in `config.json`).
-- Detta pulito (opzionale): le dettature lunghe passano dal tuo agente AI (Claude Code o Codex) che toglie ripetizioni e ripensamenti e sistema la punteggiatura. Si spegne con `"detta_pulito": false`.
+- Detta pulito (opzionale): fuori dalle chat AI, il Comando Rapido Apple prova
+  per massimo 2 secondi a sistemare punteggiatura e ripensamenti. Se fallisce,
+  arriva subito il grezzo. In ChatGPT, Claude e Codex la pulizia viene sempre
+  saltata; l'agente non viene mai avviato durante una dettatura.
 - Fotocopia funzionale di Sal: il Mac riceve lo stesso Comando Rapido Siri
   collaudato da Sal, distribuito come `Voce LeaderAI firmato.shortcut`, e gli
   stessi tasti, tempi, toggle e soglie. Il collaudo verifica anche voce
@@ -97,7 +100,7 @@ Sono permessi necessari per ascoltare la voce, leggere la scorciatoia da tastier
 
 ## Privacy
 
-La dettatura gira localmente sul Mac. Il progetto non invia le tue dettature a Sal Chiarenza, LeaderAI o server esterni di questo progetto. Col detta pulito attivo, il testo passa dal TUO agente AI (vedi `PRIVACY.md`).
+La dettatura gira localmente sul Mac. Il progetto non invia le tue dettature a Sal Chiarenza o LeaderAI. La pulizia opzionale usa Apple Intelligence secondo la configurazione del Comando Rapido; dettagli in `PRIVACY.md`.
 
 Leggi anche `PRIVACY.md`.
 

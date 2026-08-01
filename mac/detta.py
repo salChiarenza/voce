@@ -31,7 +31,7 @@ from voce_lib import (
     diagnosi_audio_muto, GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
     corsia_utilizzabile, registra_esito_corsia, SOGLIA_GUASTI_CORSIA, RIPOSO_CORSIA_SEC,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
-    serve_pulizia, comando_agente, pulisci_con_agente,
+    serve_pulizia, comando_agente, destinazione_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni,
 )
@@ -350,17 +350,15 @@ def suono(nome):
 
 
 GLOSSARIO_PROMPT = glossario_iniziale(cfg)  # nomi/brand scritti giusti da Whisper
-# detta pulito: prima il modello Apple on-device via Comando Rapido (~1.3s di
-# mediana misurata; on-device o Private Cloud Compute secondo la configurazione
-# Apple), poi l'agente del proprietario come riserva.
+# Detta pulito usa soltanto il modello Apple via Comando Rapido. L'agente non
+# e' piu' una riserva interattiva: un suo timeout bloccava il testo per 20s.
+# Nelle chat ChatGPT/Claude/Codex si usa sempre il grezzo immediato.
 SHORTCUT_PULIZIA = cfg.get("pulizia_shortcut", "Voce Pulita") if cfg.get("detta_pulito", False) else None
-# Interruttori delle due corsie di pulizia. Non sono spegnimenti definitivi: si
+# L'interruttore della corsia Apple non e' definitivo: si
 # riprova dopo RIPOSO_CORSIA_SEC (vedi corsia_utilizzabile). Con un processo che
 # vive giorni, "spento" senza ritorno significava spento per sempre.
 _guasti_shortcut = 0          # fallimenti consecutivi della corsia veloce Apple
 _ultimo_guasto_shortcut = None
-_guasti_agente = 0            # fallimenti/timeout consecutivi dell'agente locale
-_ultimo_guasto_agente = None
 if SHORTCUT_PULIZIA and not shortcut_pulizia_disponibile(SHORTCUT_PULIZIA):
     # Non c'e' adesso: si parte in pausa invece di spegnerla per sempre. Il
     # Comando Rapido puo' comparire dopo (importato a mano, iCloud che
@@ -369,10 +367,7 @@ if SHORTCUT_PULIZIA and not shortcut_pulizia_disponibile(SHORTCUT_PULIZIA):
     # ZERO uso della corsia veloce e 123 pulizie tutte sull'agente lento,
     # perche' l'unico controllo era quello all'avvio.
     _guasti_shortcut, _ultimo_guasto_shortcut = SOGLIA_GUASTI_CORSIA, time.monotonic()
-COMANDO_PULIZIA = comando_agente() if cfg.get("detta_pulito", False) else None
-if cfg.get("detta_pulito", False) and SHORTCUT_PULIZIA is None and COMANDO_PULIZIA is None:
-    logging.getLogger("voce").warning(
-        "detta_pulito attivo ma niente Comando Rapido ne' agente (claude/codex) nel PATH")
+COMANDO_APPRENDIMENTO = comando_agente() if cfg.get("debug_dettature", False) else None
 
 
 def trascrivi(audio):
@@ -664,7 +659,13 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         if allucinato:  # frase-fantasma di Whisper sul non-parlato: scarta
             log.info("scartato come allucinazione (%d caratteri)", len(testo))
             testo = ""
-        log.info("trascritto: %d parole%s", len(testo.split()), " (grezzo, in conversazione)" if testo else "")
+        nome_bersaglio = app_bersaglio.localizedName() if app_bersaglio else ""
+        chat_agente = destinazione_agente(nome_bersaglio, scheda_bersaglio)
+        log.info(
+            "trascritto: %d parole%s",
+            len(testo.split()),
+            " (grezzo, chat agente)" if testo and chat_agente else "",
+        )
         if debug and testo and not allucinato:
             log.info("grezzo: %s", testo)
         # In conversazione con l'agente (voce ON *o* mani libere ON) la
@@ -673,20 +674,22 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         # grezze intere ridotte a meta': "si e' mangiato le parole" era la
         # pulizia, non il microfono). L'agente capisce benissimo il grezzo.
         in_conversazione = voce_attiva() or mani_libere_attive()
-        salta_per_conversazione = in_conversazione and not cfg.get("pulizia_in_conversazione", False)
-        if testo and not salta_per_conversazione and (SHORTCUT_PULIZIA or COMANDO_PULIZIA) and serve_pulizia(testo, cfg):
+        salta_per_conversazione = (
+            chat_agente
+            or (in_conversazione and not cfg.get("pulizia_in_conversazione", False))
+        )
+        if testo and not salta_per_conversazione and SHORTCUT_PULIZIA and serve_pulizia(testo, cfg):
             eventi.put("sistemo")
             glossario = cfg.get("glossario", [])
             inizio_pulizia = time.monotonic()
             pulito = None
             global _guasti_shortcut, _ultimo_guasto_shortcut
-            global _guasti_agente, _ultimo_guasto_agente
             # corsia veloce Apple (~1.3s di mediana misurata)
             if SHORTCUT_PULIZIA and corsia_utilizzabile(
                     _guasti_shortcut, _ultimo_guasto_shortcut, inizio_pulizia):
                 pulito = pulisci_con_shortcut(
                     testo, SHORTCUT_PULIZIA,
-                    timeout=float(cfg.get("pulizia_timeout_shortcut_sec", 10)),
+                    timeout=float(cfg.get("pulizia_timeout_shortcut_sec", 2)),
                     glossario=glossario,
                 )
                 log.info("pulizia shortcut %.1fs: %s", time.monotonic() - inizio_pulizia,
@@ -702,24 +705,8 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
                                 RIPOSO_CORSIA_SEC // 60)
                 if debug and pulito:
                     log.info("pulito: %s", pulito)
-            # riserva: agente locale. Stessa pausa: aspettare 20s il timeout per
-            # poi incollare comunque il grezzo e' peggio che incollare subito.
-            if pulito is None and COMANDO_PULIZIA and corsia_utilizzabile(
-                    _guasti_agente, _ultimo_guasto_agente, inizio_pulizia):
-                pulito = pulisci_con_agente(
-                    testo, COMANDO_PULIZIA,
-                    timeout=float(cfg.get("pulizia_timeout_sec", 20)),
-                    glossario=glossario,
-                )
-                log.info("pulizia agente %.1fs", time.monotonic() - inizio_pulizia)
-                prima = _guasti_agente
-                _guasti_agente, _ultimo_guasto_agente = registra_esito_corsia(
-                    _guasti_agente, bool(pulito), inizio_pulizia)
-                if prima < SOGLIA_GUASTI_CORSIA <= _guasti_agente:
-                    log.warning("agente di pulizia in pausa %d minuti (2 fallimenti di fila)",
-                                RIPOSO_CORSIA_SEC // 60)
-                if debug:
-                    log.info("pulito: %s", pulito)
+            if pulito is None:
+                log.info("pulizia veloce non riuscita: uso subito il grezzo")
             testo = pulito or testo
         _nascondi_o_arma()
         if testo:
@@ -1131,7 +1118,7 @@ def _impara_dagli_errori():
         pass
     if not cfg.get("debug_dettature", False):
         return  # senza log dei testi non c'e' niente da cui imparare
-    comando = COMANDO_PULIZIA or comando_agente()
+    comando = COMANDO_APPRENDIMENTO or comando_agente()
     if not comando:
         return
     nuove = impara_sostituzioni(

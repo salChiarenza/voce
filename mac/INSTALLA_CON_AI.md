@@ -88,7 +88,8 @@ Il profilo Mac da applicare e verificare comprende:
 - Cmd destro per dettare;
 - Option + freccia sinistra per la voce;
 - Cmd destro + Option per le mani libere;
-- detta pulito attivo;
+- detta pulito Apple attivo fuori dalle chat AI, con tetto di 2 secondi e
+  nessun ripiego interattivo su Claude Code/Codex;
 - Invio automatico dopo `2.5` secondi sia a voce ON sia a voce OFF;
 - soglia mani libere `0.018` e soglia stop `0.013`;
 - voce agenti e mani libere inizialmente spente.

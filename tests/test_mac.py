@@ -538,6 +538,23 @@ def test_serve_pulizia_rispetta_la_soglia_configurata():
     assert voce_lib.serve_pulizia(testo, {"detta_pulito": True, "pulizia_min_parole": 6}) is False
 
 
+def test_destinazione_agente_riconosce_app_e_schede_web():
+    assert voce_lib.destinazione_agente("ChatGPT", "") is True
+    assert voce_lib.destinazione_agente("Claude", "") is True
+    assert voce_lib.destinazione_agente("Google Chrome", "https://chatgpt.com/c/123") is True
+    assert voce_lib.destinazione_agente("Safari", "https://claude.ai/chat/123") is True
+    assert voce_lib.destinazione_agente("Mail", "") is False
+    assert voce_lib.destinazione_agente("Google Chrome", "https://example.com") is False
+
+
+def test_percorso_interattivo_mac_non_chiama_un_agente():
+    sorgente = (REPO_ROOT / "mac" / "detta.py").read_text(encoding="utf-8")
+    corpo = sorgente.split("def _trascrivi_e_incolla", 1)[1].split("\ndef ", 1)[0]
+    assert "pulisci_con_agente" not in corpo
+    assert "destinazione_agente" in corpo
+    assert json.loads((REPO_ROOT / "mac" / "config.json").read_text())["pulizia_timeout_shortcut_sec"] == 2
+
+
 def test_prompt_pulizia_contiene_testo_e_glossario():
     p = voce_lib.prompt_pulizia("ci vediamo martedì anzi mercoledì", ["LeaderAI"])
     assert "martedì anzi mercoledì" in p
@@ -565,6 +582,12 @@ def test_pulizia_inventa_nomi_tollera_una_correzione_di_grafia():
     assert voce_lib.pulizia_inventa_nomi(grezzo, pulito, GLOSSARIO_8) is False
 
 
+def test_pulizia_inventa_nomi_blocca_una_sostituzione_di_significato():
+    grezzo = "Apri il collegamento di OpenAI e controllalo."
+    pulito = "Apri il collegamento di LeaderAI e controllalo."
+    assert voce_lib.pulizia_inventa_nomi(grezzo, pulito, GLOSSARIO_8) is True
+
+
 def test_pulizia_inventa_nomi_ok_se_i_nomi_erano_dettati():
     grezzo = "apri claude code e codex e controlla"
     pulito = "Apri Claude Code e Codex e controlla."
@@ -576,6 +599,15 @@ def test_pulizia_sospetta_scatta_sul_collasso_del_testo():
               "c'è una procedura che avevano detto, così la prossima la guardiamo insieme.")
     # visto dal vivo 03/07: il modellino risponde solo con l'esempio della regola 1
     assert voce_lib.pulizia_sospetta(grezzo, "mercoledí", GLOSSARIO_8) is True
+
+
+def test_pulizia_sospetta_blocca_anche_un_taglio_di_meta_frase():
+    grezzo = (
+        "Giusto, il primo è il setup dell'ecosistema perché si fa e si spiega, "
+        "poi colleghiamo i vari strumenti e verifichiamo insieme il risultato finale."
+    )
+    pulito = "Giusto, il primo è il setup dell'ecosistema, poi colleghiamo i vari strumenti."
+    assert voce_lib.pulizia_sospetta(grezzo, pulito, GLOSSARIO_8) is True
 
 
 def test_pulizia_sospetta_accetta_una_pulizia_normale():
@@ -661,12 +693,12 @@ def test_pulisci_con_shortcut_usa_l_output(monkeypatch, tmp_path):
         # il comando è ["shortcuts","run",nome,"-i",input,"-o",output,...]: scrive l'output
         out = cmd[cmd.index("-o") + 1]
         with open(out, "w") as f:
-            f.write("Testo sistemato dal modello locale.")
+            f.write("Testo grezzo.")
         class E: returncode = 0
         return E()
     monkeypatch.setattr(voce_lib.subprocess, "run", finto_run)
     esito = voce_lib.pulisci_con_shortcut("testo grezzo", "Voce Pulita", timeout=5)
-    assert esito == "Testo sistemato dal modello locale."
+    assert esito == "Testo grezzo."
 
 
 # --- apprendimento automatico: Voce impara le parole che sbaglia sempre ---

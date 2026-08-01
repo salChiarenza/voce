@@ -249,7 +249,7 @@ def impara_dagli_errori_giornaliero() -> None:
         pass
     if not CFG.get("debug_dettature", False):
         return  # senza log dei testi non c'e' niente da cui imparare
-    comando = COMANDO_PULIZIA or comando_agente()
+    comando = COMANDO_APPRENDIMENTO or comando_agente()
     if not comando:
         return
     nuove = impara_sostituzioni(LOG, BASE / "config.json", comando)
@@ -260,22 +260,43 @@ def impara_dagli_errori_giornaliero() -> None:
 
 
 def pulizia_inventa_nomi(grezzo: str, pulito: str, glossario=()) -> bool:
-    """True se la pulizia ha aggiunto nomi del glossario mai dettati: il
-    modellino a volte rigurgita la lista della regola 5 in coda al testo.
-    Un nome solo puo' essere una correzione legittima di grafia: soglia 2."""
+    """Gemello della guardia Mac: nessun nome nuovo senza una forma simile."""
+    from difflib import SequenceMatcher
+
     g = grezzo.lower()
     p = pulito.lower()
-    aggiunti = [v for v in glossario if v.lower() in p and v.lower() not in g]
-    return len(aggiunti) >= 2
+    parole_grezze = re.findall(r"[\w]+", g, flags=re.UNICODE)
+
+    def forma_compatibile(nome):
+        nome_compatto = "".join(re.findall(r"[\w]+", nome.lower(), flags=re.UNICODE))
+        if not nome_compatto:
+            return False
+        numero_parole = max(1, len(re.findall(r"[\w]+", nome, flags=re.UNICODE)))
+        for ampiezza in range(max(1, numero_parole - 2), numero_parole + 3):
+            for indice in range(0, len(parole_grezze) - ampiezza + 1):
+                candidato = "".join(parole_grezze[indice:indice + ampiezza])
+                if SequenceMatcher(None, nome_compatto, candidato).ratio() >= 0.82:
+                    return True
+        return False
+
+    for nome in glossario:
+        if nome.lower() in p and nome.lower() not in g and not forma_compatibile(nome):
+            return True
+    return False
 
 
 def pulizia_sospetta(grezzo: str, pulito: str, glossario=()) -> bool:
-    """La pulizia va scartata (si tiene il grezzo) se inventa nomi mai dettati
-    o se collassa il testo: togliere intercalari e ripensamenti non puo'
-    mangiarsi oltre due terzi delle parole."""
+    """Gemello Mac: blocca nomi inventati e variazioni oltre il 25%."""
     if pulizia_inventa_nomi(grezzo, pulito, glossario):
         return True
-    return len(pulito.split()) * 3 < len(grezzo.split())
+    parole_grezzo = len(grezzo.split())
+    parole_pulito = len(pulito.split())
+    if parole_grezzo == 0:
+        return bool(parole_pulito)
+    return (
+        parole_pulito * 4 < parole_grezzo * 3
+        or parole_pulito * 4 > parole_grezzo * 5
+    )
 
 
 def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()):
@@ -302,11 +323,9 @@ def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()):
 
 
 GLOSSARIO_PROMPT = glossario_iniziale(CFG)  # nomi/brand scritti giusti da Whisper
-# agente locale per "detta pulito": cercato una volta all'avvio
-COMANDO_PULIZIA = comando_agente() if CFG.get("detta_pulito", False) else None
-# Interruttore della corsia di pulizia: pausa, non spegnimento (gemello Mac).
-_guasti_agente = 0
-_ultimo_guasto_agente = None
+# L'agente resta disponibile per l'apprendimento giornaliero, ma non entra piu'
+# nel percorso interattivo: su Windows il testo grezzo viene incollato subito.
+COMANDO_APPRENDIMENTO = comando_agente() if CFG.get("debug_dettature", False) else None
 
 
 def pulisci_per_voce(testo: str) -> str:
@@ -739,34 +758,11 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             eventi.put("nascosto")
             return
         text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
-        # In conversazione (voce ON) la pulizia costa secondi su quasi ogni
-        # turno per un guadagno che l'agente non ha bisogno di avere (gemello Mac).
-        salta_per_conversazione = voce_attiva() and not CFG.get("pulizia_in_conversazione", False)
-        if text and not salta_per_conversazione and COMANDO_PULIZIA and serve_pulizia(text, CFG):
-            eventi.put("sistemo")
-            # i TESTI si loggano solo col flag debug (privacy); tempi sempre
-            debug = CFG.get("debug_dettature", False)
-            if debug:
-                logging.info("grezzo: %s", text)
-            inizio_pulizia = time.monotonic()
-            global _guasti_agente, _ultimo_guasto_agente
-            if corsia_utilizzabile(_guasti_agente, _ultimo_guasto_agente, inizio_pulizia):
-                pulito = pulisci_con_agente(
-                    text, COMANDO_PULIZIA,
-                    timeout=float(CFG.get("pulizia_timeout_sec", 20)),
-                    glossario=CFG.get("glossario", []),
-                )
-                logging.info("pulizia agente %.1fs", time.monotonic() - inizio_pulizia)
-                prima = _guasti_agente
-                _guasti_agente, _ultimo_guasto_agente = registra_esito_corsia(
-                    _guasti_agente, bool(pulito), inizio_pulizia)
-                if prima < SOGLIA_GUASTI_CORSIA <= _guasti_agente:
-                    logging.warning(
-                        "agente di pulizia in pausa %d minuti (2 fallimenti di fila)",
-                        RIPOSO_CORSIA_SEC // 60)
-                text = pulito or text  # il grezzo non si perde mai
-                if debug:
-                    logging.info("pulito: %s", text)
+        # Windows non ha una corsia locale rapida equivalente al Comando
+        # Rapido Apple. Il vecchio ripiego Claude/Codex poteva bloccare ogni
+        # dettatura per 20s: ora il grezzo viene incollato subito.
+        if CFG.get("debug_dettature", False) and text:
+            logging.info("grezzo: %s", text)
         eventi.put("nascosto")
         if not text:
             return

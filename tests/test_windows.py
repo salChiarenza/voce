@@ -224,3 +224,32 @@ def test_corsia_pulizia_windows_gemella_del_mac():
             voce_lib.corsia_utilizzabile(guasti, ultimo, ora), (guasti, ultimo, ora)
     assert spazio["registra_esito_corsia"](1, True, 500) == voce_lib.registra_esito_corsia(1, True, 500)
     assert spazio["registra_esito_corsia"](1, False, 500) == voce_lib.registra_esito_corsia(1, False, 500)
+
+
+def test_guardia_pulizia_windows_gemella_del_mac():
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+
+    spazio = _funzioni_pure_app("pulizia_inventa_nomi", "pulizia_sospetta")
+    glossario = ["LeaderAI", "AI con Sal"]
+    casi = [
+        ("Apri OpenAI e controlla", "Apri LeaderAI e controlla"),
+        ("scrivilo su leader ai", "Scrivilo su LeaderAI"),
+        (
+            "Questo messaggio contiene abbastanza parole per verificare che la pulizia non cancelli una parte importante del significato originale",
+            "Questo messaggio verifica la pulizia",
+        ),
+    ]
+    for grezzo, pulito in casi:
+        assert spazio["pulizia_inventa_nomi"](grezzo, pulito, glossario) == \
+            voce_lib.pulizia_inventa_nomi(grezzo, pulito, glossario)
+        assert spazio["pulizia_sospetta"](grezzo, pulito, glossario) == \
+            voce_lib.pulizia_sospetta(grezzo, pulito, glossario)
+
+
+def test_percorso_interattivo_windows_non_chiama_un_agente():
+    sorgente = (REPO_ROOT / "windows" / "voice_dettatura_windows.py").read_text(encoding="utf-8")
+    corpo = sorgente.split("def transcribe_and_paste", 1)[1].split("\ndef ", 1)[0]
+    assert "pulisci_con_agente" not in corpo
+    assert "pulizia agente" not in corpo
