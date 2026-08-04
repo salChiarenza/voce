@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 $Source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VersionFile = Join-Path (Split-Path -Parent $Source) "VERSION"
 if (-not (Test-Path $VersionFile)) {
-    throw "File VERSION mancante: scarica l'archivio completo della repo Voce."
+    throw "File VERSION mancante: usa la copia completa della repo Voce (git clone)."
 }
 $Version = (Get-Content $VersionFile -Raw).Trim()
 $AppDir = Join-Path $HOME "VoiceDettaturaWindows"
@@ -105,5 +105,5 @@ Write-Host "1. Clicca l'icona 'Voce Dettatura' (Scrivania o Menu Start)."
 Write-Host "2. Si apre una piccola finestra: la Voce e' accesa."
 Write-Host "3. In qualsiasi programma, tieni premuto Ctrl destro, parla, rilascia."
 Write-Host "4. Compare in basso la pill 'salchiarenza.ai' col sorriso verde; il testo viene scritto dove hai il cursore."
-Write-Host "5. Tasto Menu: accende/spegne la voce agenti, se configurata."
+Write-Host "5. Tasto Menu: accende/spegne Voce AI; all'accensione dichiara l'audio sintetico."
 Write-Host "6. Per spegnerla: chiudi quella finestra."

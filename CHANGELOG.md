@@ -4,6 +4,21 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.6 - 04/08/2026
+
+- L'agente del cliente prende la struttura dalla repo pubblica, esegue
+  l'installer e chiude il collaudo; al proprietario restano le conferme di
+  sistema e la prova con il microfono.
+- Il modello di consegna e le istruzioni Mac e Windows partono dalla repo; un
+  test impedisce di riaffidare alla persona passaggi tecnici di consegna.
+- Il rapporto di collaudo resta al proprietario: la consegna si chiude sul suo
+  computer, senza scambi di messaggi verso LeaderAI.
+- Voce AI dichiara all'accensione che le risposte sono audio sintetico.
+- Sul Mac lo stato attivo mostra `AI`; su Windows lo indica la finestra.
+- Privacy e collaudo chiariscono che l'audio e' riprodotto al momento e non
+  viene registrato, salvato o esportato.
+- La consegna richiede ora anche `AI_ACT_CHECK_OK`.
+
 ## 1.3.0-rc.5 - 01/08/2026
 
 - Nelle chat ChatGPT, Claude e Codex il testo grezzo viene incollato subito:

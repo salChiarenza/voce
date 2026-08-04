@@ -6,14 +6,14 @@ Mentre parli, in basso al centro compare la pill **salchiarenza.ai** con la barr
 
 Risorsa gratuita per la community **AI con Sal**.
 
-La versione esatta dell'archivio è nel file `../VERSION` e viene copiata nella
-cartella installata.
+La versione esatta è nel file `../VERSION` e viene copiata nella cartella
+installata.
 
 ## Stato
 
 Versione Windows brandizzata, allineata nell'aspetto e nel comportamento alla versione Mac (pill + marchio + sorriso, due tasti, voce agenti). L'aggiornamento conserva la configurazione personale e collega davvero la lettura delle risposte a Claude Code/Codex. Va provata su un PC Windows reale prima di considerarla stabile.
 
-## Metodo consigliato: launcher locale + collaudo con Claude Code o Codex
+## Metodo unico: repo + installazione con Claude Code o Codex
 
 Segui il percorso in:
 
@@ -21,7 +21,7 @@ Segui il percorso in:
 INSTALLA_CON_AI.md
 ```
 
-Il proprietario scarica la versione verificata, apre la cartella `windows/` e fa doppio clic su `install.bat`. L'installer lavora nel profilo utente e copia anche le istruzioni nella cartella installata. Da quel momento l'agente controlla il PC, conserva glossario e preferenze, ripara la parte locale, collega la voce delle risposte e chiude con una prova finale. Alla prima installazione elenca e fa ascoltare le voci italiane gia' presenti, suggerisce quella percepita come piu' naturale e salva la scelta del proprietario in `voce_nome`.
+L'agente prende dalla repo la versione verificata, esegue `windows\install.bat` e continua dalla cartella locale. Conserva glossario e preferenze, ripara la parte locale, collega la voce delle risposte e chiude con una prova finale. Alla prima installazione elenca e fa ascoltare le voci italiane gia' presenti, suggerisce quella percepita come piu' naturale e salva la scelta del proprietario in `voce_nome`.
 
 Comandi usati dall'agente per la scelta guidata:
 
@@ -33,11 +33,11 @@ voce_hook.py --set-voice "NOME"
 
 ## Installazione
 
-1. Scarica lo zip dalla versione esatta indicata da Sal.
-2. Estrai lo zip.
-3. Doppio click su `install.bat`.
-4. Attendi il messaggio `Installazione completata`.
-5. Torna nel tuo agente e chiedigli di leggere `%USERPROFILE%\VoiceDettaturaWindows\INSTALLA_CON_AI.md` e completare il collaudo locale.
+1. Apri Claude Code o Codex e fagli leggere l'email di consegna.
+2. L'agente prende la versione verificata dalla repo pubblica.
+3. L'agente esegue `windows\install.bat` e legge `INSTALLA_CON_AI.md` nella cartella installata.
+4. Concedi soltanto i permessi Windows richiesti e prova microfono, tasti e voce.
+5. L'agente ripara gli errori recuperabili e chiude con il collaudo reale.
 
 L'installer crea:
 
@@ -53,7 +53,7 @@ e un'icona cliccabile **Voce Dettatura** sulla Scrivania e nel Menu Start.
 2. In qualsiasi programma tieni premuto `Ctrl destro`.
 3. Parla.
 4. Rilascia `Ctrl destro`.
-5. Usa il tasto `Menu` per accendere o spegnere la voce agenti, se configurata.
+5. Usa il tasto `Menu` per accendere o spegnere Voce AI, se configurata; all'accensione dichiara che le risposte sono audio sintetico.
 
 In basso compare la pill **salchiarenza.ai** con la barra verde a sorriso e il testo viene scritto dove hai il cursore. Per spegnerla, chiudi quella finestra.
 

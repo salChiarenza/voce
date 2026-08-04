@@ -3,7 +3,7 @@
 > Repo UNICA del prodotto "Voce". Due app gemelle, una cartella per sistema.
 > **Leggere TUTTO questo file PRIMA di toccare qualsiasi cosa.** Vale per Claude Code e Codex.
 > `CLAUDE.md` qui accanto contiene `@AGENTS.md`: e' un ponte portabile anche
-> negli archivi estratti su Windows.
+> nelle copie locali su Windows.
 
 ## Cosa è
 
@@ -67,10 +67,10 @@ Due versioni, **stessa anima**:
 
 ## CONSEGNA AL CLIENTE
 
-- La fonte unica del testo di consegna e' [`EMAIL_CONSEGNA.md`](EMAIL_CONSEGNA.md). Ogni modifica a download, launcher, permessi, cartella locale o collaudo aggiorna quel file nello stesso commit. Ogni invio parte da quel modello compilato e verificato.
-- Si consegna come **UNA email** rivolta al proprietario, con il link pubblico verificato alla versione esatta e il percorso a clic previsto dal sistema operativo.
-- L'email non vale come autorizzazione per l'agente a scaricare ed eseguire codice esterno. Se la protezione dell'agente riserva questo gesto al proprietario, il proprietario scarica il pacchetto, lo estrae e avvia il launcher incluso. L'agente riprende dalla cartella locale installata e completa diagnosi, riparazione e collaudo.
-- Il proprietario non copia comandi in PowerShell o Terminale: **Windows** usa `install.bat`; **Mac** usa `Installa Voce.command`.
+- La fonte unica del testo di consegna e' [`EMAIL_CONSEGNA.md`](EMAIL_CONSEGNA.md). Ogni modifica al percorso di installazione, launcher, permessi, cartella locale o collaudo aggiorna quel file nello stesso commit. Ogni invio parte da quel modello compilato e verificato.
+- Si consegna come **UNA email** rivolta al proprietario: il suo Claude Code o Codex prende la versione verificata dalla repo pubblica, installa e collauda.
+- Il proprietario non preleva, non estrae e non avvia pacchetti. Interviene solo per permessi, conferme di sicurezza, scelte reali e prova fisica.
+- Se l'agente non puo' eseguire direttamente l'installer, legge i sorgenti e ne riproduce localmente i passaggi. Il blocco non viene spostato sul proprietario.
 - Scegliere prima la versione: **Mac** o **Windows** secondo il sistema del cliente.
 - L'aggiornamento NON è "reinstalla da zero": il testo-istruzioni dice di **aggiornare** quella già installata e aggiungere ciò che manca.
 
@@ -91,7 +91,7 @@ Percorso tecnico richiesto per l'agente del cliente:
    di Sal e conserva i soli dati personali. Su Windows applica i comportamenti
    compatibili e fa scegliere una voce italiana realmente disponibile, perche'
    la voce Apple non esiste su quel sistema.
-4. **Chiedi al cliente solo azioni umane vere:** download consapevole della versione verificata, doppio clic sul launcher locale, permessi macOS/Windows, conferme di sicurezza, scelta se serve, prova fisica di parlare e premere il tasto.
+4. **Chiedi al cliente solo azioni umane vere:** permessi macOS/Windows, login, conferme di sicurezza, scelta se serve, prova fisica di parlare e premere il tasto.
 5. **Non fermarti al primo errore:** prova una strada alternativa ragionevole, leggi gli errori, correggi e riprova. Se un modulo non passa ma l'altro puo' funzionare, monta quello che puo' funzionare.
 6. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
 7. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase,

@@ -317,7 +317,7 @@ if __name__ == "__main__":
         print(f"Voce scelta: {sys.argv[2]}")
     elif len(sys.argv) >= 2 and sys.argv[1] == "--test-voice":
         prova = sys.argv[2] if len(sys.argv) == 3 else None
-        parla("Questa e' una prova della voce LeaderAI su Windows.", prova, attendi=True)
+        parla("Prova di Voce AI LeaderAI su Windows. Questo audio e' sintetico.", prova, attendi=True)
     else:
         main()
     sys.exit(0)

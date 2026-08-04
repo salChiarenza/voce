@@ -24,6 +24,13 @@ Se il proprietario attiva `"debug_dettature": true`, il log locale conserva i
 testi grezzi e l'apprendimento giornaliero puo' proporre correzioni tramite il
 suo agente. Il comportamento e' disattivato nella configurazione standard.
 
+## Voce AI delle risposte
+
+Quando il proprietario la attiva, Voce legge il testo prodotto da Claude Code
+o Codex con la voce sintetica del sistema. L'accensione lo dichiara a voce e
+l'indicatore visibile mostra `AI`. L'audio viene riprodotto al momento: Voce
+non lo registra, non lo salva e non crea un file da distribuire.
+
 ## Permessi richiesti
 
 macOS puo' chiedere microfono, accessibilita' e monitoraggio input.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.6 - 03/08/2026 — Voce AI riconoscibile
+
+- All'accensione dichiara che le risposte dell'agente sono audio sintetico.
+- Pill e barra dei menu mostrano `AI` quando la lettura e' attiva.
+- Privacy e collaudo registrano che l'audio e' effimero e non viene salvato.
+
 ## 1.3.0-rc.5 - 01/08/2026 — testo immediato e significato protetto
 
 Il log reale ha separato i due problemi: Whisper trascriveva in `0.4-1.7s`,
@@ -119,11 +125,11 @@ silenzio. Niente era rotto: l'app non sentiva piu'.
 - Aggiunto `EMAIL_CONSEGNA.md` nella radice della repo come fonte unica dell'email Mac e Windows: link esatto, percorso a clic, conferme del sistema, passaggio all'agente locale, ramo di recupero e collaudo.
 - Ogni miglioramento dell'esperienza di installazione aggiorna app, istruzioni ed email nello stesso commit; la cronologia Git conserva l'evoluzione.
 
-## Non rilasciato - 23/07/2026 — passaggio di sicurezza locale
+## Superato il 04/08/2026 — passaggio di sicurezza locale
 
-- La consegna distingue ora il download di codice esterno dal lavoro locale dell'agente: il proprietario scarica la versione verificata e avvia `Installa Voce.command`; Claude Code/Codex riprende dalla cartella installata e completa diagnosi e collaudo.
+- Questo percorso trasferiva al proprietario un passaggio tecnico ed e' stato ritirato. La consegna corrente parte dalla repo ed e' eseguita interamente dal Claude Code o Codex del cliente.
 - `install.sh` copia `INSTALLA_CON_AI.md` nella cartella locale, cosi' l'agente trova la missione completa dopo il passaggio umano.
-- Il percorso cliente usa clic e conferme macOS, senza comandi da copiare nel Terminale.
+- Alla persona restano soltanto conferme macOS e prova reale.
 
 ## Non rilasciato - 17/07/2026 (27) — stessa voce naturale della versione di Sal
 

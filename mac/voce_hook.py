@@ -15,8 +15,24 @@ import subprocess
 import sys
 from pathlib import Path
 
-from voce_lib import carica_config, voce_attiva, estrai_ultima_risposta
+from voce_lib import BASE, carica_config, voce_attiva, estrai_ultima_risposta
 from parla import parla
+
+
+def traccia(messaggio):
+    """Riga nel registro di Voce a ogni fine risposta.
+
+    Senza questa riga un hook che non parte e uno che parla sono identici visti
+    da fuori: il silenzio si scambia per un guasto dell'audio (caso 01/08/2026,
+    stessa lezione della corsia di pulizia che cadeva senza dirlo)."""
+    try:
+        from datetime import datetime
+
+        istante = datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+        with open(BASE / "voce.log", "a", encoding="utf-8") as registro:
+            registro.write(f"{istante} INFO voce agenti: {messaggio}\n")
+    except Exception:
+        pass  # il registro non deve mai fermare la risposta
 
 
 VOICE_APP_MARKERS = (
@@ -222,19 +238,27 @@ def controlla_hook_agenti() -> bool:
 
 def main():
     if not voce_attiva():
+        traccia("voce spenta, non leggo")
         return
     try:
         dati = json.load(sys.stdin)
     except Exception:
+        traccia("chiamata senza dati leggibili")
         return
     testo = dati.get("last_assistant_message") or ""
+    origine = "messaggio diretto"
     if not testo and dati.get("transcript_path"):
+        origine = "trascrizione"
         try:
             testo = estrai_ultima_risposta(dati["transcript_path"])
         except Exception:
+            traccia("trascrizione illeggibile")
             return
     if testo:
+        traccia(f"leggo {len(testo)} caratteri ({origine})")
         parla(testo)  # Popen: parte e non aspetta la fine
+    else:
+        traccia(f"nessun testo da leggere ({origine})")
 
 
 if __name__ == "__main__":
@@ -256,7 +280,7 @@ if __name__ == "__main__":
             f"velocita={profilo['velocita']}, tono={profilo['tono']}"
         )
     elif len(sys.argv) == 2 and sys.argv[1] == "--test-voice":
-        parla("Voce LeaderAI pronta.")
+        parla("Prova di Voce AI LeaderAI. Questo audio e' sintetico.")
     else:
         main()
     sys.exit(0)

@@ -128,7 +128,7 @@ def colore_da_hex(hex_str):
 
 COLORE_BARRE = colore_da_hex(cfg.get("colore", "#32D74B"))
 
-indicatore_voce = AppKit.NSTextField.labelWithString_("● ON")
+indicatore_voce = AppKit.NSTextField.labelWithString_("● AI")
 indicatore_voce.setFrame_(AppKit.NSMakeRect(LARGHEZZA - 54, 49, 42, 16))
 indicatore_voce.setAlignment_(AppKit.NSTextAlignmentRight)
 indicatore_voce.setTextColor_(COLORE_BARRE)
@@ -141,7 +141,7 @@ def aggiorna_indicatore_voce():
     """Due cose distinte sulla pill, non piu' una sola:
     - bordo verde = stile della pill quando l'invio automatico e' attivo
       (quasi sempre, e' di config): Sal lo vuole sempre, non solo a voce ON;
-    - etichetta '● ON' = il tasto voce agenti (TTS) e' DAVVERO acceso: deve
+    - etichetta '● AI' = il tasto voce agenti (TTS) e' DAVVERO acceso: deve
       dire il vero, altrimenti sembra sempre ON anche a voce spenta."""
     stile_attivo = cfg.get("invio_automatico", True)
     vista.layer().setBorderWidth_(1.0 if stile_attivo else 0.0)
@@ -258,9 +258,9 @@ indicatore_menu.setVisible_(False)
 
 
 def aggiorna_indicatore_menu():
-    """🎙️ = mani libere attiva, 🔊 = voce agenti accesa (anche insieme).
+    """🎙️ = mani libere attiva, 🔊 AI = voce agenti accesa (anche insieme).
     Niente di attivo = icona nascosta."""
-    titolo = ("🎙️" if mani_libere_attive() else "") + ("🔊" if voce_attiva() else "")
+    titolo = ("🎙️" if mani_libere_attive() else "") + ("🔊 AI" if voce_attiva() else "")
     if titolo:
         indicatore_menu.button().setTitle_(titolo)
         indicatore_menu.setVisible_(True)
@@ -804,10 +804,10 @@ def commuta_voce():
     """Tasto on/off della voce agenti, con conferma parlata."""
     if FLAG_VOICE_ON.exists():
         FLAG_VOICE_ON.unlink()
-        stato = "Voce spenta"
+        stato = "Voce AI spenta"
     else:
         FLAG_VOICE_ON.touch()
-        stato = "Voce accesa"
+        stato = "Voce AI accesa. Le risposte dell'agente sono audio sintetico."
     logging.getLogger("voce").info("combo voce: %s", stato)
     pronuncia(stato)
 

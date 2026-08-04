@@ -2,21 +2,26 @@
 
 Voce arriva dalla repo pubblica `salChiarenza/voce`. Il percorso separa due momenti:
 
-1. il proprietario sceglie la versione verificata e avvia il launcher locale;
-2. Claude Code o Codex lavora sulla cartella installata, completa la diagnosi e guida il collaudo.
+1. l'agente del proprietario prende la struttura dalla repo ed esegue l'installer;
+2. lo stesso agente lavora sulla cartella installata, completa la diagnosi e guida il collaudo.
 
-Questa separazione rispetta le protezioni che alcuni agenti applicano al download e all'esecuzione di software esterno.
+Al proprietario restano le conferme di macOS, l'importazione del Comando Rapido e la prova con il microfono.
 
-## Passaggio del proprietario
+## Passaggio dell'agente
 
-1. Apri il link alla versione esatta indicata da Sal.
-2. Verifica che la pagina GitHub mostri il proprietario `salChiarenza` e la repo `voce`.
-3. Scarica il file ZIP indicato.
-4. Apri Download ed estrai tutto il contenuto.
-5. Entra nella cartella estratta e poi in `mac`.
-6. Fai doppio clic su `Installa Voce.command`.
-7. Conferma l'apertura se macOS mostra un avviso.
-8. Lascia aperta la finestra fino al messaggio `Installazione completata`.
+1. Verifica che Git sia disponibile e installalo se manca.
+2. Prendi la struttura dalla repo pubblica dentro la cartella madre del proprietario:
+
+```text
+git clone https://github.com/salChiarenza/voce.git "$HOME/<cartella madre>/voce"
+```
+
+3. Entra nella copia appena creata e poi in `mac`.
+4. Esegui `install.sh` e resta sulla finestra fino al messaggio `Installazione completata`.
+5. Chiedi al proprietario di concedere microfono e accessibilita' quando macOS li richiede, indicando con precisione cosa deve autorizzare.
+6. Se l'installazione si interrompe, leggi il messaggio nella finestra, correggi la causa ed esegui di nuovo `install.sh`.
+
+Una copia della repo già presente sul computer si aggiorna con `git pull` invece di essere clonata di nuovo.
 
 L'installer crea o aggiorna:
 
@@ -70,7 +75,9 @@ log del proprietario.
    `voce_hook.py --check-profile` con l'interprete della cartella `.venv`.
    Il risultato deve essere `FOTOCOPIA_SAL_OK`.
 8. Guida la prova reale in un campo di testo con Cmd destro e verifica il pannello `salchiarenza.ai`.
-9. Prova Option + freccia sinistra per la voce e Cmd destro + Option per la modalita' mani libere.
+9. Prova Option + freccia sinistra per la voce: l'accensione deve dire
+   `Voce AI` e `audio sintetico`, mentre la pill e il menu devono mostrare
+   `AI`. Prova anche Cmd destro + Option per la modalita' mani libere.
 10. Per Codex fai aprire `/hooks` al proprietario, verifica il comando
     `voce_hook.py` e chiedi la fiducia esplicita se richiesta.
 11. Prova una risposta completa dell'agente e verifica che venga letta davvero
@@ -105,9 +112,10 @@ Mostra al proprietario:
 - dettatura con Cmd destro;
 - pannello `salchiarenza.ai`;
 - voce agenti e mani libere;
+- avviso `Voce AI` e `audio sintetico` verificato all'accensione;
 - collegamento configurato a Claude Code o Codex e prova audio reale;
 - `FOTOCOPIA_SAL_OK`;
 - dati personali precedenti conservati;
 - eventuale gesto umano ancora richiesto.
 
-Dopo l'approvazione del proprietario, invia davvero il rapporto a `sal@salchiarenza.ai` e archivia l'email di consegna.
+Il rapporto resta al proprietario. Dopo la sua approvazione archivia l'email di consegna e chiudi il lavoro sul suo computer.

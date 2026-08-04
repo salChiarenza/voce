@@ -851,10 +851,10 @@ def commuta_voce() -> None:
     try:
         if FLAG_VOICE_ON.exists():
             FLAG_VOICE_ON.unlink()
-            stato = "Voce spenta"
+            stato = "Voce AI spenta"
         else:
             FLAG_VOICE_ON.touch()
-            stato = "Voce accesa"
+            stato = "Voce AI accesa. Le risposte dell'agente sono audio sintetico."
         logging.info(stato)
         pronuncia(stato)
     except Exception:
@@ -1013,7 +1013,7 @@ def main() -> None:
     )
     print("Voice Dettatura Windows v1.3")
     print("Ctrl destro: tieni premuto, parla, rilascia -> il testo viene incollato.")
-    print("Tasto Menu: accende/spegne la voce agenti (legge le risposte ad alta voce).")
+    print("Tasto Menu: accende/spegne Voce AI (le risposte sono audio sintetico).")
     print("Chiudi questa finestra per fermare la dettatura.")
     allinea_volume_ingresso()  # ingresso basso = app muta senza motivo apparente
     threading.Thread(target=worker, daemon=True).start()

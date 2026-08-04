@@ -9,7 +9,7 @@ SHORTCUT_NAME="Voce LeaderAI firmato"
 SHORTCUT_FILE="$SHORTCUT_NAME.shortcut"
 
 [ -f "$VERSION_FILE" ] || {
-  echo "File VERSION mancante: scarica l'archivio completo della repo Voce."
+  echo "File VERSION mancante: usa la copia completa della repo Voce (git clone)."
   exit 1
 }
 VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
@@ -61,10 +61,10 @@ fi
 if [ -f VOICE_ON ] && [ -f MANI_LIBERE_ON ]; then
   rm -f VOICE_ON MANI_LIBERE_ON
   "$PY" parla.py --stop
-  "$PY" parla.py "Voce spenta. Mani libere disattivate."
+  "$PY" parla.py "Voce AI spenta. Mani libere disattivate."
 else
   touch VOICE_ON MANI_LIBERE_ON
-  "$PY" parla.py "Voce accesa. Mani libere attivate."
+  "$PY" parla.py "Voce AI accesa. Le risposte dell'agente sono audio sintetico. Mani libere attivate."
 fi
 exit 0
 LAUNCHER

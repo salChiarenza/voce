@@ -25,6 +25,13 @@ Se il proprietario aggiunge `"debug_dettature": true`, il log locale conserva
 i testi grezzi e l'apprendimento giornaliero puo' proporre correzioni tramite
 il suo agente. Il comportamento e' disattivato nella configurazione standard.
 
+## Voce AI delle risposte
+
+Quando il proprietario la attiva, Voce legge il testo prodotto da Claude Code
+o Codex con la voce sintetica del sistema. L'accensione lo dichiara a voce e
+la finestra aperta identifica `Voce AI`. L'audio viene riprodotto al momento:
+Voce non lo registra, non lo salva e non crea un file da distribuire.
+
 ## Permessi richiesti
 
 Windows puo' chiedere accesso al microfono o mostrare avvisi di sicurezza per script e file scaricati.

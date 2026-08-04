@@ -71,15 +71,57 @@ def test_collaudo_codex_richiede_fiducia_e_prova_reale():
         assert "risposta completa" in testo
 
 
-def test_email_impone_versione_esatta_e_prova_destinatario():
+def test_email_impone_repo_pubblica_e_prova_destinatario():
     email = (ROOT / "EMAIL_CONSEGNA.md").read_text(encoding="utf-8")
     for frase in (
-        "[LINK_ARCHIVIO_VERIFICATO]",
-        "stesso accesso del destinatario",
+        "git clone https://github.com/salChiarenza/voce.git",
+        "senza credenziali",
         "PROVA_DESTINATARIO_OK",
+        "AI_ACT_CHECK_OK",
         "INVIO_OK",
     ):
         assert frase in email
+
+
+def test_consegna_senza_passaggi_tecnici_del_proprietario():
+    """Il contratto blocca il ritorno delle vecchie istruzioni manuali."""
+    testi = {
+        "AGENTS.md": (ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+        "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+        "EMAIL_CONSEGNA.md": (ROOT / "EMAIL_CONSEGNA.md").read_text(encoding="utf-8"),
+        "mac/README.md": (ROOT / "mac/README.md").read_text(encoding="utf-8"),
+        "mac/INSTALLA_CON_AI.md": (ROOT / "mac/INSTALLA_CON_AI.md").read_text(encoding="utf-8"),
+        "windows/README.md": (ROOT / "windows/README.md").read_text(encoding="utf-8"),
+        "windows/INSTALLA_CON_AI.md": (ROOT / "windows/INSTALLA_CON_AI.md").read_text(encoding="utf-8"),
+    }
+    vietate = ("Apri Download", "Estrai tutto", "estrai tutto", "[LINK_ARCHIVIO_VERIFICATO]", "/archive/")
+    for nome, testo in testi.items():
+        for frase in vietate:
+            assert frase not in testo, f"{nome} chiede ancora un passaggio tecnico al proprietario: {frase}"
+
+    for nome in (
+        "EMAIL_CONSEGNA.md",
+        "mac/INSTALLA_CON_AI.md",
+        "windows/INSTALLA_CON_AI.md",
+    ):
+        assert "git clone https://github.com/salChiarenza/voce.git" in testi[nome]
+
+
+def test_voce_ai_dichiara_audio_sintetico_su_mac_e_windows():
+    mac = (ROOT / "mac/detta.py").read_text(encoding="utf-8")
+    windows = (ROOT / "windows/voice_dettatura_windows.py").read_text(encoding="utf-8")
+    avviso = "Le risposte dell'agente sono audio sintetico."
+    assert avviso in mac
+    assert avviso in windows
+    assert "● AI" in mac
+    assert "🔊 AI" in mac
+
+    for sistema in ("mac", "windows"):
+        privacy = (ROOT / sistema / "PRIVACY.md").read_text(encoding="utf-8")
+        missione = (ROOT / sistema / "INSTALLA_CON_AI.md").read_text(encoding="utf-8")
+        assert "non lo registra" in privacy
+        assert "non lo salva" in privacy
+        assert "audio sintetico" in missione
 
 
 def test_nessuna_configurazione_personale_nella_repo():

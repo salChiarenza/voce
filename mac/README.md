@@ -4,8 +4,8 @@ Dettatura locale per Mac: tieni premuto un tasto, parli, rilasci, e il testo vie
 
 Risorsa gratuita per la community **AI con Sal**.
 
-La versione esatta dell'archivio è nel file `../VERSION` e viene copiata nella
-cartella installata.
+La versione esatta è nel file `../VERSION` e viene copiata nella cartella
+installata.
 
 ## Cosa fa
 
@@ -37,7 +37,7 @@ Il primo download puo' essere pesante: il modello Whisper viene scaricato una vo
 
 ## Installazione
 
-### Metodo consigliato: launcher locale + collaudo con Claude Code o Codex
+### Metodo unico: repo + installazione con Claude Code o Codex
 
 Segui il percorso in:
 
@@ -45,7 +45,7 @@ Segui il percorso in:
 INSTALLA_CON_AI.md
 ```
 
-Scarica la versione verificata, apri la cartella `mac/` e fai doppio clic su `Installa Voce.command`. L'installer copia anche le istruzioni nella cartella locale. Da quel momento l'agente controlla il Mac, conserva cio' che hai personalizzato, ripara la parte locale, collega la voce e chiude con una prova finale.
+Il tuo agente prende dalla repo la versione verificata, esegue `mac/install.sh` e continua dalla cartella locale. Conserva cio' che hai personalizzato, ripara la parte locale, collega la voce e chiude con una prova finale.
 
 L'installer applica la fotocopia funzionale di Sal e conserva glossario,
 sostituzioni apprese e preferenza di log. macOS chiede un solo gesto umano:
@@ -55,12 +55,11 @@ esegue poi `voce_hook.py --check-profile` e chiude solo con
 
 ### Installazione
 
-1. Scarica il file `.zip` dalla versione esatta indicata da Sal.
-2. Estrai lo zip.
-3. Apri la cartella `mac/`.
-4. Fai doppio clic su `Installa Voce.command`.
-5. Attendi il messaggio `Installazione completata`.
-6. Torna nel tuo agente e chiedigli di leggere `~/VoiceDettaturaMac/INSTALLA_CON_AI.md` e completare il collaudo locale.
+1. Apri Claude Code o Codex e fagli leggere l'email di consegna.
+2. L'agente prende la versione verificata dalla repo pubblica.
+3. L'agente esegue `mac/install.sh` e legge `INSTALLA_CON_AI.md` nella cartella installata.
+4. Concedi soltanto i permessi macOS richiesti e prova microfono, tasti e voce.
+5. L'agente ripara gli errori recuperabili e chiude con il collaudo reale.
 
 L'installer crea la cartella:
 
@@ -83,7 +82,7 @@ e aggiunge due launcher sulla Scrivania:
 
 Il testo viene scritto dove hai il cursore.
 
-- `Option + freccia sinistra`: accende o spegne la voce delle risposte.
+- `Option + freccia sinistra`: accende o spegne Voce AI; all'accensione dichiara che le risposte sono audio sintetico.
 - `Cmd destro + Option`: accende o spegne la modalità mani libere.
 - `Voce Attiva Tutto.command`: controllo rapido per accendere o spegnere voce
   agenti e mani libere insieme.

@@ -1,12 +1,22 @@
 # Email di consegna Voce
 
 Questa e' la fonte unica del testo usato per consegnare Voce a un cliente.
-L'installer e l'email evolvono insieme: ogni cambiamento che modifica download,
-launcher, permessi, cartella locale o collaudo aggiorna anche questo file nello
-stesso commit.
+L'installer e l'email evolvono insieme: ogni cambiamento che tocca il modo di
+arrivare sul computer del cliente, il launcher, i permessi, la cartella locale
+o il collaudo aggiorna anche questo file nello stesso commit.
 
 La cronologia Git conserva i miglioramenti. I dati del singolo cliente restano
 nel testo mostrato a Sal e nella copia Gmail inviata.
+
+## Regola fissa: consegna gestita dall'agente
+
+Voce arriva sul computer del cliente attraverso il suo agente, che prende la
+struttura dalla repo pubblica ed esegue l'installer. Il proprietario dà le
+conferme di sistema e fa la prova con il microfono.
+
+La consegna chiude sempre allo stesso modo: l'agente del cliente legge
+`INSTALLA_CON_AI.md` nella cartella installata, completa la missione di
+diagnosi e collaudo e manda il rapporto finale.
 
 ## Dati da compilare e verificare
 
@@ -14,9 +24,9 @@ Prima di mostrare l'email a Sal, sostituisci tutti i campi tra parentesi quadre:
 
 - `[NOME]`: nome del destinatario;
 - `[EMAIL_DESTINATARIO]`: indirizzo verificato del destinatario;
-- `[LINK_ARCHIVIO_VERIFICATO]`: URL esatto del commit o della release provata
-  con lo stesso accesso del destinatario;
 - `[AGENTE_CLIENTE]`: Claude Code oppure Codex, verificato sul computer;
+- `[CARTELLA_MADRE]`: cartella dell'Ecosistema del cliente, letta dal suo
+  stato o da un suo rapporto, in forma portabile;
 - `[CARTELLA_LOCALE]`: percorso creato dall'installer;
 - `[FIRMA_AGENTE]`: agente LeaderAI che ha preparato e verificato la consegna.
 
@@ -33,13 +43,11 @@ un rapporto precedente del cliente.
 Il blocco email e' scritto in Markdown ed e' la fonte unica per entrambe le
 parti del messaggio:
 
-- il corpo HTML mostra il link come testo cliccabile;
-- il fallback `text/plain` contiene lo stesso testo e l'URL esteso;
+- il corpo HTML e il fallback `text/plain` nascono dallo stesso testo;
 - il connettore Gmail riceve il blocco Markdown;
 - `tools/gmail/gmail_send.py` riceve insieme `--body-file` e `--html-file`;
-- nell'HTML il link usa
-  `<a href="[LINK_ARCHIVIO_VERIFICATO]">Scarica Voce Windows</a>` oppure
-  `<a href="[LINK_ARCHIVIO_VERIFICATO]">Scarica Voce Mac</a>`.
+- il comando che il cliente incolla nel suo agente resta testo semplice, uguale
+  in entrambe le parti, così si copia senza sorprese di formattazione.
 
 Prima della composizione apri `commerciale/INDEX.md`, lo stato del cliente e
 verifica quale agente tiene il filo. Cerca poi Gmail con:
@@ -60,53 +68,38 @@ ricerca conferma che quella consegna e' ancora da eseguire.
 ```text
 Ciao [NOME],
 
-con questa email installi la versione verificata di Voce Windows e completi le
-prove insieme a [AGENTE_CLIENTE].
+con questa email attivi Voce su Windows: parli e il testo si scrive da solo,
+dentro [AGENTE_CLIENTE] e in qualsiasi finestra. Il lavoro lo fa il tuo
+[AGENTE_CLIENTE], tu confermi e provi il microfono.
 
-1. [Scarica Voce Windows, versione verificata]([LINK_ARCHIVIO_VERIFICATO]).
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla questo
+messaggio:
 
-2. Apri Download, seleziona il file ZIP e scegli "Estrai tutto".
+Installa Voce LeaderAI su questo computer Windows.
 
-3. Apri la cartella estratta, poi apri la cartella windows.
+Prendi la struttura dalla repo pubblica salChiarenza/voce con questo comando,
+dentro la cartella madre:
+git clone https://github.com/salChiarenza/voce.git "[CARTELLA_MADRE]\voce"
 
-4. Fai doppio clic su install.bat.
+Poi esegui windows\install.bat da quella cartella e resta sulla finestra fino
+al messaggio "Installazione completata". L'installazione crea la cartella
+[CARTELLA_LOCALE] e aggiunge l'icona Voce Dettatura sulla Scrivania.
 
-5. Se Windows mostra una conferma, scegli "Ulteriori informazioni", poi
-"Esegui comunque" e conferma con "Si'".
+Leggi integralmente INSTALLA_CON_AI.md che trovi nella cartella windows e
+completa la sezione "Missione locale di diagnosi e collaudo".
 
-6. Lascia aperta la finestra fino al messaggio "Installazione completata".
-Il primo avvio puo' richiedere piu' tempo per preparare il modello di
-trascrizione.
+Guidami soltanto nei gesti fisici e nelle conferme di Windows. Verifica Git,
+Python e gli altri componenti richiesti, installa da solo quello che serve e
+riprendi da dove ti eri fermato. Quando Windows o l'antivirus chiedono
+un'autorizzazione, dimmi con precisione cosa devo confermare.
 
-Quando compare "Installazione completata", torna in [AGENTE_CLIENTE] e scrivi:
+Chiudi mostrando a me il risultato: icona, Ctrl destro che avvia la dettatura,
+pannello salchiarenza.ai, tasto Menu, voce italiana e una risposta letta
+davvero ad alta voce. Il rapporto resta qui con me e archivia questa email.
 
-Ho avviato personalmente il launcher locale di Voce LeaderAI e
-l'installazione e' terminata.
-
-Lavora ora nella cartella:
-[CARTELLA_LOCALE]
-
-Leggi integralmente INSTALLA_CON_AI.md che trovi nella cartella e completa la
-sezione "Missione locale di diagnosi e collaudo".
-
-Guidami nei gesti fisici e nelle conferme Windows. Correggi direttamente gli
-errori software locali recuperabili, ripeti le prove e chiudi con il rapporto
-finale previsto.
-
-Se la finestra mostra "Installazione interrotta", lasciala aperta e invia
-subito questo messaggio a [AGENTE_CLIENTE]:
-
-Analizza il messaggio visibile nella finestra di installazione di Voce. Guidami
-nella correzione della causa e indicami quando eseguire di nuovo il doppio clic
-su install.bat. Riprendi poi il collaudo dalla cartella
-[CARTELLA_LOCALE].
-
-Al termine [AGENTE_CLIENTE] ti mostrera' il rapporto con icona, Ctrl destro,
-pannello salchiarenza.ai, tasto Menu, voce italiana e una risposta realmente
-letta ad alta voce. Se usi Codex, durante il collaudo aprirai anche `/hooks`
-per verificare e autorizzare il comando Voce.
-Dopo la tua conferma, fagli inviare il rapporto a sal@salchiarenza.ai e fagli
-archiviare questa email.
+Da li' in poi detti tenendo premuto il Ctrl di destra: parli, rilasci, il testo
+compare dove stai scrivendo. Se usi Codex, durante il collaudo aprirai anche
+/hooks per verificare e autorizzare il comando Voce.
 
 A presto,
 
@@ -122,55 +115,40 @@ Sal & [FIRMA_AGENTE]
 ```text
 Ciao [NOME],
 
-con questa email installi la versione verificata di Voce Mac e completi le
-prove insieme a [AGENTE_CLIENTE].
+con questa email attivi Voce sul Mac: parli e il testo si scrive da solo,
+dentro [AGENTE_CLIENTE] e in qualsiasi finestra. Il lavoro lo fa il tuo
+[AGENTE_CLIENTE], tu confermi e provi il microfono.
 
-1. [Scarica Voce Mac, versione verificata]([LINK_ARCHIVIO_VERIFICATO]).
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla questo
+messaggio:
 
-2. Apri Download e fai doppio clic sul file ZIP per estrarlo.
+Installa Voce LeaderAI su questo Mac.
 
-3. Apri la cartella estratta, poi apri la cartella mac.
+Prendi la struttura dalla repo pubblica salChiarenza/voce con questo comando,
+dentro la cartella madre:
+git clone https://github.com/salChiarenza/voce.git "[CARTELLA_MADRE]/voce"
 
-4. Fai doppio clic su "Installa Voce.command".
+Poi esegui mac/install.sh da quella cartella e resta sulla finestra fino al
+messaggio di installazione completata. L'installazione crea la cartella
+[CARTELLA_LOCALE] e i launcher Voce Dettatura e Voce Attiva Tutto.
 
-5. Se macOS mostra una conferma, fai Control-clic sul file, scegli "Apri" e
-conferma di nuovo con "Apri".
+Leggi integralmente INSTALLA_CON_AI.md che trovi nella cartella mac e completa
+la sezione "Missione locale di diagnosi e collaudo".
 
-6. Lascia aperta la finestra fino al messaggio di installazione completata.
-Il primo avvio puo' richiedere piu' tempo per preparare il modello di
-trascrizione.
+Guidami soltanto nei gesti fisici e nelle conferme di macOS, compresi
+microfono, accessibilita' e importazione del Comando Rapido. Verifica Git,
+Python e gli altri componenti richiesti, installa da solo quello che serve e
+riprendi da dove ti eri fermato.
 
-Quando l'installazione termina, torna in [AGENTE_CLIENTE] e scrivi:
+Chiudi mostrando a me il risultato: launcher Voce Dettatura e Voce Attiva
+Tutto, Cmd destro, pannello salchiarenza.ai, stessi tempi e toggle della
+versione di Sal, esito FOTOCOPIA_SAL_OK sul Comando Rapido e una risposta letta
+davvero con la stessa voce. Il rapporto resta qui con me e archivia questa
+email.
 
-Ho avviato personalmente il launcher locale di Voce LeaderAI e
-l'installazione e' terminata.
-
-Lavora ora nella cartella:
-[CARTELLA_LOCALE]
-
-Leggi integralmente INSTALLA_CON_AI.md che trovi nella cartella e completa la
-sezione "Missione locale di diagnosi e collaudo".
-
-Guidami nei gesti fisici e nelle conferme macOS. Correggi direttamente gli
-errori software locali recuperabili, ripeti le prove e chiudi con il rapporto
-finale previsto.
-
-Se la finestra mostra un'interruzione, lasciala aperta e invia subito questo
-messaggio a [AGENTE_CLIENTE]:
-
-Analizza il messaggio visibile nella finestra di installazione di Voce. Guidami
-nella correzione della causa e indicami quando eseguire di nuovo il doppio clic
-su "Installa Voce.command". Riprendi poi il collaudo dalla cartella
-[CARTELLA_LOCALE].
-
-Al termine [AGENTE_CLIENTE] ti mostrera' il rapporto con i launcher `Voce
-Dettatura` e `Voce Attiva Tutto`, Cmd destro, pannello salchiarenza.ai, stessi
-tempi e toggle della versione di Sal, esito `FOTOCOPIA_SAL_OK` sul Comando
-Rapido e una risposta realmente letta con la stessa voce. Se usi Codex,
-durante il collaudo aprirai anche `/hooks` per verificare e autorizzare il
-comando Voce.
-Dopo la tua conferma, fagli inviare il rapporto a sal@salchiarenza.ai e fagli
-archiviare questa email.
+Da li' in poi detti tenendo premuto il Cmd di destra: parli, rilasci, il testo
+compare dove stai scrivendo. Se usi Codex, durante il collaudo aprirai anche
+/hooks per verificare e autorizzare il comando Voce.
 
 A presto,
 
@@ -184,22 +162,29 @@ Sal & [FIRMA_AGENTE]
 2. Cerca `in:sent newer_than:1d to:[EMAIL_DESTINATARIO]` e confronta oggetto,
    sistema, versione e scopo.
 3. Apri lo stato corrente della repo e scegli Windows oppure Mac.
-4. Crea il commit della versione da consegnare.
-5. Costruisci l'URL esatto dell'archivio da quel commit o dalla release.
-6. Scarica l'archivio con lo stesso accesso del destinatario.
-7. Verifica che il launcher e `INSTALLA_CON_AI.md` siano presenti.
-8. Prova il primo avvio sul sistema previsto e registra
-   `PROVA_DESTINATARIO_OK`.
-9. Compila tutti i campi del modello e rileggi ogni link e percorso.
-10. Genera HTML e fallback testuale dalla stessa fonte; nell'HTML il link
-    appare come testo cliccabile.
-11. Controlla `tu`, frasi affermative, firma a due nomi e zero em dash.
-12. Mostra a Sal destinatario, oggetto e testo integrale.
-13. Dopo il suo comando di invio, registra `INVIO_OK` e manda una sola nuova
-   email con oggetto autonomo.
-14. Rileggi la copia in Sent e conferma una sola nuova email per quella
+4. Pubblica su `main` la versione da consegnare: quello che il cliente riceve
+   e' il contenuto pubblico della repo in quel momento.
+5. Leggi la cartella madre del cliente dal suo stato o da un suo rapporto e
+   scrivila in forma portabile.
+6. Clona la repo pubblica senza credenziali, come fa il cliente, e verifica che
+   il launcher e `INSTALLA_CON_AI.md` siano presenti nella cartella del sistema
+   scelto.
+7. Prova il primo avvio sul sistema previsto oppure dichiara nella scheda del
+   cliente cosa resta in carico all'agente del destinatario.
+8. Registra `PROVA_DESTINATARIO_OK`.
+9. Esegui o aggiorna il controllo AI Act del prodotto: registra ruolo, livello
+   di rischio, obblighi di trasparenza e presidio applicato. Registra
+   `AI_ACT_CHECK_OK` solo dopo l'esito.
+10. Compila tutti i campi del modello e rileggi ogni percorso e ogni comando.
+11. Genera HTML e fallback testuale dalla stessa fonte; il comando da incollare
+    resta testo semplice e identico nelle due parti.
+12. Controlla `tu`, frasi affermative, firma a due nomi e zero em dash.
+13. Mostra a Sal destinatario, oggetto e testo integrale.
+14. Dopo il suo comando di invio, registra `INVIO_OK` e manda una sola nuova
+    email con oggetto autonomo.
+15. Rileggi la copia in Sent e conferma una sola nuova email per quella
     consegna.
-15. Applica la label `Clienti`, aggiorna la scheda del cliente e verifica la
+16. Applica la label `Clienti`, aggiorna la scheda del cliente e verifica la
     sua Inbox.
 
 ## Miglioramento continuo
@@ -213,4 +198,4 @@ Quando una consegna incontra un ostacolo:
    l'esperienza del destinatario;
 4. aggiorna i changelog Mac e Windows;
 5. ripeti il percorso completo del destinatario;
-6. pubblica un nuovo commit e usa il nuovo link nell'invio successivo.
+6. pubblica su `main` e riparti dalla repo pubblica nell'invio successivo.
