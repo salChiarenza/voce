@@ -5,6 +5,8 @@
 - All'accensione dichiara che le risposte dell'agente sono audio sintetico.
 - La finestra identifica `Voce AI` quando spiega il tasto Menu.
 - Privacy e collaudo registrano che l'audio e' effimero e non viene salvato.
+- La missione chiude con una sola conferma finale dopo tutte le prove, priva di
+  file o rapporti separati.
 
 ## 1.3.0-rc.5 - 01/08/2026 — nessuna attesa interattiva dell'agente
 

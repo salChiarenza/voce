@@ -43,7 +43,7 @@ Lavora ora nella cartella locale:
 
 Leggi integralmente INSTALLA_CON_AI.md che trovi in quella cartella e completa la sezione "Missione locale di diagnosi e collaudo".
 
-Guidami soltanto nei gesti fisici e nelle conferme Windows. Correggi direttamente gli errori software locali recuperabili e chiudi con il rapporto finale previsto.
+Guidami soltanto nei gesti fisici e nelle conferme Windows. Correggi direttamente gli errori software locali recuperabili e chiudi con la conferma finale prevista.
 ```
 
 ## Missione locale di diagnosi e collaudo
@@ -86,7 +86,7 @@ Alla prima installazione proponi in una sola domanda:
 
 Applica la scelta del proprietario e registrala nel rapporto.
 
-## Rapporto finale
+## Conferma finale
 
 Mostra al proprietario:
 
@@ -101,7 +101,9 @@ Mostra al proprietario:
 - configurazione precedente conservata;
 - eventuale gesto umano ancora richiesto.
 
-Il rapporto resta al proprietario. Dopo la sua approvazione archivia l'email di consegna e chiudi il lavoro sul suo computer.
+Apri con `Perfetto, l'ho fatto. Tutto completato e funzionante.` soltanto dopo
+che tutte le prove sono passate. Poi archivia l'email di consegna e chiudi il
+lavoro sul computer del proprietario.
 
 ## Uso quotidiano
 

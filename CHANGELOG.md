@@ -11,8 +11,9 @@ restano nei changelog [`mac/`](mac/CHANGELOG.md) e
   sistema e la prova con il microfono.
 - Il modello di consegna e le istruzioni Mac e Windows partono dalla repo; un
   test impedisce di riaffidare alla persona passaggi tecnici di consegna.
-- Il rapporto di collaudo resta al proprietario: la consegna si chiude sul suo
-  computer, senza scambi di messaggi verso LeaderAI.
+- La consegna si chiude sul computer del proprietario con una sola conferma
+  finale dopo tutte le prove; nessun file
+  o rapporto separato viene creato.
 - Voce AI dichiara all'accensione che le risposte sono audio sintetico.
 - Sul Mac lo stato attivo mostra `AI`; su Windows lo indica la finestra.
 - Privacy e collaudo chiariscono che l'audio e' riprodotto al momento e non

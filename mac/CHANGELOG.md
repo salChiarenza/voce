@@ -5,6 +5,8 @@
 - All'accensione dichiara che le risposte dell'agente sono audio sintetico.
 - Pill e barra dei menu mostrano `AI` quando la lettura e' attiva.
 - Privacy e collaudo registrano che l'audio e' effimero e non viene salvato.
+- La missione chiude con una sola conferma finale dopo tutte le prove, priva di
+  file o rapporti separati.
 
 ## 1.3.0-rc.5 - 01/08/2026 — testo immediato e significato protetto
 

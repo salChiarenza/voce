@@ -98,10 +98,11 @@ Percorso tecnico richiesto per l'agente del cliente:
    verifica che il testo compaia dove sta il cursore e che il pannello
    `salchiarenza.ai` si veda. Su Mac ottieni `FOTOCOPIA_SAL_OK` e prova
    l'audio; su Windows elenca, fa ascoltare e salva la voce italiana scelta.
-8. **Report finale breve:** versione, installata si/no, dettatura si/no, voce
-   agenti configurata si/no e provata realmente si/no, gate
-   `FOTOCOPIA_SAL_OK` su Mac o voce scelta su Windows, launcher creato si/no,
-   problemi non recuperabili.
+8. **Conferma finale breve:** soltanto dopo il collaudo completo apre con
+   `Perfetto, l'ho fatto. Tutto completato e funzionante.` e riporta versione,
+   dettatura provata, voce agenti provata, gate `FOTOCOPIA_SAL_OK` su Mac o
+   voce scelta su Windows e launcher creato. Un blocco reale produce una sola
+   domanda durante la stessa missione.
 
 ## DIVIETI (qui è dove un agente "crea a cazzo" — NON farlo)
 

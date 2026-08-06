@@ -47,7 +47,7 @@ Lavora ora nella cartella locale:
 
 Leggi integralmente INSTALLA_CON_AI.md che trovi in quella cartella e completa la sezione "Missione locale di diagnosi e collaudo".
 
-Guidami soltanto nei gesti fisici e nelle conferme macOS. Correggi direttamente gli errori software locali recuperabili e chiudi con il rapporto finale previsto.
+Guidami soltanto nei gesti fisici e nelle conferme macOS. Correggi direttamente gli errori software locali recuperabili e chiudi con la conferma finale prevista.
 ```
 
 ## Missione locale di diagnosi e collaudo
@@ -103,7 +103,7 @@ Il profilo Mac da applicare e verificare comprende:
 
 Glossario, sostituzioni apprese e preferenza di log restano del proprietario.
 
-## Rapporto finale
+## Conferma finale
 
 Mostra al proprietario:
 
@@ -118,4 +118,6 @@ Mostra al proprietario:
 - dati personali precedenti conservati;
 - eventuale gesto umano ancora richiesto.
 
-Il rapporto resta al proprietario. Dopo la sua approvazione archivia l'email di consegna e chiudi il lavoro sul suo computer.
+Apri con `Perfetto, l'ho fatto. Tutto completato e funzionante.` soltanto dopo
+che tutte le prove sono passate. Poi archivia l'email di consegna e chiudi il
+lavoro sul computer del proprietario.
