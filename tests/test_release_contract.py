@@ -74,7 +74,9 @@ def test_collaudo_codex_richiede_fiducia_e_prova_reale():
 def test_email_impone_repo_pubblica_e_prova_destinatario():
     email = (ROOT / "EMAIL_CONSEGNA.md").read_text(encoding="utf-8")
     for frase in (
-        "git clone https://github.com/salChiarenza/voce.git",
+        "https://github.com/salChiarenza/voce",
+        "windows/INSTALLA_CON_AI.md",
+        "mac/INSTALLA_CON_AI.md",
         "senza credenziali",
         "PROVA_DESTINATARIO_OK",
         "AI_ACT_CHECK_OK",
@@ -99,12 +101,22 @@ def test_consegna_senza_passaggi_tecnici_del_proprietario():
         for frase in vietate:
             assert frase not in testo, f"{nome} chiede ancora un passaggio tecnico al proprietario: {frase}"
 
-    for nome in (
-        "EMAIL_CONSEGNA.md",
-        "mac/INSTALLA_CON_AI.md",
-        "windows/INSTALLA_CON_AI.md",
-    ):
+    assert "https://github.com/salChiarenza/voce" in testi["EMAIL_CONSEGNA.md"]
+    for nome in ("mac/INSTALLA_CON_AI.md", "windows/INSTALLA_CON_AI.md"):
         assert "git clone https://github.com/salChiarenza/voce.git" in testi[nome]
+
+
+def test_consegna_resta_una_missione_unica_fino_alla_prova():
+    email = (ROOT / "EMAIL_CONSEGNA.md").read_text(encoding="utf-8")
+    assert email.count("------------------------------------------------------------") >= 4
+    assert "Continua nella stessa missione" in email
+
+    for sistema in ("mac", "windows"):
+        missione = (ROOT / sistema / "INSTALLA_CON_AI.md").read_text(encoding="utf-8")
+        assert "Continuazione automatica dopo l'installazione" in missione
+        assert "prosegui nella stessa sessione" in missione
+        assert "Messaggio diretto per l'agente dopo l'installazione" not in missione
+        assert "Invia questo messaggio direttamente" not in missione
 
 
 def test_voce_ai_dichiara_audio_sintetico_su_mac_e_windows():

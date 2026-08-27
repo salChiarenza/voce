@@ -1,5 +1,13 @@
 # Changelog
 
+## Consegna - 27/08/2026 — una sola missione fino alla prova
+
+- Il messaggio per l'agente sta fra due righe di trattini: il proprietario vede
+  con precisione cosa copiare.
+- Dopo l'installazione lo stesso agente prosegue nella medesima sessione fino
+  alla prova reale: eliminato il secondo messaggio che il proprietario doveva
+  reinviare all'agente.
+
 ## 1.3.0-rc.6 - 03/08/2026 — Voce AI riconoscibile
 
 - All'accensione dichiara che le risposte dell'agente sono audio sintetico.

@@ -7,7 +7,7 @@ Voce arriva dalla repo pubblica `salChiarenza/voce`. Il percorso separa due mome
 
 Al proprietario restano le conferme di macOS, l'importazione del Comando Rapido e la prova con il microfono.
 
-## Passaggio dell'agente
+## Missione unica dell'agente
 
 1. Verifica che Git sia disponibile e installalo se manca.
 2. Prendi la struttura dalla repo pubblica dentro la cartella madre del proprietario:
@@ -35,20 +35,12 @@ e aggiunge sulla Scrivania:
 - `Voce Attiva Tutto.command`, un clic per avviare e commutare voce agenti e
   mani libere.
 
-## Messaggio diretto per l'agente dopo l'installazione
+## Continuazione automatica dopo l'installazione
 
-Invia questo messaggio direttamente nel tuo Claude Code o Codex:
-
-```text
-Ho avviato personalmente il launcher locale di Voce LeaderAI e la finestra di installazione ha terminato il lavoro.
-
-Lavora ora nella cartella locale:
-~/VoiceDettaturaMac
-
-Leggi integralmente INSTALLA_CON_AI.md che trovi in quella cartella e completa la sezione "Missione locale di diagnosi e collaudo".
-
-Guidami soltanto nei gesti fisici e nelle conferme macOS. Correggi direttamente gli errori software locali recuperabili e chiudi con la conferma finale prevista.
-```
+Dopo il messaggio `Installazione completata`, prosegui nella stessa sessione:
+entra nella cartella locale qui sotto e completa subito la missione di diagnosi
+e prova. Il percorso usa un solo messaggio iniziale. Al proprietario chiedi
+soltanto i gesti fisici e le conferme di macOS nel momento in cui servono.
 
 ## Missione locale di diagnosi e collaudo
 
@@ -116,7 +108,7 @@ Mostra al proprietario:
 - collegamento configurato a Claude Code o Codex e prova audio reale;
 - `FOTOCOPIA_SAL_OK`;
 - dati personali precedenti conservati;
-- eventuale gesto umano ancora richiesto.
+- gesti umani richiesti e completati durante la prova.
 
 Apri con `Perfetto, l'ho fatto. Tutto completato e funzionante.` soltanto dopo
 che tutte le prove sono passate. Poi archivia l'email di consegna e chiudi il

@@ -27,7 +27,6 @@ Prima di mostrare l'email a Sal, sostituisci tutti i campi tra parentesi quadre:
 - `[AGENTE_CLIENTE]`: Claude Code oppure Codex, verificato sul computer;
 - `[CARTELLA_MADRE]`: cartella dell'Ecosistema del cliente, letta dal suo
   stato o da un suo rapporto, in forma portabile;
-- `[CARTELLA_LOCALE]`: percorso creato dall'installer;
 - `[FIRMA_AGENTE]`: agente LeaderAI che ha preparato e verificato la consegna.
 
 Percorsi standard:
@@ -74,13 +73,19 @@ Ciao [NOME],
 installiamo Voce: parli e il testo si scrive da solo, dentro [AGENTE_CLIENTE] e
 in qualsiasi finestra.
 
-Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e scrivigli questo:
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e copia soltanto il testo
+fra le due righe:
 
-Installa Voce LeaderAI da github.com/salChiarenza/voce, cartella windows.
-Leggi INSTALLA_CON_AI.md ed esegui tutto fino al collaudo con me.
+------------------------------------------------------------
+Installa o aggiorna Voce LeaderAI dalla repo pubblica
+https://github.com/salChiarenza/voce, usando la cartella windows. Leggi prima
+AGENTS.md e poi windows/INSTALLA_CON_AI.md. Esegui tu diagnosi, installazione,
+riparazione e prova reale. Continua nella stessa missione finche' dettatura e
+voce dell'agente funzionano davvero con me.
+------------------------------------------------------------
 
-Fa tutto lui. A te servono 20 minuti, il microfono collegato e qualche conferma
-di Windows che ti chiedera' lui.
+[AGENTE_CLIENTE] gestisce tutto il lavoro. A te servono 20 minuti, il microfono
+collegato e qualche conferma di Windows che ti chiedera' lui.
 
 A presto,
 
@@ -99,13 +104,19 @@ Ciao [NOME],
 installiamo Voce: parli e il testo si scrive da solo, dentro [AGENTE_CLIENTE] e
 in qualsiasi finestra.
 
-Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e scrivigli questo:
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e copia soltanto il testo
+fra le due righe:
 
-Installa Voce LeaderAI da github.com/salChiarenza/voce, cartella mac.
-Leggi INSTALLA_CON_AI.md ed esegui tutto fino al collaudo con me.
+------------------------------------------------------------
+Installa o aggiorna Voce LeaderAI dalla repo pubblica
+https://github.com/salChiarenza/voce, usando la cartella mac. Leggi prima
+AGENTS.md e poi mac/INSTALLA_CON_AI.md. Esegui tu diagnosi, installazione,
+riparazione e prova reale. Continua nella stessa missione finche' dettatura e
+voce dell'agente funzionano davvero con me.
+------------------------------------------------------------
 
-Fa tutto lui. A te servono 20 minuti, il microfono collegato e qualche
-autorizzazione del Mac che ti chiedera' lui.
+[AGENTE_CLIENTE] gestisce tutto il lavoro. A te servono 20 minuti, il microfono
+collegato e qualche autorizzazione del Mac che ti chiedera' lui.
 
 A presto,
 
@@ -115,14 +126,18 @@ Sal & [FIRMA_AGENTE]
 ## Prova di leggibilita' (gate, precede ogni altro controllo)
 
 L'email di consegna sta in una schermata e dice tre cose: cosa ottiene la
-persona, la frase esatta da dare al suo agente, cosa serve a lei. I passaggi
-tecnici vivono in `INSTALLA_CON_AI.md` dentro la repo, dove li legge l'agente.
+persona, la frase esatta da dare al suo agente, cosa serve a lei. Il testo da
+copiare e' delimitato da due righe. I passaggi tecnici vivono in
+`INSTALLA_CON_AI.md` dentro la repo, dove li legge l'agente. Lo stesso agente
+prosegue fino alla prova finale: il cliente non riceve un secondo messaggio da
+copiare durante il lavoro.
 
 Prima di ogni invio rispondi a queste tre domande guardando il testo finito:
 
 1. Il destinatario capisce al primo colpo qual e' il suo unico gesto?
 2. Il testo sta in una schermata, senza scorrere?
-3. Ogni riga aggiunta serve alla persona, oppure ripete quello che l'agente
+3. Il confine del testo da copiare si vede senza doverlo interpretare?
+4. Ogni riga aggiunta serve alla persona, oppure ripete quello che l'agente
    trova gia' nella repo?
 
 Una risposta negativa si corregge tagliando. Le lezioni delle consegne passate

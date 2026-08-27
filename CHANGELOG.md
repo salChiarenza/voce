@@ -4,6 +4,13 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## Consegna - 27/08/2026
+
+- L'email mostra un solo blocco delimitato da copiare nell'agente del cliente.
+- Lo stesso agente prende la repo, installa, ripara e prova Voce nella medesima
+  sessione: durante il lavoro non richiede un secondo messaggio al proprietario.
+- Il controllo di release blocca il ritorno del vecchio passaggio intermedio.
+
 ## 1.3.0-rc.6 - 04/08/2026
 
 - L'agente del cliente prende la struttura dalla repo pubblica, esegue

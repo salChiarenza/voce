@@ -7,7 +7,7 @@ Voce arriva dalla repo pubblica `salChiarenza/voce`. Il percorso separa due mome
 
 Al proprietario restano le conferme di Windows e la prova con il microfono. L'installazione avviene nel profilo Windows dell'utente tramite `install.bat`.
 
-## Passaggio dell'agente
+## Missione unica dell'agente
 
 1. Verifica che Git sia disponibile e installalo se manca.
 2. Prendi la struttura dalla repo pubblica dentro la cartella madre del proprietario:
@@ -31,20 +31,12 @@ L'installer crea o aggiorna:
 
 e aggiunge l'icona **Voce Dettatura** sulla Scrivania e nel Menu Start.
 
-## Messaggio diretto per l'agente dopo l'installazione
+## Continuazione automatica dopo l'installazione
 
-Invia questo messaggio direttamente nel tuo Claude Code o Codex:
-
-```text
-Ho avviato personalmente il launcher locale di Voce LeaderAI e la finestra di installazione ha terminato il lavoro.
-
-Lavora ora nella cartella locale:
-%USERPROFILE%\VoiceDettaturaWindows
-
-Leggi integralmente INSTALLA_CON_AI.md che trovi in quella cartella e completa la sezione "Missione locale di diagnosi e collaudo".
-
-Guidami soltanto nei gesti fisici e nelle conferme Windows. Correggi direttamente gli errori software locali recuperabili e chiudi con la conferma finale prevista.
-```
+Dopo il messaggio `Installazione completata`, prosegui nella stessa sessione:
+entra nella cartella locale qui sotto e completa subito la missione di diagnosi
+e prova. Il percorso usa un solo messaggio iniziale. Al proprietario chiedi
+soltanto i gesti fisici e le conferme di Windows nel momento in cui servono.
 
 ## Missione locale di diagnosi e collaudo
 
@@ -92,7 +84,8 @@ Alla prima installazione proponi in una sola domanda:
 - voce agenti inizialmente spenta;
 - scelta guidata della voce italiana percepita come piu' naturale.
 
-Applica la scelta del proprietario e registrala nel rapporto.
+Applica la scelta del proprietario, salvala nella configurazione locale e
+mostrala nella conferma finale.
 
 ## Conferma finale
 
@@ -107,7 +100,7 @@ Mostra al proprietario:
 - collegamento configurato a Claude Code o Codex e prova audio reale;
 - voce italiana scelta;
 - configurazione precedente conservata;
-- eventuale gesto umano ancora richiesto.
+- gesti umani richiesti e completati durante la prova.
 
 Apri con `Perfetto, l'ho fatto. Tutto completato e funzionante.` soltanto dopo
 che tutte le prove sono passate. Poi archivia l'email di consegna e chiudi il
