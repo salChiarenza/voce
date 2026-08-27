@@ -9,6 +9,13 @@
 - La missione locale tratta l'antivirus come prima causa quando lo scaricamento
   della voce si ferma, con la misura host per host della catena dei certificati.
   Origine: consegna Windows del 28/07/2026 fermata da Avast su questo punto.
+- Controllo AI Act aggiornato per questa consegna. Ruolo LeaderAI: fornitore.
+  Prodotto: trascrizione vocale locale e lettura ad alta voce delle risposte
+  dell'agente, fuori dagli usi ad alto rischio dell'Allegato III. Obbligo di
+  trasparenza sull'audio sintetico presidiato dalla 1.3.0-rc.6: all'accensione
+  la finestra dichiara `Voce AI` e `audio sintetico`. Audio effimero, elaborato
+  sul computer del proprietario, come dichiara `PRIVACY.md`. Esito
+  `AI_ACT_CHECK_OK`.
 
 ## 1.3.0-rc.6 - 03/08/2026 — Voce AI riconoscibile
 
