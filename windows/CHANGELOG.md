@@ -1,5 +1,15 @@
 # Changelog
 
+## Consegna - 27/08/2026 — l'email dice dove finisce il testo da incollare
+
+- Il messaggio per l'agente sta fra due righe di trattini: il confine di cosa
+  copiare si vede a occhio. Le frasi rivolte alla persona restano fuori.
+- L'email dichiara in apertura i 20 minuti e il microfono collegato, e avvisa
+  che Windows e l'antivirus chiederanno qualche autorizzazione.
+- La missione locale tratta l'antivirus come prima causa quando lo scaricamento
+  della voce si ferma, con la misura host per host della catena dei certificati.
+  Origine: consegna Windows del 28/07/2026 fermata da Avast su questo punto.
+
 ## 1.3.0-rc.6 - 03/08/2026 — Voce AI riconoscibile
 
 - All'accensione dichiara che le risposte dell'agente sono audio sintetico.

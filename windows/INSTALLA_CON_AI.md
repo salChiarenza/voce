@@ -72,7 +72,15 @@ Obiettivo: portare Voce fino a una prova reale, conservando la configurazione pe
     davvero con la voce scelta. Il solo `--check-hooks` prova la configurazione,
     non l'esecuzione autorizzata.
 12. Quando Windows richiede microfono o altre conferme, indica al proprietario il gesto preciso e riprendi il collaudo subito dopo.
-13. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
+13. Se lo scaricamento del modello della voce fallisce, tratta l'antivirus come
+    prima causa: gli scudi web e posta intercettano il traffico e lo firmano con
+    una radice propria. Misura la catena host per host su `github.com`,
+    `raw.githubusercontent.com` e `huggingface.co`, distingui la radice fidata
+    da quella non fidata e riprova con un canale che usa l'archivio certificati
+    di Windows. Quando resta necessaria una scelta del proprietario, indica il
+    percorso esatto dentro il suo antivirus e l'esclusione da aggiungere.
+    Origine: consegna Windows del 28/07/2026 fermata da Avast su questo punto.
+14. Ripara gli errori software locali recuperabili, ripeti la prova interessata e chiudi quando gli esiti sono verificati.
 
 ## Profilo LeaderAI consigliato
 

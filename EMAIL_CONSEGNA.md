@@ -47,7 +47,10 @@ parti del messaggio:
 - il connettore Gmail riceve il blocco Markdown;
 - `tools/gmail/gmail_send.py` riceve insieme `--body-file` e `--html-file`;
 - il comando che il cliente incolla nel suo agente resta testo semplice, uguale
-  in entrambe le parti, così si copia senza sorprese di formattazione.
+  in entrambe le parti, così si copia senza sorprese di formattazione;
+- il comando da incollare sta fra due righe di trattini e contiene soltanto le
+  istruzioni dirette all'agente. Le frasi rivolte alla persona restano fuori dal
+  blocco, così il confine di cosa copiare resta visibile a occhio.
 
 Prima della composizione apri `commerciale/INDEX.md`, lo stato del cliente e
 verifica quale agente tiene il filo. Cerca poi Gmail con:
@@ -70,11 +73,16 @@ Ciao [NOME],
 
 con questa email attivi Voce su Windows: parli e il testo si scrive da solo,
 dentro [AGENTE_CLIENTE] e in qualsiasi finestra. Il lavoro lo fa il tuo
-[AGENTE_CLIENTE], tu confermi e provi il microfono.
+[AGENTE_CLIENTE], a te restano le conferme e la prova al microfono.
 
-Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla questo
-messaggio:
+Prenditi 20 minuti tranquilli con il microfono collegato. Durante il lavoro
+Windows e l'antivirus ti chiederanno qualche autorizzazione: il tuo
+[AGENTE_CLIENTE] ti dice volta per volta cosa confermare.
 
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla il testo
+compreso fra le due righe di trattini, trattini esclusi.
+
+------------------------------------------------------------
 Installa Voce LeaderAI su questo computer Windows.
 
 Prendi la struttura dalla repo pubblica salChiarenza/voce con questo comando,
@@ -91,16 +99,18 @@ completa la sezione "Missione locale di diagnosi e collaudo".
 Guidami soltanto nei gesti fisici e nelle conferme di Windows. Verifica Git,
 Python e gli altri componenti richiesti, installa da solo quello che serve e
 riprendi da dove ti eri fermato. Quando Windows o l'antivirus chiedono
-un'autorizzazione, dimmi con precisione cosa devo confermare.
+un'autorizzazione, dimmi con precisione cosa devo confermare. Se lo
+scaricamento della voce si ferma, controlla per primo l'antivirus e dimmi
+l'esclusione esatta da aggiungere.
 
 Chiudi mostrando a me il risultato: icona, Ctrl destro che avvia la dettatura,
 pannello salchiarenza.ai, tasto Menu, voce italiana e una risposta letta
 davvero ad alta voce. Apri con "Perfetto, l'ho fatto. Tutto completato e
-funzionante.", poi archivia questa email.
+funzionante."
+------------------------------------------------------------
 
 Da li' in poi detti tenendo premuto il Ctrl di destra: parli, rilasci, il testo
-compare dove stai scrivendo. Se usi Codex, durante il collaudo aprirai anche
-/hooks per verificare e autorizzare il comando Voce.
+compare dove stai scrivendo.
 
 A presto,
 
@@ -118,11 +128,16 @@ Ciao [NOME],
 
 con questa email attivi Voce sul Mac: parli e il testo si scrive da solo,
 dentro [AGENTE_CLIENTE] e in qualsiasi finestra. Il lavoro lo fa il tuo
-[AGENTE_CLIENTE], tu confermi e provi il microfono.
+[AGENTE_CLIENTE], a te restano le conferme e la prova al microfono.
 
-Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla questo
-messaggio:
+Prenditi 20 minuti tranquilli con il microfono collegato. Durante il lavoro
+macOS ti chiedera' qualche autorizzazione, microfono e accessibilita'
+comprese: il tuo [AGENTE_CLIENTE] ti dice volta per volta cosa confermare.
 
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla il testo
+compreso fra le due righe di trattini, trattini esclusi.
+
+------------------------------------------------------------
 Installa Voce LeaderAI su questo Mac.
 
 Prendi la struttura dalla repo pubblica salChiarenza/voce con questo comando,
@@ -145,11 +160,11 @@ Chiudi mostrando a me il risultato: launcher Voce Dettatura e Voce Attiva
 Tutto, Cmd destro, pannello salchiarenza.ai, stessi tempi e toggle della
 versione di Sal, esito FOTOCOPIA_SAL_OK sul Comando Rapido e una risposta letta
 davvero con la stessa voce. Apri con "Perfetto, l'ho fatto. Tutto completato e
-funzionante.", poi archivia questa email.
+funzionante."
+------------------------------------------------------------
 
 Da li' in poi detti tenendo premuto il Cmd di destra: parli, rilasci, il testo
-compare dove stai scrivendo. Se usi Codex, durante il collaudo aprirai anche
-/hooks per verificare e autorizzare il comando Voce.
+compare dove stai scrivendo.
 
 A presto,
 
