@@ -109,7 +109,14 @@ def test_consegna_senza_passaggi_tecnici_del_proprietario():
 def test_consegna_resta_una_missione_unica_fino_alla_prova():
     email = (ROOT / "EMAIL_CONSEGNA.md").read_text(encoding="utf-8")
     assert email.count("------------------------------------------------------------") >= 4
-    assert "Continua nella stessa missione" in email
+    for frase in (
+        "Con una prova ancora aperta, continua nella stessa missione",
+        "correzione locale sicura",
+        "una sola conferma finale",
+        "una risposta completa",
+    ):
+        assert email.count(frase) >= 2
+    assert len(re.findall(r"suono di\s+avvio e fine\s+dettatura", email)) >= 2
 
     for sistema in ("mac", "windows"):
         missione = (ROOT / sistema / "INSTALLA_CON_AI.md").read_text(encoding="utf-8")

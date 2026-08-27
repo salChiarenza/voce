@@ -80,8 +80,18 @@ fra le due righe:
 Installa o aggiorna Voce LeaderAI dalla repo pubblica
 https://github.com/salChiarenza/voce, usando la cartella windows. Leggi prima
 AGENTS.md e poi windows/INSTALLA_CON_AI.md. Esegui tu diagnosi, installazione,
-riparazione e prova reale. Continua nella stessa missione finche' dettatura e
-voce dell'agente funzionano davvero con me.
+riparazione e prova reale. Quando trovi un errore del software, applica una
+correzione locale sicura, ripeti la prova e prosegui.
+
+La prova finale comprende tutto: l'icona apre Voce; Ctrl destro scrive il
+parlato; il pannello salchiarenza.ai si vede; il suono di avvio e fine
+dettatura si sente; il tasto Menu attiva la voce; una risposta completa
+dell'agente viene letta ad alta voce.
+
+Con una prova ancora aperta, continua nella stessa missione. Chiedimi soltanto
+il gesto fisico o la conferma di Windows che serve, poi riprendi subito. Chiudi
+con una sola conferma finale quando tutte le prove funzionano davvero. Salva le
+prove sul mio computer e archivia questa email.
 ------------------------------------------------------------
 
 [AGENTE_CLIENTE] gestisce tutto il lavoro. A te servono 20 minuti, il microfono
@@ -111,8 +121,19 @@ fra le due righe:
 Installa o aggiorna Voce LeaderAI dalla repo pubblica
 https://github.com/salChiarenza/voce, usando la cartella mac. Leggi prima
 AGENTS.md e poi mac/INSTALLA_CON_AI.md. Esegui tu diagnosi, installazione,
-riparazione e prova reale. Continua nella stessa missione finche' dettatura e
-voce dell'agente funzionano davvero con me.
+riparazione e prova reale. Quando trovi un errore del software, applica una
+correzione locale sicura, ripeti la prova e prosegui.
+
+La prova finale comprende tutto: i pulsanti sulla Scrivania aprono Voce; Cmd
+destro scrive il parlato; il pannello salchiarenza.ai si vede; il suono di
+avvio e fine dettatura si sente; Option + freccia sinistra attiva la voce; Cmd
+destro + Option attiva le mani libere; una risposta completa dell'agente viene
+letta ad alta voce.
+
+Con una prova ancora aperta, continua nella stessa missione. Chiedimi soltanto
+il gesto fisico o l'autorizzazione del Mac che serve, poi riprendi subito.
+Chiudi con una sola conferma finale quando tutte le prove funzionano davvero.
+Salva le prove sul mio computer e archivia questa email.
 ------------------------------------------------------------
 
 [AGENTE_CLIENTE] gestisce tutto il lavoro. A te servono 20 minuti, il microfono
@@ -125,23 +146,28 @@ Sal & [FIRMA_AGENTE]
 
 ## Prova di leggibilita' (gate, precede ogni altro controllo)
 
-L'email di consegna sta in una schermata e dice tre cose: cosa ottiene la
-persona, la frase esatta da dare al suo agente, cosa serve a lei. Il testo da
-copiare e' delimitato da due righe. I passaggi tecnici vivono in
+L'email di consegna separa due livelli: fuori dal blocco la persona vede in una
+schermata cosa ottiene, cosa deve fare e cosa le serve; dentro il blocco
+l'agente riceve i criteri completi di riuscita. Il testo da copiare e'
+delimitato da due righe. I passaggi tecnici vivono in
 `INSTALLA_CON_AI.md` dentro la repo, dove li legge l'agente. Lo stesso agente
 prosegue fino alla prova finale: il cliente non riceve un secondo messaggio da
-copiare durante il lavoro.
+copiare durante il lavoro. La parola `finito` vale soltanto quando tutte le
+funzioni visibili al cliente sono state provate nella condizione reale.
 
 Prima di ogni invio rispondi a queste tre domande guardando il testo finito:
 
 1. Il destinatario capisce al primo colpo qual e' il suo unico gesto?
-2. Il testo sta in una schermata, senza scorrere?
+2. Le frasi rivolte al destinatario, fuori dal blocco, stanno in una schermata?
 3. Il confine del testo da copiare si vede senza doverlo interpretare?
 4. Ogni riga aggiunta serve alla persona, oppure ripete quello che l'agente
    trova gia' nella repo?
+5. Icona o pulsanti, dettatura, pannello, suoni e risposta letta ad alta voce
+   compaiono tutti nella prova finale?
 
-Una risposta negativa si corregge tagliando. Le lezioni delle consegne passate
-entrano in `INSTALLA_CON_AI.md` e nell'installer, mantenendo corta questa email.
+Una risposta negativa si corregge tagliando. I passaggi tecnici delle consegne
+passate entrano in `INSTALLA_CON_AI.md` e nell'installer; nell'email restano il
+gesto del cliente e le prove visibili che definiscono la chiusura.
 
 ## Controllo prima dell'invio
 

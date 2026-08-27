@@ -9,6 +9,10 @@ restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 - L'email mostra un solo blocco delimitato da copiare nell'agente del cliente.
 - Lo stesso agente prende la repo, installa, ripara e prova Voce nella medesima
   sessione: durante il lavoro non richiede un secondo messaggio al proprietario.
+- Le email reali hanno mostrato installazioni chiuse con funzioni ancora aperte.
+  Il modello ora elenca la prova completa: avvio, dettatura, pannello, suoni e
+  risposta dell'agente letta ad alta voce. Una prova aperta mantiene viva la
+  stessa missione.
 - Il controllo di release blocca il ritorno del vecchio passaggio intermedio.
 
 ## 1.3.0-rc.6 - 04/08/2026
