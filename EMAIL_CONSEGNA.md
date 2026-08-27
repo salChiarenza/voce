@@ -71,46 +71,16 @@ ricerca conferma che quella consegna e' ancora da eseguire.
 ```text
 Ciao [NOME],
 
-con questa email attivi Voce su Windows: parli e il testo si scrive da solo,
-dentro [AGENTE_CLIENTE] e in qualsiasi finestra. Il lavoro lo fa il tuo
-[AGENTE_CLIENTE], a te restano le conferme e la prova al microfono.
+installiamo Voce: parli e il testo si scrive da solo, dentro [AGENTE_CLIENTE] e
+in qualsiasi finestra.
 
-Prenditi 20 minuti tranquilli con il microfono collegato. Durante il lavoro
-Windows e l'antivirus ti chiederanno qualche autorizzazione: il tuo
-[AGENTE_CLIENTE] ti dice volta per volta cosa confermare.
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e scrivigli questo:
 
-Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla il testo
-compreso fra le due righe di trattini, trattini esclusi.
+Installa Voce LeaderAI da github.com/salChiarenza/voce, cartella windows.
+Leggi INSTALLA_CON_AI.md ed esegui tutto fino al collaudo con me.
 
-------------------------------------------------------------
-Installa Voce LeaderAI su questo computer Windows.
-
-Prendi la struttura dalla repo pubblica salChiarenza/voce con questo comando,
-dentro la cartella madre:
-git clone https://github.com/salChiarenza/voce.git "[CARTELLA_MADRE]\voce"
-
-Poi esegui windows\install.bat da quella cartella e resta sulla finestra fino
-al messaggio "Installazione completata". L'installazione crea la cartella
-[CARTELLA_LOCALE] e aggiunge l'icona Voce Dettatura sulla Scrivania.
-
-Leggi integralmente INSTALLA_CON_AI.md che trovi nella cartella windows e
-completa la sezione "Missione locale di diagnosi e collaudo".
-
-Guidami soltanto nei gesti fisici e nelle conferme di Windows. Verifica Git,
-Python e gli altri componenti richiesti, installa da solo quello che serve e
-riprendi da dove ti eri fermato. Quando Windows o l'antivirus chiedono
-un'autorizzazione, dimmi con precisione cosa devo confermare. Se lo
-scaricamento della voce si ferma, controlla per primo l'antivirus e dimmi
-l'esclusione esatta da aggiungere.
-
-Chiudi mostrando a me il risultato: icona, Ctrl destro che avvia la dettatura,
-pannello salchiarenza.ai, tasto Menu, voce italiana e una risposta letta
-davvero ad alta voce. Apri con "Perfetto, l'ho fatto. Tutto completato e
-funzionante."
-------------------------------------------------------------
-
-Da li' in poi detti tenendo premuto il Ctrl di destra: parli, rilasci, il testo
-compare dove stai scrivendo.
+Fa tutto lui. A te servono 20 minuti, il microfono collegato e qualche conferma
+di Windows che ti chiedera' lui.
 
 A presto,
 
@@ -126,50 +96,37 @@ Sal & [FIRMA_AGENTE]
 ```text
 Ciao [NOME],
 
-con questa email attivi Voce sul Mac: parli e il testo si scrive da solo,
-dentro [AGENTE_CLIENTE] e in qualsiasi finestra. Il lavoro lo fa il tuo
-[AGENTE_CLIENTE], a te restano le conferme e la prova al microfono.
+installiamo Voce: parli e il testo si scrive da solo, dentro [AGENTE_CLIENTE] e
+in qualsiasi finestra.
 
-Prenditi 20 minuti tranquilli con il microfono collegato. Durante il lavoro
-macOS ti chiedera' qualche autorizzazione, microfono e accessibilita'
-comprese: il tuo [AGENTE_CLIENTE] ti dice volta per volta cosa confermare.
+Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e scrivigli questo:
 
-Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e incolla il testo
-compreso fra le due righe di trattini, trattini esclusi.
+Installa Voce LeaderAI da github.com/salChiarenza/voce, cartella mac.
+Leggi INSTALLA_CON_AI.md ed esegui tutto fino al collaudo con me.
 
-------------------------------------------------------------
-Installa Voce LeaderAI su questo Mac.
-
-Prendi la struttura dalla repo pubblica salChiarenza/voce con questo comando,
-dentro la cartella madre:
-git clone https://github.com/salChiarenza/voce.git "[CARTELLA_MADRE]/voce"
-
-Poi esegui mac/install.sh da quella cartella e resta sulla finestra fino al
-messaggio di installazione completata. L'installazione crea la cartella
-[CARTELLA_LOCALE] e i launcher Voce Dettatura e Voce Attiva Tutto.
-
-Leggi integralmente INSTALLA_CON_AI.md che trovi nella cartella mac e completa
-la sezione "Missione locale di diagnosi e collaudo".
-
-Guidami soltanto nei gesti fisici e nelle conferme di macOS, compresi
-microfono, accessibilita' e importazione del Comando Rapido. Verifica Git,
-Python e gli altri componenti richiesti, installa da solo quello che serve e
-riprendi da dove ti eri fermato.
-
-Chiudi mostrando a me il risultato: launcher Voce Dettatura e Voce Attiva
-Tutto, Cmd destro, pannello salchiarenza.ai, stessi tempi e toggle della
-versione di Sal, esito FOTOCOPIA_SAL_OK sul Comando Rapido e una risposta letta
-davvero con la stessa voce. Apri con "Perfetto, l'ho fatto. Tutto completato e
-funzionante."
-------------------------------------------------------------
-
-Da li' in poi detti tenendo premuto il Cmd di destra: parli, rilasci, il testo
-compare dove stai scrivendo.
+Fa tutto lui. A te servono 20 minuti, il microfono collegato e qualche
+autorizzazione del Mac che ti chiedera' lui.
 
 A presto,
 
 Sal & [FIRMA_AGENTE]
 ```
+
+## Prova di leggibilita' (gate, precede ogni altro controllo)
+
+L'email di consegna sta in una schermata e dice tre cose: cosa ottiene la
+persona, la frase esatta da dare al suo agente, cosa serve a lei. I passaggi
+tecnici vivono in `INSTALLA_CON_AI.md` dentro la repo, dove li legge l'agente.
+
+Prima di ogni invio rispondi a queste tre domande guardando il testo finito:
+
+1. Il destinatario capisce al primo colpo qual e' il suo unico gesto?
+2. Il testo sta in una schermata, senza scorrere?
+3. Ogni riga aggiunta serve alla persona, oppure ripete quello che l'agente
+   trova gia' nella repo?
+
+Una risposta negativa si corregge tagliando. Le lezioni delle consegne passate
+entrano in `INSTALLA_CON_AI.md` e nell'installer, mantenendo corta questa email.
 
 ## Controllo prima dell'invio
 
