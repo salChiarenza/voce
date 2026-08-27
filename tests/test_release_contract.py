@@ -109,6 +109,7 @@ def test_consegna_senza_passaggi_tecnici_del_proprietario():
 def test_consegna_resta_una_missione_unica_fino_alla_prova():
     email = (ROOT / "EMAIL_CONSEGNA.md").read_text(encoding="utf-8")
     assert email.count("------------------------------------------------------------") >= 4
+    assert "20 minuti" not in email
     for frase in (
         "Con una prova ancora aperta, continua nella stessa missione",
         "correzione locale sicura",

@@ -94,8 +94,8 @@ con una sola conferma finale quando tutte le prove funzionano davvero. Salva le
 prove sul mio computer e archivia questa email.
 ------------------------------------------------------------
 
-[AGENTE_CLIENTE] gestisce tutto il lavoro. A te servono 20 minuti, il microfono
-collegato e qualche conferma di Windows che ti chiedera' lui.
+[AGENTE_CLIENTE] gestisce tutto il lavoro. Tieni il microfono collegato e resta
+disponibile per le conferme di Windows che ti chiedera' lui.
 
 A presto,
 
@@ -136,8 +136,8 @@ Chiudi con una sola conferma finale quando tutte le prove funzionano davvero.
 Salva le prove sul mio computer e archivia questa email.
 ------------------------------------------------------------
 
-[AGENTE_CLIENTE] gestisce tutto il lavoro. A te servono 20 minuti, il microfono
-collegato e qualche autorizzazione del Mac che ti chiedera' lui.
+[AGENTE_CLIENTE] gestisce tutto il lavoro. Tieni il microfono collegato e resta
+disponibile per le autorizzazioni del Mac che ti chiedera' lui.
 
 A presto,
 

@@ -13,6 +13,9 @@ restano nei changelog [`mac/`](mac/CHANGELOG.md) e
   Il modello ora elenca la prova completa: avvio, dettatura, pannello, suoni e
   risposta dell'agente letta ad alta voce. Una prova aperta mantiene viva la
   stessa missione.
+- Tolta la promessa fissa dei 20 minuti: il tempo dipende da download, permessi
+  e riparazioni; alla persona si chiede soltanto di restare disponibile per le
+  conferme e la prova fisica.
 - Il controllo di release blocca il ritorno del vecchio passaggio intermedio.
 
 ## 1.3.0-rc.6 - 04/08/2026
