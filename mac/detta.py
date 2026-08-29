@@ -508,6 +508,26 @@ def _ax_valore(elemento, attributo):
     return valore if err == 0 else None
 
 
+def _finestra_bersaglio(ax_app):
+    """La finestra dove mettere il cursore: quella col focus, o in riserva la
+    principale, o la prima della lista. Le app Electron sotto carico a volte
+    non rispondono alla prima lettura (caso reale 29/08 13:42: tre dettature
+    con 'finestra frontale non leggibile' su app con finestre sane): una
+    lettura fallita non deve spegnere la funzione. Torna (finestra, errore)."""
+    err, finestra = AX.AXUIElementCopyAttributeValue(ax_app, AX.kAXFocusedWindowAttribute, None)
+    if err == 0 and finestra is not None:
+        return finestra, 0
+    primo_err = err
+    for attributo in (AX.kAXMainWindowAttribute, "AXWindows"):
+        err2, valore = AX.AXUIElementCopyAttributeValue(ax_app, attributo, None)
+        if err2 == 0 and valore is not None:
+            if attributo == "AXWindows":
+                valore = valore[0] if len(valore) else None
+            if valore is not None:
+                return valore, primo_err
+    return None, primo_err
+
+
 def _ax_geometria(elemento):
     """(x, y, larghezza, altezza) in coordinate globali (origine in alto a
     sinistra: y piu' grande = piu' in basso), o None se illeggibile."""
@@ -574,9 +594,9 @@ def metti_cursore_in_casella(app):
     ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
     if _focus_in_casella(ax_app):
         return  # il cursore e' gia' al posto giusto
-    finestra = _ax_valore(ax_app, AX.kAXFocusedWindowAttribute)
+    finestra, err_focus = _finestra_bersaglio(ax_app)
     if finestra is None:
-        log.info("cursore automatico: finestra frontale non leggibile")
+        log.info("cursore automatico: finestra frontale non leggibile (errore AX %s)", err_focus)
         return
     geo_finestra = _ax_geometria(finestra)
     if geo_finestra is None:
