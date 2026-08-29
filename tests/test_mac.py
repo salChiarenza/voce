@@ -841,3 +841,26 @@ def test_in_zona_scrittura_esclude_le_barre_in_alto():
     # finestra su un monitor sopra (coordinate negative): stesso criterio
     assert not voce_lib.in_zona_scrittura(-950, -1000, 900)
     assert voce_lib.in_zona_scrittura(-150, -1000, 900)
+
+
+def test_rimuovi_eco_glossario_sul_caso_reale():
+    glossario = ["Claude Code", "Codex", "LeaderAI", "salchiarenza.ai"]
+    # caso reale 29/08/2026: il suggerimento colato in testa alla frase
+    assert voce_lib.rimuovi_eco_glossario("Glossario, mi arrendo.", glossario) == "mi arrendo."
+    # eco completo: anche i nomi ricopiati vanno via
+    assert voce_lib.rimuovi_eco_glossario(
+        "Glossario: Claude Code, Codex, LeaderAI, salchiarenza.ai. Ciao a te.", glossario
+    ) == "Ciao a te."
+    # eco puro senza parlato: resta vuoto (scartato a valle come testo vuoto)
+    assert voce_lib.rimuovi_eco_glossario("Glossario: LeaderAI.", glossario) == ""
+
+
+def test_rimuovi_eco_glossario_non_tocca_le_frasi_vere():
+    glossario = ["LeaderAI"]
+    # "glossario" nel corpo della frase resta
+    assert voce_lib.rimuovi_eco_glossario(
+        "Aggiungi al glossario la parola LeaderAI", glossario
+    ) == "Aggiungi al glossario la parola LeaderAI"
+    # "glossario" in apertura seguito da parola normale (niente :/,/.) resta
+    assert voce_lib.rimuovi_eco_glossario("Glossario aggiornato bene", glossario) == "Glossario aggiornato bene"
+    assert voce_lib.rimuovi_eco_glossario("Mi arrendo.", glossario) == "Mi arrendo."

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
+
+- `rimuovi_eco_glossario`: su audio corto Whisper puo' ricopiare il prompt
+  del glossario in testa alla trascrizione (caso reale 13:10: "non lo so, mi
+  arrendo" -> "Glossario, mi arrendo."; l'audio conservato di rc.7 ha
+  permesso di ritrascriverlo e confermare la causa). "Glossario" seguito da
+  `:`/`,`/`.` in apertura e gli eventuali nomi ricopiati vengono rimossi
+  prima delle sostituzioni; un eco puro diventa testo vuoto e si scarta.
+  "Glossario" nel corpo della frase, o seguito da una parola normale, resta.
+
 ## 1.3.0-rc.7 - 29/08/2026 — il click nella casella lo fa l'app
 
 - Cursore automatico via Accessibility: al momento dell'incolla, se nell'app

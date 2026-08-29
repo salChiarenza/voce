@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
+
+- `rimuovi_eco_glossario` (gemella Mac): la parola "Glossario" e i nomi del
+  prompt ricopiati da Whisper in testa alla trascrizione vengono rimossi
+  prima del filtro allucinazioni; il corpo della frase non si tocca.
+
 ## 1.3.0-rc.7 - 29/08/2026 — il click nella casella lo fa l'app
 
 - Cursore automatico via UI Automation (nuova dipendenza `comtypes`): al

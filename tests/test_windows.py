@@ -279,3 +279,23 @@ def test_cursore_automatico_windows_non_blocca_mai_l_incolla():
     # mai impedire l'incolla (comportamento di prima)
     assert "try:" in corpo
     assert "except Exception:" in corpo
+
+
+def test_rimuovi_eco_glossario_gemella_del_mac():
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+
+    spazio = _funzioni_pure_app("rimuovi_eco_glossario")
+    glossario = ["Claude Code", "LeaderAI"]
+    casi = [
+        "Glossario, mi arrendo.",
+        "Glossario: Claude Code, LeaderAI. Ciao a te.",
+        "Glossario: LeaderAI.",
+        "Aggiungi al glossario la parola LeaderAI",
+        "Glossario aggiornato bene",
+        "Mi arrendo.",
+    ]
+    for testo in casi:
+        assert spazio["rimuovi_eco_glossario"](testo, glossario) == \
+            voce_lib.rimuovi_eco_glossario(testo, glossario), testo

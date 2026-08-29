@@ -361,6 +361,29 @@ def glossario_iniziale(cfg):
     return "Glossario: " + ", ".join(voci) + "."
 
 
+def rimuovi_eco_glossario(testo, glossario=()):
+    """Whisper a volte ricopia il suggerimento del glossario in testa alla
+    trascrizione (caso reale 29/08/2026: "non lo so, mi arrendo" diventato
+    "Glossario, mi arrendo."). La parola "Glossario" seguita da :/,/. in
+    apertura non e' mai stata dettata: si toglie, insieme agli eventuali nomi
+    del glossario ricopiati subito dopo. Nel corpo della frase non si tocca
+    niente, e "glossario" seguito da una parola normale resta com'e'."""
+    t = testo.lstrip()
+    eco = re.match(r"(?i)^glossario\s*[:,.]\s*", t)
+    if not eco:
+        return testo
+    t = t[eco.end():]
+    rimosso = True
+    while rimosso:  # l'eco completo ricopia anche i nomi, uno dopo l'altro
+        rimosso = False
+        for voce in glossario:
+            coda = re.match(r"(?i)^" + re.escape(voce) + r"\s*[:,.]\s*", t)
+            if coda:
+                t = t[coda.end():]
+                rimosso = True
+    return t
+
+
 def applica_sostituzioni(testo, sostituzioni):
     """Correzioni ricorrenti 'sbagliato -> giusto', a parola intera e senza
     distinguere maiuscole: quello che il glossario non basta a fissare."""

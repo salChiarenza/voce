@@ -4,6 +4,14 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.8 - 29/08/2026
+
+- Tolto l'eco del glossario: su audio corto Whisper poteva ricopiare il
+  suggerimento in testa alla frase ("non lo so, mi arrendo" diventato
+  "Glossario, mi arrendo.", caso reale scoperto grazie all'audio conservato
+  di rc.7). La parola "Glossario" e i nomi ricopiati in apertura ora vengono
+  rimossi; il corpo della frase non si tocca. Mac e Windows insieme.
+
 ## 1.3.0-rc.7 - 29/08/2026
 
 - Cursore automatico: se nella finestra bersaglio nessuna casella di testo ha

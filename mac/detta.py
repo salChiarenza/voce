@@ -35,7 +35,7 @@ from voce_lib import (
     serve_pulizia, comando_agente, destinazione_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
-    salva_audio_recente,
+    salva_audio_recente, rimuovi_eco_glossario,
 )
 from parla import ferma as ferma_voce, parla as pronuncia
 
@@ -392,7 +392,8 @@ def trascrivi(audio):
                 no_speech, confidenza,
             )
             return ""
-    return applica_sostituzioni(esito["text"].strip(), cfg.get("sostituzioni", {}))
+    testo = rimuovi_eco_glossario(esito["text"].strip(), cfg.get("glossario", []))
+    return applica_sostituzioni(testo, cfg.get("sostituzioni", {}))
 
 
 def app_frontale():
