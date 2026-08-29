@@ -791,3 +791,53 @@ def test_pulisci_con_shortcut_none_su_errore_o_vuoto(monkeypatch):
         return E()  # non scrive nessun output
     monkeypatch.setattr(voce_lib.subprocess, "run", vuoto)
     assert voce_lib.pulisci_con_shortcut("testo", "Voce Pulita", timeout=1) is None
+
+
+def test_ruolo_editabile_riconosce_le_caselle_di_testo():
+    assert voce_lib.ruolo_editabile("AXTextArea")
+    assert voce_lib.ruolo_editabile("AXTextField")
+    assert voce_lib.ruolo_editabile("AXSearchField")
+    assert not voce_lib.ruolo_editabile("AXButton")
+    assert not voce_lib.ruolo_editabile("AXWebArea")
+    assert not voce_lib.ruolo_editabile(None)
+
+
+def test_scegli_casella_prende_la_piu_in_basso_poi_la_piu_larga():
+    # y cresce verso il basso: nelle chat la casella di scrittura sta in fondo
+    assert voce_lib.scegli_casella([]) is None
+    assert voce_lib.scegli_casella([(100, 500), (700, 300)]) == 1
+    assert voce_lib.scegli_casella([(700, 200), (700, 600)]) == 1
+
+
+def test_file_audio_da_eliminare_tiene_solo_le_ultime():
+    nomi = [f"dettatura_2026082{i}_120000.wav" for i in range(5)]
+    assert voce_lib.file_audio_da_eliminare(nomi, 3) == nomi[:2]
+    assert voce_lib.file_audio_da_eliminare(nomi, 10) == []
+    assert voce_lib.file_audio_da_eliminare(nomi, 0) == nomi  # spenta: via tutto
+
+
+def test_salva_audio_recente_scrive_wav_e_ruota(tmp_path):
+    import wave
+    audio = np.zeros(1600, dtype="float32")
+    # spenta di default: non scrive niente e non crea cartelle
+    assert voce_lib.salva_audio_recente(audio, tmp_path / "audio", 0) is None
+    assert not (tmp_path / "audio").exists()
+    percorsi = [voce_lib.salva_audio_recente(audio, tmp_path / "audio", 2) for _ in range(3)]
+    assert all(p is not None for p in percorsi)
+    rimasti = sorted(p.name for p in (tmp_path / "audio").glob("dettatura_*.wav"))
+    assert len(rimasti) == 2
+    assert percorsi[0].name not in rimasti  # la piu' vecchia e' stata eliminata
+    with wave.open(str(percorsi[-1]), "rb") as w:
+        assert w.getframerate() == 16000
+        assert w.getnchannels() == 1
+        assert w.getnframes() == 1600
+
+
+def test_in_zona_scrittura_esclude_le_barre_in_alto():
+    # finestra da y=0 alta 1000: la barra degli indirizzi (y=50) e' esclusa,
+    # la casella della chat in fondo (y=900) e' ammessa
+    assert not voce_lib.in_zona_scrittura(50, 0, 1000)
+    assert voce_lib.in_zona_scrittura(900, 0, 1000)
+    # finestra su un monitor sopra (coordinate negative): stesso criterio
+    assert not voce_lib.in_zona_scrittura(-950, -1000, 900)
+    assert voce_lib.in_zona_scrittura(-150, -1000, 900)

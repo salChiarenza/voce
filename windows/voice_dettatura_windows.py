@@ -110,6 +110,69 @@ def applica_sostituzioni(testo: str, sostituzioni: dict) -> str:
     return testo
 
 
+def scegli_casella(candidati):
+    """Indice della casella migliore tra quelle trovate nella finestra.
+
+    candidati = [(y, larghezza), ...] con y che cresce verso il basso. Nelle
+    chat la casella di scrittura sta in fondo: si prende la piu' in basso, a
+    parita' la piu' larga. None se non c'e' nessuna casella.
+    (Gemella di scegli_casella in mac/voce_lib.py.)"""
+    if not candidati:
+        return None
+    return max(range(len(candidati)), key=lambda i: (candidati[i][0], candidati[i][1]))
+
+
+def in_zona_scrittura(y_casella, y_finestra, altezza_finestra, quota=0.4):
+    """True se la casella sta nella parte bassa della finestra: la casella di
+    scrittura delle chat sta in fondo, mentre in alto ci sono barra degli
+    indirizzi e campi di ricerca che non vanno MAI presi. Meglio nessun click
+    che un click nella barra sbagliata.
+    (Gemella di in_zona_scrittura in mac/voce_lib.py.)"""
+    return y_casella >= y_finestra + altezza_finestra * quota
+
+
+def file_audio_da_eliminare(nomi, massimo):
+    """Quali file audio conservati vanno eliminati per restare entro `massimo`:
+    i nomi contengono il timestamp, quindi l'ordine alfabetico e' l'ordine
+    temporale. Con massimo <= 0 (conservazione spenta) si elimina tutto.
+    (Gemella di file_audio_da_eliminare in mac/voce_lib.py.)"""
+    ordinati = sorted(nomi)
+    if massimo <= 0:
+        return ordinati
+    return ordinati[:-massimo] if len(ordinati) > massimo else []
+
+
+def salva_audio_recente(audio, cartella, massimo, freq=16000):
+    """Salva la dettatura come WAV e tiene solo le ultime `massimo` (le piu'
+    vecchie si eliminano da sole). Tutto resta sul computer del proprietario:
+    serve a riascoltare le frasi capite male e tarare glossario e
+    sostituzioni su casi veri. Spenta di default (`conserva_audio_n` = 0).
+    (Gemella di salva_audio_recente in mac/voce_lib.py.)"""
+    import wave
+    massimo = int(massimo)
+    cartella = Path(cartella)
+    if massimo <= 0:
+        return None
+    cartella.mkdir(exist_ok=True)
+    base = time.strftime("dettatura_%Y%m%d_%H%M%S")
+    nome, progressivo = base + ".wav", 0
+    while (cartella / nome).exists():  # due dettature nello stesso secondo
+        progressivo += 1
+        nome = f"{base}_{progressivo}.wav"
+    dati = np.clip(np.asarray(audio, dtype="float32").reshape(-1), -1.0, 1.0)
+    percorso = cartella / nome
+    with wave.open(str(percorso), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(freq)
+        w.writeframes((dati * 32767).astype("<i2").tobytes())
+    for vecchio in file_audio_da_eliminare(
+        [p.name for p in cartella.glob("dettatura_*.wav")], massimo
+    ):
+        (cartella / vecchio).unlink(missing_ok=True)
+    return percorso
+
+
 def serve_pulizia(testo: str, cfg) -> bool:
     """Detta pulito solo se attivo in config e la dettatura e' lunga: le
     dettature corte (comandi rapidi) devono incollare subito, senza attese."""
@@ -701,6 +764,72 @@ def riattiva_bersaglio(hwnd) -> None:
         logging.exception("impossibile riattivare la finestra bersaglio")
 
 
+# --- cursore automatico nella casella (gemello Mac, richiesta 29/08/2026) ---
+# Riattivare la finestra non basta se dentro nessuna casella di testo ha il
+# focus: il Ctrl+V cadrebbe nel vuoto e il proprietario dovrebbe prendere il
+# mouse. Qui, via UI Automation di Windows, si controlla dove sta il focus e,
+# se non e' una casella, il click nella casella di scrittura lo fa l'app.
+
+_UIA_EDIT, _UIA_DOCUMENT = 50004, 50030  # ControlType: Edit, Document
+_UIA_PROP_CONTROLTYPE = 30003
+_UIA_SCOPE_DISCENDENTI = 4
+
+
+def _client_uia():
+    """Client UI Automation (COM via comtypes), creato al bisogno. None fuori
+    da Windows o senza comtypes: si rinuncia e resta il comportamento di prima."""
+    try:
+        import comtypes.client
+        comtypes.client.GetModule("UIAutomationCore.dll")
+        from comtypes.gen.UIAutomationClient import CUIAutomation, IUIAutomation
+        return comtypes.client.CreateObject(CUIAutomation, interface=IUIAutomation)
+    except Exception:
+        return None
+
+
+def metti_cursore_in_casella(hwnd) -> None:
+    """Se nella finestra bersaglio nessuna casella di testo ha il focus, mette
+    il cursore nella casella di scrittura (la piu' in basso: nelle chat sta in
+    fondo). Qualsiasi intoppo = si lascia tutto com'era.
+    (Gemella di metti_cursore_in_casella in mac/detta.py; da collaudare su
+    PC Windows reale come il resto della versione Windows.)"""
+    if not hwnd or not CFG.get("cursore_automatico", True):
+        return
+    try:
+        uia = _client_uia()
+        if uia is None:
+            return
+        fuoco = uia.GetFocusedElement()
+        if fuoco is not None and fuoco.CurrentControlType in (_UIA_EDIT, _UIA_DOCUMENT):
+            return  # il cursore e' gia' in una casella
+        radice = uia.ElementFromHandle(hwnd)
+        condizione = uia.CreateOrCondition(
+            uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_EDIT),
+            uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_DOCUMENT),
+        )
+        trovate = radice.FindAll(_UIA_SCOPE_DISCENDENTI, condizione)
+        rett_finestra = radice.CurrentBoundingRectangle
+        altezza_finestra = rett_finestra.bottom - rett_finestra.top
+        candidate = []
+        for i in range(trovate.Length):
+            elemento = trovate.GetElement(i)
+            r = elemento.CurrentBoundingRectangle
+            # solo la parte bassa della finestra: in alto ci sono barra degli
+            # indirizzi e campi di ricerca, e un click li' sarebbe un danno vero
+            if not in_zona_scrittura(r.top, rett_finestra.top, altezza_finestra):
+                continue
+            candidate.append((elemento, (r.top, r.right - r.left)))
+        scelta = scegli_casella([geometria for _, geometria in candidate])
+        if scelta is None:
+            logging.info("cursore automatico: nessuna casella di testo nella finestra")
+            return
+        candidate[scelta][0].SetFocus()
+        time.sleep(0.1)
+        logging.info("cursore automatico: messo nella casella di scrittura")
+    except Exception:
+        logging.exception("cursore automatico fallito: incollo dove sta il focus")
+
+
 def stop_recording() -> None:
     global stream, recording, recording_started_at
     if not recording:
@@ -746,6 +875,15 @@ def stop_recording() -> None:
 
 def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
     try:
+        try:
+            conservato = salva_audio_recente(
+                audio, BASE / "audio_recenti",
+                CFG.get("conserva_audio_n", 0), freq=SAMPLE_RATE,
+            )
+            if conservato:
+                logging.info("audio conservato: %s", conservato.name)
+        except Exception:
+            logging.exception("conservazione audio fallita")
         segments, _info = load_model().transcribe(
             audio,
             language=CFG.get("language", "it"),
@@ -767,6 +905,7 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
         if not text:
             return
         riattiva_bersaglio(finestra_bersaglio)
+        metti_cursore_in_casella(finestra_bersaglio)
         paste_text(text)
         # invio automatico: parte sempre. La pausa prima dell'Invio dipende
         # dal contesto: a voce ON e' conversazione vera con l'agente (botta e

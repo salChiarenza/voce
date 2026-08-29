@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -265,6 +266,88 @@ def esegui_sicuro(fn, *args):
         return fn(*args)
     except Exception:
         logging.getLogger("voce").exception("errore in callback voce")
+
+
+# --- cursore automatico: il click nella casella lo fa l'app, non l'utente ---
+# (richiesta 29/08/2026: Sal passa di finestra in finestra e detta; non deve
+# mai prendere il mouse per cliccare nella casella di scrittura.)
+
+RUOLI_CASELLA = {"AXTextField", "AXTextArea", "AXSearchField", "AXComboBox"}
+
+
+def ruolo_editabile(ruolo):
+    """True se il ruolo Accessibility e' una casella dove si puo' scrivere."""
+    return str(ruolo or "") in RUOLI_CASELLA
+
+
+def scegli_casella(candidati):
+    """Indice della casella migliore tra quelle trovate nella finestra.
+
+    candidati = [(y, larghezza), ...] con y che cresce verso il basso (come
+    nelle coordinate Accessibility). Nelle chat la casella di scrittura sta
+    in fondo alla finestra: si prende la piu' in basso, a parita' la piu'
+    larga. None se non c'e' nessuna casella."""
+    if not candidati:
+        return None
+    return max(range(len(candidati)), key=lambda i: (candidati[i][0], candidati[i][1]))
+
+
+def in_zona_scrittura(y_casella, y_finestra, altezza_finestra, quota=0.4):
+    """True se la casella sta nella parte bassa della finestra.
+
+    La casella di scrittura delle chat sta in fondo; le caselle in alto sono
+    barra degli indirizzi del browser o campi di ricerca della toolbar, e non
+    vanno MAI prese (provato su Chrome il 29/08/2026: senza questo filtro il
+    testo sarebbe finito nella barra degli indirizzi). Meglio nessun click
+    che un click nella barra sbagliata."""
+    return y_casella >= y_finestra + altezza_finestra * quota
+
+
+# --- audio conservato: riascoltare le frasi capite male per tarare Voce ---
+
+def file_audio_da_eliminare(nomi, massimo):
+    """Quali file conservati vanno eliminati per restare entro `massimo`.
+
+    I nomi contengono il timestamp, quindi l'ordine alfabetico e' l'ordine
+    temporale: si tolgono i piu' vecchi. Con massimo <= 0 (conservazione
+    spenta) si elimina tutto: nessun audio deve restare indietro."""
+    ordinati = sorted(nomi)
+    if massimo <= 0:
+        return ordinati
+    return ordinati[:-massimo] if len(ordinati) > massimo else []
+
+
+def salva_audio_recente(audio, cartella, massimo, freq=16000):
+    """Salva la dettatura come WAV in `cartella` e tiene solo le ultime
+    `massimo` (le piu' vecchie si eliminano da sole). Tutto resta sul
+    computer: serve a riascoltare le frasi capite male e a tarare glossario
+    e sostituzioni su casi veri, non a memoria. Spenta di default
+    (`conserva_audio_n` = 0): e' una scelta del proprietario.
+    Torna il percorso salvato (None se spenta)."""
+    import wave
+    import numpy as np  # import pigro: l'hook TTS usa voce_lib senza numpy
+    massimo = int(massimo)
+    cartella = Path(cartella)
+    if massimo <= 0:
+        return None
+    cartella.mkdir(exist_ok=True)
+    base = time.strftime("dettatura_%Y%m%d_%H%M%S")
+    nome, progressivo = base + ".wav", 0
+    while (cartella / nome).exists():  # due dettature nello stesso secondo
+        progressivo += 1
+        nome = f"{base}_{progressivo}.wav"
+    dati = np.clip(np.asarray(audio, dtype="float32").reshape(-1), -1.0, 1.0)
+    percorso = cartella / nome
+    with wave.open(str(percorso), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(freq)
+        w.writeframes((dati * 32767).astype("<i2").tobytes())
+    for vecchio in file_audio_da_eliminare(
+        [p.name for p in cartella.glob("dettatura_*.wav")], massimo
+    ):
+        (cartella / vecchio).unlink(missing_ok=True)
+    return percorso
 
 
 # --- glossario e detta pulito: la trascrizione grezza diventa testo curato ---

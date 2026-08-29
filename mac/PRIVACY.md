@@ -24,6 +24,15 @@ Se il proprietario attiva `"debug_dettature": true`, il log locale conserva i
 testi grezzi e l'apprendimento giornaliero puo' proporre correzioni tramite il
 suo agente. Il comportamento e' disattivato nella configurazione standard.
 
+## Audio conservato (opzionale)
+
+Se il proprietario imposta `"conserva_audio_n"` a un numero maggiore di zero,
+le ultime dettature (fino a quel numero) restano come file audio nella
+cartella locale `audio_recenti/`: servono a riascoltare le frasi capite male
+e a migliorare glossario e sostituzioni su casi veri. I file restano sul
+computer, non vengono inviati a nessuno e i piu' vecchi si eliminano da soli.
+Nella configurazione standard l'opzione e' spenta e non viene salvato nulla.
+
 ## Voce AI delle risposte
 
 Quando il proprietario la attiva, Voce legge il testo prodotto da Claude Code

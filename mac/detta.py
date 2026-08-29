@@ -19,6 +19,7 @@ import numpy as np
 import sounddevice as sd
 import mlx_whisper
 import AppKit
+import ApplicationServices as AX
 import Quartz
 from PyObjCTools import AppHelper
 from pynput import keyboard
@@ -26,14 +27,15 @@ from pynput.keyboard import Controller, Key
 
 from voce_lib import (
     carica_config, config_scrivibile, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
-    mani_libere_attive, FLAG_MANI_LIBERE_ON,
+    mani_libere_attive, FLAG_MANI_LIBERE_ON, BASE,
     c_e_voce, aggiorna_scarti_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     diagnosi_audio_muto, GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
     corsia_utilizzabile, registra_esito_corsia, SOGLIA_GUASTI_CORSIA, RIPOSO_CORSIA_SEC,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
     serve_pulizia, comando_agente, destinazione_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
-    impara_sostituzioni,
+    impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
+    salva_audio_recente,
 )
 from parla import ferma as ferma_voce, parla as pronuncia
 
@@ -484,6 +486,118 @@ def riattiva_bersaglio(app, scheda_url=None):
         riattiva_scheda_browser(app, scheda_url)
 
 
+# --- cursore automatico nella casella (richiesta 29/08/2026) ---
+# Sal passa di finestra in finestra e detta al volo: riattivare l'app non
+# basta se dentro la finestra nessuna casella di testo ha il focus, perche'
+# il Cmd+V cadrebbe nel vuoto e lui dovrebbe prendere il mouse e cliccare
+# nella "barretta". Qui, via Accessibility, si guarda dove sta il focus e,
+# se non e' una casella, il click nella casella di scrittura lo fa l'app.
+
+AX_BUDGET_SEC = 0.5     # tempo massimo di ricerca nella finestra
+AX_MAX_ELEMENTI = 600   # elementi visitati al massimo (le pagine web sono foreste)
+
+
+def _ax_valore(elemento, attributo):
+    """Un attributo Accessibility, o None se l'elemento non ce l'ha."""
+    err, valore = AX.AXUIElementCopyAttributeValue(elemento, attributo, None)
+    return valore if err == 0 else None
+
+
+def _ax_geometria(elemento):
+    """(x, y, larghezza, altezza) in coordinate globali (origine in alto a
+    sinistra: y piu' grande = piu' in basso), o None se illeggibile."""
+    pos = _ax_valore(elemento, AX.kAXPositionAttribute)
+    dim = _ax_valore(elemento, AX.kAXSizeAttribute)
+    if pos is None or dim is None:
+        return None
+    ok_p, punto = AX.AXValueGetValue(pos, AX.kAXValueCGPointType, None)
+    ok_d, taglia = AX.AXValueGetValue(dim, AX.kAXValueCGSizeType, None)
+    if not (ok_p and ok_d):
+        return None
+    return punto.x, punto.y, taglia.width, taglia.height
+
+
+def _focus_in_casella(ax_app):
+    """True se l'elemento col focus nell'app e' gia' una casella di testo."""
+    focalizzato = _ax_valore(ax_app, AX.kAXFocusedUIElementAttribute)
+    if focalizzato is None:
+        return False
+    return ruolo_editabile(_ax_valore(focalizzato, AX.kAXRoleAttribute))
+
+
+def _caselle_nella_finestra(finestra):
+    """Tutte le caselle di testo della finestra, con la loro geometria.
+    Visita in ampiezza con tetto di tempo ed elementi: meglio rinunciare
+    (comportamento di prima) che tenere il testo in ostaggio."""
+    da_visitare = collections.deque([finestra])
+    inizio = time.monotonic()
+    visitati = 0
+    caselle = []
+    while da_visitare and visitati < AX_MAX_ELEMENTI and time.monotonic() - inizio < AX_BUDGET_SEC:
+        elemento = da_visitare.popleft()
+        visitati += 1
+        if ruolo_editabile(_ax_valore(elemento, AX.kAXRoleAttribute)):
+            geometria = _ax_geometria(elemento)
+            if geometria:
+                caselle.append((elemento, geometria))
+            continue  # dentro una casella non serve scendere
+        da_visitare.extend(_ax_valore(elemento, AX.kAXChildrenAttribute) or [])
+    return caselle
+
+
+def _click_sintetico(geometria):
+    """Click del programma al centro della casella; poi il puntatore torna
+    dov'era, cosi' Sal non se ne accorge nemmeno."""
+    x, y, larghezza, altezza = geometria
+    centro = (x + larghezza / 2, y + altezza / 2)
+    posizione_prima = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+    for tipo in (Quartz.kCGEventLeftMouseDown, Quartz.kCGEventLeftMouseUp):
+        evento = Quartz.CGEventCreateMouseEvent(None, tipo, centro, Quartz.kCGMouseButtonLeft)
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, evento)
+        time.sleep(0.03)
+    Quartz.CGWarpMouseCursorPosition(posizione_prima)
+
+
+def metti_cursore_in_casella(app):
+    """Se nell'app bersaglio nessuna casella di testo ha il focus, mette il
+    cursore nella casella di scrittura della finestra frontale (nelle chat
+    sta in fondo). Prima per via gentile (focus Accessibility), poi con un
+    click fatto dal programma. Se non trova caselle non tocca niente."""
+    if app is None or not cfg.get("cursore_automatico", True):
+        return
+    log = logging.getLogger("voce")
+    ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
+    if _focus_in_casella(ax_app):
+        return  # il cursore e' gia' al posto giusto
+    finestra = _ax_valore(ax_app, AX.kAXFocusedWindowAttribute)
+    if finestra is None:
+        log.info("cursore automatico: finestra frontale non leggibile")
+        return
+    geo_finestra = _ax_geometria(finestra)
+    if geo_finestra is None:
+        log.info("cursore automatico: geometria della finestra non leggibile")
+        return
+    # solo la parte bassa della finestra: in alto ci sono barra degli
+    # indirizzi e campi di ricerca, e un click li' sarebbe un danno vero
+    caselle = [
+        (el, g) for el, g in _caselle_nella_finestra(finestra)
+        if in_zona_scrittura(g[1], geo_finestra[1], geo_finestra[3])
+    ]
+    scelta = scegli_casella([(g[1], g[2]) for _, g in caselle])
+    if scelta is None:
+        log.info("cursore automatico: nessuna casella di testo nella finestra")
+        return
+    elemento, geometria = caselle[scelta]
+    AX.AXUIElementSetAttributeValue(elemento, AX.kAXFocusedAttribute, True)
+    time.sleep(0.1)
+    if _focus_in_casella(ax_app):
+        log.info("cursore automatico: messo nella casella di scrittura")
+        return
+    _click_sintetico(geometria)
+    time.sleep(0.15)
+    log.info("cursore automatico: click nella casella di scrittura")
+
+
 def incolla(testo):
     """Mette il testo in clipboard, simula Cmd+V, poi ripristina la clipboard."""
     vecchia = subprocess.run(["pbpaste"], capture_output=True).stdout
@@ -651,6 +765,12 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
     si trova ora il focus."""
     log = logging.getLogger("voce")
     try:
+        conservato = esegui_sicuro(
+            salva_audio_recente, audio, BASE / "audio_recenti",
+            cfg.get("conserva_audio_n", 0),
+        )
+        if conservato:
+            log.info("audio conservato: %s", conservato.name)
         with _lock_trascrizione:  # una trascrizione per volta
             eventi.put("trascrivo")
             testo = trascrivi(audio)
@@ -711,6 +831,7 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         _nascondi_o_arma()
         if testo:
             riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
+            esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
             incolla(testo)
             log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
             # invio automatico: parte sempre (indipendente dal toggle voce
@@ -1131,6 +1252,16 @@ def _impara_dagli_errori():
         f.write(oggi)
 
 
+def _apprendimento_periodico():
+    """Il processo vive per giorni: l'apprendimento solo all'avvio non
+    partiva quasi mai (stesso difetto del Comando Rapido cercato solo
+    all'avvio, vedi rc.4). Controllo ogni ora: il gate una-volta-al-giorno
+    sta gia' dentro _impara_dagli_errori."""
+    while True:
+        esegui_sicuro(_impara_dagli_errori)
+        time.sleep(3600)
+
+
 def _scalda_modello():
     """Scalda Whisper in background: cosi' l'hotkey e' attivo SUBITO e non dopo
     i ~10s di caricamento del modello (prima, in quei secondi, premere il tasto
@@ -1185,7 +1316,7 @@ if __name__ == "__main__":
     threading.Thread(target=worker_combo_mani_libere, daemon=True).start()  # Cmd+Option via flag di sistema
     listener = avvia_listener()  # hotkey attivo DA SUBITO
     threading.Thread(target=_scalda_modello, daemon=True).start()  # modello in sottofondo
-    threading.Thread(target=lambda: esegui_sicuro(_impara_dagli_errori), daemon=True).start()
+    threading.Thread(target=_apprendimento_periodico, daemon=True).start()  # una volta al giorno, anche se il processo vive settimane
     print(f"Voce — dettatura attiva (il modello si scalda in sottofondo). "
           f"Tieni premuto [{cfg['hotkey']}] e parla.")
     gestore = GestorePannello.alloc().init()

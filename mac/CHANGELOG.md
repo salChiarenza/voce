@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.3.0-rc.7 - 29/08/2026 — il click nella casella lo fa l'app
+
+- Cursore automatico via Accessibility: al momento dell'incolla, se nell'app
+  bersaglio nessuna casella di testo ha il focus, l'app trova la casella di
+  scrittura della finestra frontale (la piu' in basso), le da' il focus e
+  solo se serve fa un click del programma, riportando poi il puntatore
+  dov'era. Le caselle nella parte alta della finestra non vengono mai prese:
+  provato su Chrome il 29/08, senza questo filtro il testo sarebbe finito
+  nella barra degli indirizzi. Ricerca con tetto di 600 elementi e 0,5s
+  (misurata: 0,04s su Claude e ChatGPT); se non trova una casella sicura non
+  tocca niente, come prima. Interruttore: `cursore_automatico`.
+- Audio conservato opzionale (`conserva_audio_n`, default 0 = spento): le
+  ultime N dettature restano come WAV in `audio_recenti/`, solo sul computer,
+  con rotazione automatica; a opzione spenta non si salva nulla. Serve a
+  riascoltare le frasi capite male e tarare glossario e sostituzioni su casi
+  veri invece che a memoria.
+- Apprendimento sostituzioni: controllo ogni ora col gate giornaliero
+  interno. Prima partiva solo all'avvio, e con un processo che vive giorni
+  non girava quasi mai (stesso difetto della corsia Apple risolto in rc.4).
+- Modello misurato su questo Mac (29/08): turbo 0,64s vs large-v3 1,66s a
+  parita' di trascrizione sulla clip di prova. Si resta su turbo; il
+  riconfronto si fara' sugli audio reali conservati.
+
 ## Consegna - 27/08/2026 — una sola missione fino alla prova
 
 - Il messaggio per l'agente sta fra due righe di trattini: il proprietario vede

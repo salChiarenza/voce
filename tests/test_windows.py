@@ -253,3 +253,29 @@ def test_percorso_interattivo_windows_non_chiama_un_agente():
     corpo = sorgente.split("def transcribe_and_paste", 1)[1].split("\ndef ", 1)[0]
     assert "pulisci_con_agente" not in corpo
     assert "pulizia agente" not in corpo
+
+
+def test_scegli_casella_e_rotazione_audio_gemelle_del_mac():
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+
+    spazio = _funzioni_pure_app("scegli_casella", "file_audio_da_eliminare", "in_zona_scrittura")
+    for caso in ((50, 0, 1000), (900, 0, 1000), (-45, -100, 100), (-20, -100, 100)):
+        assert spazio["in_zona_scrittura"](*caso) == voce_lib.in_zona_scrittura(*caso)
+    casi_caselle = [[], [(100, 500), (700, 300)], [(700, 200), (700, 600)]]
+    for candidati in casi_caselle:
+        assert spazio["scegli_casella"](candidati) == voce_lib.scegli_casella(candidati)
+    nomi = ["a.wav", "b.wav", "c.wav"]
+    for massimo in (0, 2, 10):
+        assert spazio["file_audio_da_eliminare"](nomi, massimo) == \
+            voce_lib.file_audio_da_eliminare(nomi, massimo)
+
+
+def test_cursore_automatico_windows_non_blocca_mai_l_incolla():
+    sorgente = (REPO_ROOT / "windows" / "voice_dettatura_windows.py").read_text(encoding="utf-8")
+    corpo = sorgente.split("def metti_cursore_in_casella", 1)[1].split("\ndef ", 1)[0]
+    # tutto il lavoro UI Automation sta dentro un try: un intoppo non deve
+    # mai impedire l'incolla (comportamento di prima)
+    assert "try:" in corpo
+    assert "except Exception:" in corpo

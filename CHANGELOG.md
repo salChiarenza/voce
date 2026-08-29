@@ -4,6 +4,22 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.7 - 29/08/2026
+
+- Cursore automatico: se nella finestra bersaglio nessuna casella di testo ha
+  il focus, l'app mette da sola il cursore nella casella di scrittura (quella
+  in basso) prima di incollare. Si detta passando di finestra in finestra
+  senza mai prendere il mouse. Le caselle in alto (barra degli indirizzi,
+  campi di ricerca) non vengono mai prese; senza una casella sicura non tocca
+  niente. Interruttore: `cursore_automatico`.
+- Audio conservato opzionale (`conserva_audio_n`, spento di default): le
+  ultime dettature restano come file locali in `audio_recenti/` con rotazione
+  automatica, per riascoltare le frasi capite male e tarare glossario e
+  sostituzioni su casi veri. `PRIVACY.md` aggiornata: niente cambia nella
+  configurazione standard.
+- L'apprendimento giornaliero delle sostituzioni parte anche se il processo
+  resta acceso per giorni (prima solo all'avvio).
+
 ## Consegna - 27/08/2026
 
 - L'email mostra un solo blocco delimitato da copiare nell'agente del cliente.

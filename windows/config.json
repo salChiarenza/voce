@@ -2,6 +2,8 @@
   "hotkey": "ctrl_r",
   "tasto_voce": "menu",
   "invio_automatico": true,
+  "cursore_automatico": true,
+  "conserva_audio_n": 0,
   "invio_automatico_ritardo_sec": 2.5,
   "invio_automatico_ritardo_conversazione_sec": 2.5,
   "voce_nome": "",

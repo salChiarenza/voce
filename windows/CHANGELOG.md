@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0-rc.7 - 29/08/2026 — il click nella casella lo fa l'app
+
+- Cursore automatico via UI Automation (nuova dipendenza `comtypes`): al
+  momento dell'incolla, se nella finestra bersaglio nessuna casella di testo
+  ha il focus, l'app mette il cursore nella casella di scrittura (la piu' in
+  basso). Le caselle nella parte alta della finestra (barra degli indirizzi,
+  campi di ricerca) non vengono mai prese. Qualsiasi intoppo lascia il
+  comportamento precedente. Interruttore: `cursore_automatico`. Come il resto
+  della versione Windows, va visto girare su un PC reale prima di
+  considerarlo stabile.
+- Audio conservato opzionale (`conserva_audio_n`, default 0 = spento): come
+  sul Mac, WAV locali in `audio_recenti/` con rotazione automatica, per
+  tarare glossario e sostituzioni su casi veri.
+
 ## Consegna - 27/08/2026 — l'email dice dove finisce il testo da incollare
 
 - Il messaggio per l'agente sta fra due righe di trattini: il confine di cosa
