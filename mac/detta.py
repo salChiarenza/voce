@@ -494,8 +494,12 @@ def riattiva_bersaglio(app, scheda_url=None):
 # nella "barretta". Qui, via Accessibility, si guarda dove sta il focus e,
 # se non e' una casella, il click nella casella di scrittura lo fa l'app.
 
-AX_BUDGET_SEC = 0.5     # tempo massimo di ricerca nella finestra
-AX_MAX_ELEMENTI = 600   # elementi visitati al massimo (le pagine web sono foreste)
+AX_BUDGET_SEC = 0.5      # tempo massimo di ricerca nella finestra
+# Le pagine web sono foreste: 600 elementi si esaurivano nella struttura di
+# Chrome prima di arrivare alla casella (caso reale 29/08 13:17, "nessuna
+# casella di testo nella finestra"). Misurato ~15.000 elementi/secondo: 4000
+# stanno comodi nel budget di tempo, che resta la vera cintura di sicurezza.
+AX_MAX_ELEMENTI = 4000
 
 
 def _ax_valore(elemento, attributo):
@@ -578,13 +582,25 @@ def metti_cursore_in_casella(app):
     if geo_finestra is None:
         log.info("cursore automatico: geometria della finestra non leggibile")
         return
-    # solo la parte bassa della finestra: in alto ci sono barra degli
-    # indirizzi e campi di ricerca, e un click li' sarebbe un danno vero
-    caselle = [
-        (el, g) for el, g in _caselle_nella_finestra(finestra)
-        if in_zona_scrittura(g[1], geo_finestra[1], geo_finestra[3])
-    ]
-    scelta = scegli_casella([(g[1], g[2]) for _, g in caselle])
+    # Nei browser il focus sta spesso sulla pagina (AXWebArea): si cerca
+    # prima DENTRO la pagina, saltando la struttura del browser; la finestra
+    # intera resta il secondo giro.
+    radici = []
+    focalizzato = _ax_valore(ax_app, AX.kAXFocusedUIElementAttribute)
+    if focalizzato is not None and _ax_valore(focalizzato, AX.kAXRoleAttribute) == "AXWebArea":
+        radici.append(focalizzato)
+    radici.append(finestra)
+    caselle, scelta = [], None
+    for radice in radici:
+        # solo la parte bassa della finestra: in alto ci sono barra degli
+        # indirizzi e campi di ricerca, e un click li' sarebbe un danno vero
+        caselle = [
+            (el, g) for el, g in _caselle_nella_finestra(radice)
+            if in_zona_scrittura(g[1], geo_finestra[1], geo_finestra[3])
+        ]
+        scelta = scegli_casella([(g[1], g[2]) for _, g in caselle])
+        if scelta is not None:
+            break
     if scelta is None:
         log.info("cursore automatico: nessuna casella di testo nella finestra")
         return

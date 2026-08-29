@@ -2,6 +2,14 @@
 
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 
+Aggiornata nello stesso giorno: nel cursore automatico il tetto di ricerca
+sale da 600 a 4000 elementi (misurati ~15.000/secondo: il tempo resta la
+cintura vera) e nei browser, quando il focus sta sulla pagina (AXWebArea),
+la ricerca parte dentro la pagina saltando la struttura del browser. Caso
+reale 13:17: su Gmail in vista elenco l'app ha detto correttamente "nessuna
+casella di testo nella finestra" — li' una casella non esiste; il tetto
+basso pero' avrebbe potuto tagliare pagine grandi con una casella vera.
+
 - `rimuovi_eco_glossario`: su audio corto Whisper puo' ricopiare il prompt
   del glossario in testa alla trascrizione (caso reale 13:10: "non lo so, mi
   arrendo" -> "Glossario, mi arrendo."; l'audio conservato di rc.7 ha
