@@ -236,6 +236,35 @@ def controlla_hook_agenti() -> bool:
     return bool(trovati) and all(trovati)
 
 
+# Finestra entro cui una seconda chiamata con lo STESSO testo e' un doppione.
+# Serve perche' l'evento di fine risposta puo' arrivare due volte a pochi
+# millisecondi (misurato il 30/08/2026: 10 letture doppie su 26). Ogni parla()
+# uccide la lettura in corso ("una voce per volta"), quindi il doppione tronca
+# l'audio subito dopo l'inizio: il guasto che Sal sentiva come voce mozzata.
+FINESTRA_DOPPIONE_SEC = 8.0
+ULTIMA_LETTURA = BASE / "ULTIMA_LETTURA"
+
+
+def gia_letto_da_poco(testo: str) -> bool:
+    """Vero se questo identico testo e' gia' stato mandato in lettura da poco."""
+    import hashlib
+    import time
+
+    impronta = hashlib.sha1(testo.encode("utf-8")).hexdigest()
+    adesso = time.time()
+    try:
+        precedente, istante = ULTIMA_LETTURA.read_text(encoding="utf-8").split(None, 1)
+        doppione = precedente == impronta and (adesso - float(istante)) < FINESTRA_DOPPIONE_SEC
+    except Exception:
+        doppione = False  # nessuno stato leggibile: si legge, il silenzio e' peggio
+    if not doppione:
+        try:
+            ULTIMA_LETTURA.write_text(f"{impronta} {adesso}", encoding="utf-8")
+        except Exception:
+            pass
+    return doppione
+
+
 def main():
     if not voce_attiva():
         traccia("voce spenta, non leggo")
@@ -255,6 +284,9 @@ def main():
             traccia("trascrizione illeggibile")
             return
     if testo:
+        if gia_letto_da_poco(testo):
+            traccia(f"lettura doppia scartata ({len(testo)} caratteri, {origine})")
+            return
         traccia(f"leggo {len(testo)} caratteri ({origine})")
         parla(testo)  # Popen: parte e non aspetta la fine
     else:

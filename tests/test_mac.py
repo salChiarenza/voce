@@ -864,3 +864,24 @@ def test_rimuovi_eco_glossario_non_tocca_le_frasi_vere():
     # "glossario" in apertura seguito da parola normale (niente :/,/.) resta
     assert voce_lib.rimuovi_eco_glossario("Glossario aggiornato bene", glossario) == "Glossario aggiornato bene"
     assert voce_lib.rimuovi_eco_glossario("Mi arrendo.", glossario) == "Mi arrendo."
+
+
+def test_lettura_doppia_ravvicinata_viene_scartata(tmp_path, monkeypatch):
+    """Il doppio evento di fine risposta non deve far partire due voci.
+
+    Ogni parla() uccide la lettura in corso: senza questa guardia la seconda
+    chiamata tronca l'audio appena iniziato (misurato il 30/08/2026)."""
+    monkeypatch.setattr(voce_hook, "ULTIMA_LETTURA", tmp_path / "ULTIMA_LETTURA")
+
+    assert voce_hook.gia_letto_da_poco("stessa risposta") is False
+    assert voce_hook.gia_letto_da_poco("stessa risposta") is True
+    assert voce_hook.gia_letto_da_poco("risposta diversa") is False
+
+
+def test_stessa_risposta_dopo_la_finestra_si_rilegge(tmp_path, monkeypatch):
+    """Passata la finestra, ripetere la stessa frase resta possibile."""
+    monkeypatch.setattr(voce_hook, "ULTIMA_LETTURA", tmp_path / "ULTIMA_LETTURA")
+    monkeypatch.setattr(voce_hook, "FINESTRA_DOPPIONE_SEC", 0.0)
+
+    assert voce_hook.gia_letto_da_poco("stessa risposta") is False
+    assert voce_hook.gia_letto_da_poco("stessa risposta") is False
