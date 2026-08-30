@@ -35,5 +35,6 @@
   "mani_libere_soglia_stop": 0.013,
   "mani_libere_autospegnimento_min": 10,
   "soglia_no_speech": 0.6,
-  "soglia_confidenza": -1.0
+  "soglia_confidenza": -1.0,
+  "modello_ripasso": "mlx-community/whisper-large-v3-turbo"
 }

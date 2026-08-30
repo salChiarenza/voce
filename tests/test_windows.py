@@ -365,3 +365,15 @@ def test_punteggiatura_dettata_windows_gemella_del_mac():
     assert f("prima riga a capo seconda riga") == "prima riga\nSeconda riga"
     assert f("Il punto esclamativo non me lo becca") == "Il punto esclamativo non me lo becca"
     assert f("Non ne vengo a capo") == "Non ne vengo a capo"
+
+
+def test_ripasso_windows_gemello_del_mac():
+    spazio = _funzioni_pure_app(
+        "estrai_grezzi_con_orario", "abbina_audio_a_grezzo", "disaccordi_parole")
+    grezzi = spazio["estrai_grezzi_con_orario"](
+        ["2026-08-30 14:19:32,192 INFO grezzo: Dalle colle è emerso questo."])
+    assert spazio["abbina_audio_a_grezzo"](
+        "dettatura_20260830_141931.wav", grezzi) == "Dalle colle è emerso questo."
+    assert spazio["disaccordi_parole"](
+        "Dalle colle è emerso questo.", "Dalle call è emerso questo."
+    ) == [("colle", "call")]

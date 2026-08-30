@@ -20,6 +20,7 @@ import queue
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import tkinter as tk
@@ -394,7 +395,153 @@ def impara_dagli_errori_giornaliero() -> None:
     if nuove:
         CFG.setdefault("sostituzioni", {}).update(nuove)  # attive da subito
         logging.info("imparate sostituzioni: %s", nuove)
+    # Ripasso degli audio conservati (gemello Mac): processo a parte e
+    # sganciato, cosi' il secondo modello non pesa sulla dettatura in diretta.
+    if int(CFG.get("conserva_audio_n", 0)) > 0:
+        distacco = (
+            getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        )
+        subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "--ripasso"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, creationflags=distacco,
+        )
+        logging.info("ripasso audio avviato in sottofondo")
     marcatore.write_text(oggi)
+
+
+# --- ripasso degli audio conservati (gemello di mac/voce_lib.py) ---
+# Un secondo riconoscitore ritrascrive con calma le dettature conservate;
+# dove i due non sono d'accordo decide l'agente locale, e le correzioni
+# sicure entrano da sole nelle sostituzioni. Da collaudare su PC reale.
+
+def estrai_grezzi_con_orario(righe):
+    """[(orario, testo)] dalle righe di registro 'INFO grezzo: ...'."""
+    import datetime as dt
+    esiti = []
+    for r in righe:
+        if "INFO grezzo: " not in r:
+            continue
+        try:
+            quando = dt.datetime.strptime(r[:19], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        esiti.append((quando, r.split("INFO grezzo: ", 1)[1]))
+    return esiti
+
+
+def abbina_audio_a_grezzo(nome_wav, grezzi, tolleranza_sec=15):
+    """Il testo scritto in diretta per quell'audio (None se non c'e')."""
+    import datetime as dt
+    m = re.match(r"dettatura_(\d{8}_\d{6})", nome_wav)
+    if not m:
+        return None
+    quando = dt.datetime.strptime(m.group(1), "%Y%m%d_%H%M%S")
+    migliore, distanza = None, tolleranza_sec + 1
+    for orario, testo in grezzi:
+        delta = (orario - quando).total_seconds()
+        if 0 <= delta <= tolleranza_sec and delta < distanza:
+            migliore, distanza = testo, delta
+    return migliore
+
+
+def disaccordi_parole(vivo, ripasso, massimo_parole=2):
+    """Coppie (versione_live, versione_ripasso) dove le due trascrizioni non
+    sono d'accordo; punteggiatura e maiuscole non contano."""
+    from difflib import SequenceMatcher
+
+    def chiave(p):
+        return re.sub(r"[^\w]+", "", p.lower())
+    pa, pb = vivo.split(), ripasso.split()
+    sm = SequenceMatcher(None, [chiave(p) for p in pa], [chiave(p) for p in pb])
+    coppie = []
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        if op != "replace" or i2 - i1 > massimo_parole or j2 - j1 > massimo_parole:
+            continue
+        lato_a = " ".join(pa[i1:i2]).strip(".,;:!?\"'")
+        lato_b = " ".join(pb[j1:j2]).strip(".,;:!?\"'")
+        if not lato_a or not lato_b or chiave(lato_a) == chiave(lato_b):
+            continue
+        coppie.append((lato_a, lato_b))
+    return coppie
+
+
+def prompt_arbitro_ripasso(casi):
+    """casi = [(frase_in_diretta, versione_A_live, versione_B_ripasso), ...]."""
+    righe = [
+        "Due riconoscitori vocali hanno trascritto le stesse dettature in",
+        "italiano e su alcune parole non sono d'accordo. Per ogni caso scegli",
+        "la versione giusta nel contesto della frase, SOLO se sei sicuro.",
+        'Rispondi SOLO con un oggetto JSON piatto {"versione sbagliata": "versione giusta"}',
+        "con le coppie di cui sei sicuro (o {} se nessuna). Mai inventare parole terze.",
+        "",
+        "CASI:",
+    ]
+    for frase, viva, seconda in casi:
+        righe.append(f'- frase: "{frase}" | A: "{viva}" | B: "{seconda}"')
+    return "\n".join(righe)
+
+
+def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
+                             modello_ripasso, massimo_file=30, timeout=180):
+    """Gemella Mac: seconda trascrizione (faster-whisper) con la stessa
+    pulizia del vivo, arbitrato dell'agente, unione sicura nel config."""
+    if not comando:
+        return {}
+    righe = []
+    for p in log_paths:
+        try:
+            righe += Path(p).read_text(encoding="utf-8").splitlines()
+        except OSError:
+            pass
+    grezzi = estrai_grezzi_con_orario(righe)
+    if not grezzi:
+        return {}
+    casi = []
+    modello = WhisperModel(modello_ripasso, device="cpu", compute_type="int8")
+    for wav in sorted(Path(cartella).glob("dettatura_*.wav"))[-massimo_file:]:
+        vivo = abbina_audio_a_grezzo(wav.name, grezzi)
+        if not vivo:
+            continue
+        try:
+            segmenti, _ = modello.transcribe(
+                str(wav), language=CFG.get("language", "it"),
+                initial_prompt=glossario_iniziale(CFG),
+            )
+            secondo = " ".join(s.text.strip() for s in segmenti).strip()
+        except Exception:
+            logging.exception("ripasso: trascrizione fallita su %s", wav.name)
+            continue
+        secondo = rimuovi_eco_glossario(secondo, CFG.get("glossario", []))
+        secondo = applica_sostituzioni(secondo, CFG.get("sostituzioni", {}))
+        secondo = converti_punteggiatura_dettata(secondo)
+        for viva, seconda in disaccordi_parole(vivo, secondo):
+            casi.append((vivo, viva, seconda))
+    if not casi:
+        logging.info("ripasso audio: i due riconoscitori sono d'accordo su tutto")
+        return {}
+    try:
+        esito = subprocess.run(
+            comando + [prompt_arbitro_ripasso(casi)],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        proposte = estrai_json(esito.stdout or "")
+        cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
+        if nuove:
+            cfg.setdefault("sostituzioni", {}).update(nuove)
+            Path(config_path).write_text(
+                json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+            logging.info("ripasso audio: imparate %s (da %d disaccordi)", nuove, len(casi))
+        else:
+            logging.info("ripasso audio: %d disaccordi, nessuna correzione sicura", len(casi))
+        return nuove
+    except Exception:
+        logging.exception("ripasso audio fallito")
+        return {}
 
 
 def pulizia_inventa_nomi(grezzo: str, pulito: str, glossario=()) -> bool:
@@ -1254,4 +1401,18 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "--ripasso":
+        logging.basicConfig(
+            filename=str(LOG), level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(message)s",
+        )
+        ripassa_audio_conservati(
+            BASE / "audio_recenti",
+            [LOG] + sorted(BASE.glob(LOG.name + ".*"))[-1:],
+            BASE / "config.json",
+            comando_agente(),
+            CFG.get("modello_ripasso", "small"),
+            massimo_file=int(CFG.get("conserva_audio_n", 0)) or 30,
+        )
+        raise SystemExit(0)
     main()

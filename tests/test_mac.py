@@ -987,3 +987,55 @@ def test_punteggiatura_dettata_non_tocca_il_parlato_normale():
     assert f("Non ne vengo a capo") == "Non ne vengo a capo"
     # "punto" e "virgola" da soli restano parole (li mette gia' Whisper)
     assert f("Il punto e' questo, virgola piu' virgola meno") == "Il punto e' questo, virgola piu' virgola meno"
+
+
+def test_ripasso_abbina_audio_e_grezzo():
+    grezzi = voce_lib.estrai_grezzi_con_orario([
+        "2026-08-30 14:19:32,192 INFO grezzo: Frase giusta della dettatura.",
+        "2026-08-30 14:19:52,850 INFO grezzo: Altra frase.",
+        "riga qualunque senza grezzo",
+    ])
+    assert len(grezzi) == 2
+    assert voce_lib.abbina_audio_a_grezzo(
+        "dettatura_20260830_141931.wav", grezzi) == "Frase giusta della dettatura."
+    # nessun grezzo nei 15 secondi dopo il salvataggio: niente abbinamento
+    assert voce_lib.abbina_audio_a_grezzo("dettatura_20260830_120000.wav", grezzi) is None
+
+
+def test_ripasso_trova_i_disaccordi_veri():
+    assert voce_lib.disaccordi_parole(
+        "Dalle colle è emerso questo.", "Dalle call è emerso questo."
+    ) == [("colle", "call")]
+    # punteggiatura e maiuscole non contano come disaccordo
+    assert voce_lib.disaccordi_parole("Va bene, ok.", "va bene ok") == []
+
+
+def test_ripasso_impara_solo_le_correzioni_sicure(tmp_path, monkeypatch):
+    """Giro completo con audio finto: secondo riconoscitore in disaccordo,
+    arbitro che conferma, correzione scritta nel config personale."""
+    import types
+    cartella = tmp_path / "audio_recenti"
+    cartella.mkdir()
+    (cartella / "dettatura_20260830_141931.wav").touch()
+    log = tmp_path / "voce.log"
+    log.write_text("2026-08-30 14:19:32,000 INFO grezzo: Dalle colle è emerso questo.\n")
+    config = tmp_path / "config.local.json"
+    config.write_text('{"sostituzioni": {}}')
+
+    finto_mlx = types.SimpleNamespace(
+        transcribe=lambda *a, **k: {"text": "Dalle call è emerso questo."})
+    monkeypatch.setitem(sys.modules, "mlx_whisper", finto_mlx)
+    monkeypatch.setattr(
+        voce_lib, "carica_config",
+        lambda: {"lingua": "it", "glossario": [], "sostituzioni": {}})
+
+    class Arbitro:
+        returncode = 0
+        stdout = '{"colle": "call"}'
+    monkeypatch.setattr(voce_lib.subprocess, "run", lambda *a, **k: Arbitro())
+
+    nuove = voce_lib.ripassa_audio_conservati(
+        cartella, [log], config, ["agente-finto"], "modello-finto")
+
+    assert nuove == {"colle": "call"}
+    assert json.loads(config.read_text())["sostituzioni"] == {"colle": "call"}

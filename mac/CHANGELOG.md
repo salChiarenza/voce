@@ -59,6 +59,14 @@ tre cause, tutte con lo stesso effetto (audio mozzato, mai ripreso).
   parte: un Invio su un focus ignoto puo' essere un bottone qualunque.
 - Glossario personale arricchito dai casi veri del giorno (PEC, dettatura,
   call) e sostituzioni per gli errori ricorrenti visti nei log.
+- Ripasso notturno degli audio conservati (`voce_lib.py --ripasso`): una
+  volta al giorno, insieme all'apprendimento esistente, un processo a parte
+  (sganciato, bassa priorita') ritrascrive le dettature conservate con un
+  secondo riconoscitore (`modello_ripasso`, default turbo), le passa dalla
+  stessa pulizia del vivo e, dove i due modelli non sono d'accordo, fa
+  scegliere all'agente locale nel contesto della frase. Le correzioni sicure
+  entrano da sole nelle sostituzioni personali: piu' la usi, piu' ti capisce.
+  Attivo solo con `conserva_audio_n` > 0 (l'audio resta sul computer).
 
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 

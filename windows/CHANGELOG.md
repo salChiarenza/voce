@@ -32,6 +32,10 @@
 - Il modello Windows resta `faster-whisper medium` (limite di sistema, vedi
   lista parita'); il salto di qualita' del Mac (large-v3) non e' replicabile
   li' a parita' di hardware.
+- Ripasso degli audio conservati (gemello Mac, `--ripasso`): secondo
+  riconoscitore (`modello_ripasso`, default `small`) sulle dettature
+  conservate, arbitrato dell'agente locale sui disaccordi, correzioni sicure
+  auto-aggiunte alle sostituzioni. Attivo solo con `conserva_audio_n` > 0.
 
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 

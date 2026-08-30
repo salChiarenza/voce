@@ -1312,6 +1312,17 @@ def _impara_dagli_errori():
     if nuove:
         cfg.setdefault("sostituzioni", {}).update(nuove)  # attive da subito
         logging.getLogger("voce").info("imparate sostituzioni: %s", nuove)
+    # Ripasso notturno degli audio conservati: processo a parte, sganciato e
+    # a bassa priorita' — carica il secondo modello, impara e muore, cosi' la
+    # dettatura in diretta non paga ne' memoria ne' lock di trascrizione.
+    if int(cfg.get("conserva_audio_n", 0)) > 0:
+        subprocess.Popen(
+            [sys.executable, os.path.join(base, "voce_lib.py"), "--ripasso"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True,
+            preexec_fn=lambda: os.nice(15),
+        )
+        logging.getLogger("voce").info("ripasso audio avviato in sottofondo")
     with open(marcatore, "w") as f:
         f.write(oggi)
 
