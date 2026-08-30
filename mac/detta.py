@@ -589,21 +589,27 @@ def metti_cursore_in_casella(app):
     """Se nell'app bersaglio nessuna casella di testo ha il focus, mette il
     cursore nella casella di scrittura della finestra frontale (nelle chat
     sta in fondo). Prima per via gentile (focus Accessibility), poi con un
-    click fatto dal programma. Se non trova caselle non tocca niente."""
+    click fatto dal programma. Se non trova caselle non tocca niente.
+
+    Torna True se un posto dove scrivere c'e' (focus gia' giusto, o messo);
+    False SOLO quando la finestra e' leggibile e di caselle non ce n'e'
+    proprio (li' l'incolla andrebbe nel vuoto); None quando non si sa
+    (cursore automatico spento, finestra AX illeggibile: la casella puo'
+    esserci comunque e si incolla come sempre)."""
     if app is None or not cfg.get("cursore_automatico", True):
-        return
+        return None
     log = logging.getLogger("voce")
     ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
     if _focus_in_casella(ax_app):
-        return  # il cursore e' gia' al posto giusto
+        return True  # il cursore e' gia' al posto giusto
     finestra, err_focus = _finestra_bersaglio(ax_app)
     if finestra is None:
         log.info("cursore automatico: finestra frontale non leggibile (errore AX %s)", err_focus)
-        return
+        return None
     geo_finestra = _ax_geometria(finestra)
     if geo_finestra is None:
         log.info("cursore automatico: geometria della finestra non leggibile")
-        return
+        return None
     # Nei browser il focus sta spesso sulla pagina (AXWebArea): si cerca
     # prima DENTRO la pagina, saltando la struttura del browser; la finestra
     # intera resta il secondo giro.
@@ -625,20 +631,25 @@ def metti_cursore_in_casella(app):
             break
     if scelta is None:
         log.info("cursore automatico: nessuna casella di testo nella finestra")
-        return
+        return False
     elemento, geometria = caselle[scelta]
     AX.AXUIElementSetAttributeValue(elemento, AX.kAXFocusedAttribute, True)
     time.sleep(0.1)
     if _focus_in_casella(ax_app):
         log.info("cursore automatico: messo nella casella di scrittura")
-        return
+        return True
     _click_sintetico(geometria)
     time.sleep(0.15)
     log.info("cursore automatico: click nella casella di scrittura")
+    return True
 
 
-def incolla(testo):
-    """Mette il testo in clipboard, simula Cmd+V, poi ripristina la clipboard."""
+def incolla(testo, conserva_appunti=False):
+    """Mette il testo in clipboard, simula Cmd+V, poi ripristina la clipboard.
+
+    Con conserva_appunti=True il ripristino si salta: quando l'incolla parte
+    alla cieca (nessuna casella trovata) il testo deve restare negli Appunti,
+    altrimenti la frase dettata sparisce del tutto (caso reale 30/08/2026)."""
     vecchia = subprocess.run(["pbpaste"], capture_output=True).stdout
     subprocess.run(["pbcopy"], input=testo.encode())
     time.sleep(0.15)
@@ -646,7 +657,8 @@ def incolla(testo):
         tastiera.press("v")
         tastiera.release("v")
     time.sleep(0.4)
-    subprocess.run(["pbcopy"], input=vecchia)
+    if not conserva_appunti:
+        subprocess.run(["pbcopy"], input=vecchia)
 
 
 def su_callback(indata, frames, t, status):
@@ -870,8 +882,16 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
         _nascondi_o_arma()
         if testo:
             riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
-            esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
-            incolla(testo)
+            casella = esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
+            senza_casella = casella is False  # finestra letta: di caselle non ce n'e'
+            incolla(testo, conserva_appunti=senza_casella)
+            if senza_casella:
+                # l'incolla e' partito alla cieca: il testo resta negli
+                # Appunti (Cmd+V dove serve) e il suono diverso avvisa che
+                # la frase NON e' arrivata (caso 30/08: frase incollata nel
+                # vuoto e persa col ripristino degli Appunti)
+                suono("Basso")
+                log.info("incollato alla cieca: testo conservato negli Appunti")
             log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
             # invio automatico: parte sempre (indipendente dal toggle voce
             # agenti). La PAUSA prima dell'Invio dipende dal contesto: a voce
@@ -882,7 +902,9 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
             # si deve bloccare" — stava aggiungendo una seconda frase e la
             # prima e' partita da sola). La frase resta incollata: partira'
             # con l'Invio del turno successivo, tutto insieme.
-            if cfg.get("invio_automatico", True):
+            if cfg.get("invio_automatico", True) and not senza_casella:
+                # senza una casella vera l'Invio andrebbe su un focus ignoto:
+                # in una pagina puo' essere un bottone qualunque
                 chiave_ritardo = (
                     "invio_automatico_ritardo_conversazione_sec" if voce_attiva()
                     else "invio_automatico_ritardo_sec"

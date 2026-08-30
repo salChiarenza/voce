@@ -862,21 +862,23 @@ def _client_uia():
         return None
 
 
-def metti_cursore_in_casella(hwnd) -> None:
+def metti_cursore_in_casella(hwnd):
     """Se nella finestra bersaglio nessuna casella di testo ha il focus, mette
     il cursore nella casella di scrittura (la piu' in basso: nelle chat sta in
     fondo). Qualsiasi intoppo = si lascia tutto com'era.
+    Torna True se un posto dove scrivere c'e', False SOLO quando la finestra
+    e' leggibile e di caselle non ce n'e' proprio, None quando non si sa.
     (Gemella di metti_cursore_in_casella in mac/detta.py; da collaudare su
     PC Windows reale come il resto della versione Windows.)"""
     if not hwnd or not CFG.get("cursore_automatico", True):
-        return
+        return None
     try:
         uia = _client_uia()
         if uia is None:
-            return
+            return None
         fuoco = uia.GetFocusedElement()
         if fuoco is not None and fuoco.CurrentControlType in (_UIA_EDIT, _UIA_DOCUMENT):
-            return  # il cursore e' gia' in una casella
+            return True  # il cursore e' gia' in una casella
         radice = uia.ElementFromHandle(hwnd)
         condizione = uia.CreateOrCondition(
             uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_EDIT),
@@ -897,12 +899,14 @@ def metti_cursore_in_casella(hwnd) -> None:
         scelta = scegli_casella([geometria for _, geometria in candidate])
         if scelta is None:
             logging.info("cursore automatico: nessuna casella di testo nella finestra")
-            return
+            return False
         candidate[scelta][0].SetFocus()
         time.sleep(0.1)
         logging.info("cursore automatico: messo nella casella di scrittura")
+        return True
     except Exception:
         logging.exception("cursore automatico fallito: incollo dove sta il focus")
+        return None
 
 
 def stop_recording() -> None:
@@ -982,12 +986,19 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
         if not text:
             return
         riattiva_bersaglio(finestra_bersaglio)
-        metti_cursore_in_casella(finestra_bersaglio)
-        paste_text(text)
+        casella = metti_cursore_in_casella(finestra_bersaglio)
+        senza_casella = casella is False  # finestra letta: di caselle non ce n'e'
+        paste_text(text, conserva_appunti=senza_casella)
+        if senza_casella:
+            # incolla alla cieca: il testo resta negli Appunti (Ctrl+V dove
+            # serve) e il beep avvisa che la frase NON e' arrivata
+            if winsound is not None:
+                winsound.MessageBeep(winsound.MB_ICONHAND)
+            logging.info("incollato alla cieca: testo conservato negli Appunti")
         # invio automatico: parte sempre. La pausa prima dell'Invio dipende
         # dal contesto: a voce ON e' conversazione vera con l'agente (botta e
         # risposta), a voce OFF serve tempo per correggere il testo incollato.
-        if INVIO_AUTOMATICO:
+        if INVIO_AUTOMATICO and not senza_casella:
             attesa = (
                 RITARDO_INVIO_CONVERSAZIONE
                 if voce_attiva()
@@ -1021,7 +1032,9 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
         print("Errore durante la trascrizione. Dettagli in voice.log")
 
 
-def paste_text(text: str) -> None:
+def paste_text(text: str, conserva_appunti: bool = False) -> None:
+    """Con conserva_appunti=True il ripristino degli Appunti si salta: quando
+    l'incolla parte alla cieca il testo dettato deve restare recuperabile."""
     try:
         previous = pyperclip.paste()
     except Exception:
@@ -1032,7 +1045,7 @@ def paste_text(text: str) -> None:
         keyboard_controller.press("v")
         keyboard_controller.release("v")
     time.sleep(0.3)
-    if previous is not None:
+    if previous is not None and not conserva_appunti:
         try:
             pyperclip.copy(previous)
         except Exception:

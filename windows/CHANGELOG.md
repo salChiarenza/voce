@@ -23,6 +23,16 @@
   barge-in immediato per ora e' solo Mac. Come il resto della versione
   Windows, va vista girare su un PC reale prima di considerarla stabile.
 
+## 1.3.0-rc.9 (bis) - 30/08/2026 — niente frasi perse nell'incolla alla cieca
+
+- Gemella Mac: quando il cursore automatico legge la finestra e caselle di
+  testo non ce ne sono, il testo dettato resta negli Appunti (Ctrl+V dove
+  serve), un beep di sistema avvisa e l'Invio automatico non parte. Prima
+  la frase veniva incollata nel vuoto e persa col ripristino degli Appunti.
+- Il modello Windows resta `faster-whisper medium` (limite di sistema, vedi
+  lista parita'); il salto di qualita' del Mac (large-v3) non e' replicabile
+  li' a parita' di hardware.
+
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 
 - `rimuovi_eco_glossario` (gemella Mac): la parola "Glossario" e i nomi del

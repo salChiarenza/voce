@@ -42,6 +42,24 @@ tre cause, tutte con lo stesso effetto (audio mozzato, mai ripreso).
   davanti ("il punto esclamativo") non si tocca; "venirne a capo" resta un
   idioma. Dopo ! ? e a-capo la frase riparte maiuscola.
 
+## 1.3.0-rc.9 (bis) - 30/08/2026 — la dettatura capisce meglio e non perde frasi
+
+- Modello: da `whisper-large-v3-turbo` a `whisper-large-v3-mlx`. Il
+  riconfronto promesso in rc.7 e' stato fatto sugli audio reali conservati
+  (30 dettature vere di Sal del 30/08): 20 su 30 diverse, il grande vince
+  nettamente ("salchiarenza.ai" dove turbo scriveva sigle a caso, "LeaderAI"
+  vs "lead-ray", "esclamativi" vs "sclamativi", punteggiatura piu' ricca).
+  Costo misurato: 1,71s vs 0,77s a dettatura, accettato: la richiesta di
+  Sal e' la comprensione, non il decimo di secondo.
+- Incolla alla cieca: quando il cursore automatico legge la finestra e
+  caselle di testo NON ce ne sono, prima la frase veniva incollata nel
+  vuoto e PERSA (il ripristino degli Appunti la cancellava — caso reale
+  14:49 del 30/08). Ora in quel caso il testo resta negli Appunti (Cmd+V
+  dove serve), suona un avviso diverso ("Basso") e l'Invio automatico non
+  parte: un Invio su un focus ignoto puo' essere un bottone qualunque.
+- Glossario personale arricchito dai casi veri del giorno (PEC, dettatura,
+  call) e sostituzioni per gli errori ricorrenti visti nei log.
+
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 
 Aggiornata nello stesso giorno: nel cursore automatico il tetto di ricerca

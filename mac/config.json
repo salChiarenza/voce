@@ -1,7 +1,7 @@
 {
   "brand": "salchiarenza.ai",
   "hotkey": "cmd_r",
-  "modello": "mlx-community/whisper-large-v3-turbo",
+  "modello": "mlx-community/whisper-large-v3-mlx",
   "lingua": "it",
   "voce": "Siri (Voce 2)",
   "comando_voce": "Voce LeaderAI firmato",
