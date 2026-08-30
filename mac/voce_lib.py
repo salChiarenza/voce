@@ -303,6 +303,21 @@ def in_zona_scrittura(y_casella, y_finestra, altezza_finestra, quota=0.4):
     return y_casella >= y_finestra + altezza_finestra * quota
 
 
+def casella_ammissibile(y_casella, altezza_casella, y_finestra, altezza_finestra,
+                        quota=0.4, quota_documento=0.5):
+    """True se nella casella si puo' scrivere senza fare danni: o sta nella
+    parte bassa della finestra (le chat), o e' ALTA almeno meta' finestra
+    (l'area documento di Note/TextEdit/Word, che parte dall'alto).
+
+    Le barre degli indirizzi e i campi di ricerca sono in alto E bassi di
+    statura: restano fuori da entrambe le porte. Richiesta 30/08/2026 ("giro
+    pagina e deve capire da solo dove scrivere"): prima un documento aperto
+    veniva rifiutato in blocco perche' parte dall'alto."""
+    if in_zona_scrittura(y_casella, y_finestra, altezza_finestra, quota):
+        return True
+    return altezza_casella >= altezza_finestra * quota_documento
+
+
 # --- audio conservato: riascoltare le frasi capite male per tarare Voce ---
 
 def file_audio_da_eliminare(nomi, massimo):

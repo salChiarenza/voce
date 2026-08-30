@@ -36,6 +36,7 @@ from voce_lib import (
     serve_pulizia, comando_agente, destinazione_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
+    casella_ammissibile,
     salva_audio_recente, rimuovi_eco_glossario,
 )
 from parla import ferma as ferma_voce, parla as pronuncia
@@ -620,11 +621,11 @@ def metti_cursore_in_casella(app):
     radici.append(finestra)
     caselle, scelta = [], None
     for radice in radici:
-        # solo la parte bassa della finestra: in alto ci sono barra degli
-        # indirizzi e campi di ricerca, e un click li' sarebbe un danno vero
+        # parte bassa della finestra (chat) o area alta almeno meta' finestra
+        # (documento): mai le barre in alto, che sono alte poco
         caselle = [
             (el, g) for el, g in _caselle_nella_finestra(radice)
-            if in_zona_scrittura(g[1], geo_finestra[1], geo_finestra[3])
+            if casella_ammissibile(g[1], g[3], geo_finestra[1], geo_finestra[3])
         ]
         scelta = scegli_casella([(g[1], g[2]) for _, g in caselle])
         if scelta is not None:

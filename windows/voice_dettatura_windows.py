@@ -207,6 +207,18 @@ def in_zona_scrittura(y_casella, y_finestra, altezza_finestra, quota=0.4):
     return y_casella >= y_finestra + altezza_finestra * quota
 
 
+def casella_ammissibile(y_casella, altezza_casella, y_finestra, altezza_finestra,
+                        quota=0.4, quota_documento=0.5):
+    """True se nella casella si puo' scrivere senza fare danni: parte bassa
+    della finestra (le chat) oppure area ALTA almeno meta' finestra (il
+    documento di Blocco Note/Word, che parte dall'alto). Le barre in alto
+    sono basse di statura: fuori da entrambe le porte.
+    (Gemella di casella_ammissibile in mac/voce_lib.py.)"""
+    if in_zona_scrittura(y_casella, y_finestra, altezza_finestra, quota):
+        return True
+    return altezza_casella >= altezza_finestra * quota_documento
+
+
 def file_audio_da_eliminare(nomi, massimo):
     """Quali file audio conservati vanno eliminati per restare entro `massimo`:
     i nomi contengono il timestamp, quindi l'ordine alfabetico e' l'ordine
@@ -1038,9 +1050,11 @@ def metti_cursore_in_casella(hwnd):
         for i in range(trovate.Length):
             elemento = trovate.GetElement(i)
             r = elemento.CurrentBoundingRectangle
-            # solo la parte bassa della finestra: in alto ci sono barra degli
-            # indirizzi e campi di ricerca, e un click li' sarebbe un danno vero
-            if not in_zona_scrittura(r.top, rett_finestra.top, altezza_finestra):
+            # parte bassa della finestra (chat) o area alta almeno meta'
+            # finestra (documento): mai le barre in alto, che sono alte poco
+            if not casella_ammissibile(
+                r.top, r.bottom - r.top, rett_finestra.top, altezza_finestra
+            ):
                 continue
             candidate.append((elemento, (r.top, r.right - r.left)))
         scelta = scegli_casella([geometria for _, geometria in candidate])

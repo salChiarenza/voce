@@ -59,6 +59,12 @@ tre cause, tutte con lo stesso effetto (audio mozzato, mai ripreso).
   parte: un Invio su un focus ignoto puo' essere un bottone qualunque.
 - Glossario personale arricchito dai casi veri del giorno (PEC, dettatura,
   call) e sostituzioni per gli errori ricorrenti visti nei log.
+- Cursore automatico anche nei documenti (`casella_ammissibile`): prima
+  tutto cio' che stava nella parte alta della finestra veniva rifiutato per
+  non scrivere nella barra degli indirizzi, ma cosi' l'area documento di
+  Note/TextEdit/Word (che parte dall'alto) restava fuori e girando pagina
+  la dettatura non scriveva. Ora un'area alta almeno meta' finestra e' un
+  documento e si prende; le barre restano fuori perche' basse di statura.
 - Ripasso notturno degli audio conservati (`voce_lib.py --ripasso`): una
   volta al giorno, insieme all'apprendimento esistente, un processo a parte
   (sganciato, bassa priorita') ritrascrive le dettature conservate con un

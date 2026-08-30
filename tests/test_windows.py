@@ -377,3 +377,11 @@ def test_ripasso_windows_gemello_del_mac():
     assert spazio["disaccordi_parole"](
         "Dalle colle è emerso questo.", "Dalle call è emerso questo."
     ) == [("colle", "call")]
+
+
+def test_casella_ammissibile_windows_gemella_del_mac():
+    spazio = _funzioni_pure_app("in_zona_scrittura", "casella_ammissibile")
+    f = spazio["casella_ammissibile"]
+    assert f(700, 40, 0, 800) is True    # chat in fondo
+    assert f(60, 700, 0, 800) is True    # documento a tutta finestra
+    assert f(40, 28, 0, 800) is False    # barra degli indirizzi

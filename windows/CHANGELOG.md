@@ -32,6 +32,10 @@
 - Il modello Windows resta `faster-whisper medium` (limite di sistema, vedi
   lista parita'); il salto di qualita' del Mac (large-v3) non e' replicabile
   li' a parita' di hardware.
+- Cursore automatico anche nei documenti (gemella Mac,
+  `casella_ammissibile`): un'area alta almeno meta' finestra e' un documento
+  (Blocco Note/Word) e si prende anche se parte dall'alto; le barre restano
+  fuori perche' basse di statura.
 - Ripasso degli audio conservati (gemello Mac, `--ripasso`): secondo
   riconoscitore (`modello_ripasso`, default `small`) sulle dettature
   conservate, arbitrato dell'agente locale sui disaccordi, correzioni sicure

@@ -1039,3 +1039,15 @@ def test_ripasso_impara_solo_le_correzioni_sicure(tmp_path, monkeypatch):
 
     assert nuove == {"colle": "call"}
     assert json.loads(config.read_text())["sostituzioni"] == {"colle": "call"}
+
+
+def test_casella_ammissibile_accetta_documenti_e_rifiuta_barre():
+    # chat in fondo alla finestra: ammessa (come prima)
+    assert voce_lib.casella_ammissibile(y_casella=700, altezza_casella=40,
+                                        y_finestra=0, altezza_finestra=800) is True
+    # area documento: parte dall'alto ma copre meta' finestra -> ammessa
+    assert voce_lib.casella_ammissibile(y_casella=60, altezza_casella=700,
+                                        y_finestra=0, altezza_finestra=800) is True
+    # barra degli indirizzi: in alto E bassa di statura -> mai
+    assert voce_lib.casella_ammissibile(y_casella=40, altezza_casella=28,
+                                        y_finestra=0, altezza_finestra=800) is False
