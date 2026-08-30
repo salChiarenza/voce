@@ -354,3 +354,14 @@ def test_metti_in_lettura_windows_non_avvia_un_secondo_lettore(tmp_path, monkeyp
 
     assert pendente.read_text(encoding="utf-8") == "testo da leggere"
     assert avvii == []  # il lettore vivo passera' da solo al nuovo testo
+
+
+def test_punteggiatura_dettata_windows_gemella_del_mac():
+    spazio = _funzioni_pure_app("converti_punteggiatura_dettata")
+    f = spazio["converti_punteggiatura_dettata"]
+
+    assert f("Domani si parte punto esclamativo") == "Domani si parte!"
+    assert f("Hai capito punto interrogativo") == "Hai capito?"
+    assert f("prima riga a capo seconda riga") == "prima riga\nSeconda riga"
+    assert f("Il punto esclamativo non me lo becca") == "Il punto esclamativo non me lo becca"
+    assert f("Non ne vengo a capo") == "Non ne vengo a capo"

@@ -394,6 +394,61 @@ def applica_sostituzioni(testo, sostituzioni):
     return testo
 
 
+def converti_punteggiatura_dettata(testo):
+    """I segni di punteggiatura DETTATI diventano segni veri: "si parte punto
+    esclamativo" -> "si parte!" (richiesta di Sal 30/08/2026: Whisper virgole
+    e domande le mette a orecchio, l'esclamativo in italiano quasi mai).
+
+    Si convertono SOLO comandi inequivocabili al singolare: "punto" e
+    "virgola" da soli restano parole (li mette gia' Whisper e nel parlato
+    sono ovunque). Con l'articolo davanti ("il punto esclamativo") si sta
+    parlando DEL segno e non si tocca; "venirne a capo" resta un idioma.
+    Il segno si attacca alla parola prima, al posto dell'eventuale segno gia'
+    messo da Whisper; dopo ! ? e a-capo la frase riparte maiuscola.
+    Tabelle dentro la funzione: la gemella Windows viene estratta da sola
+    dai test e deve bastarsi (stesso patto di rimuovi_eco_glossario)."""
+    comandi = [
+        (r"punto\s+esclamativo", "!"),
+        (r"punto\s+interrogativo", "?"),
+        (r"punto\s+e\s+virgola", ";"),
+        (r"punt(?:ini|i)\s+di\s+sospensione", "..."),
+        (r"a\s+capo|nuova\s+riga", "\n"),
+    ]
+    articoli = {"il", "lo", "la", "i", "gli", "le", "un", "uno", "una",
+                "del", "dello", "della", "dei", "degli", "delle",
+                "al", "allo", "alla", "ai", "agli", "alle",
+                "quel", "quello", "quella", "quei", "questo", "questa",
+                "ogni", "nessun", "senza"}
+    venire = {"vengo", "vieni", "viene", "veniamo", "venite", "vengono",
+              "venirne", "venuto", "venuta", "venuti", "venute"}
+    for motivo, segno in comandi:
+        schema = re.compile(
+            r"(\w[\w'’]*)?([\s.,;:]*)\b(?:" + motivo + r")\b[.,;:]?",
+            re.IGNORECASE,
+        )
+
+        def rimpiazza(m, segno=segno):
+            prima = m.group(1) or ""
+            nuda = prima.lower()
+            if nuda in articoli:
+                return m.group(0)  # si parla del segno, non lo si detta
+            if segno == "\n" and nuda in venire:
+                return m.group(0)  # "non ne vengo a capo" resta com'e'
+            if segno == "\n" and nuda == "vai":
+                return segno       # "vai a capo": sparisce tutto il comando
+            return prima + segno
+
+        testo = schema.sub(rimpiazza, testo)
+    testo = re.sub(r"[ \t]+\n", "\n", testo)  # niente spazi attorno alla riga nuova
+    testo = re.sub(r"\n[ \t]+", "\n", testo)
+    testo = re.sub(  # dopo ! ? o riga nuova la frase riparte maiuscola
+        r"([!?\n])(\s*)(\w)",
+        lambda m: m.group(1) + m.group(2) + m.group(3).upper(),
+        testo,
+    )
+    return testo.strip()
+
+
 # Apple Intelligence (corsia veloce via Comando Rapido) rifiuta in blocco le
 # richieste con parolacce ("Il modello non puo' fornire una risposta a questa
 # richiesta"): verificato in diretta il 05/07, causa reale di gran parte dei

@@ -32,6 +32,7 @@ from voce_lib import (
     diagnosi_audio_muto, GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
     corsia_utilizzabile, registra_esito_corsia, SOGLIA_GUASTI_CORSIA, RIPOSO_CORSIA_SEC,
     timeout_scaduto, glossario_iniziale, applica_sostituzioni,
+    converti_punteggiatura_dettata,
     serve_pulizia, comando_agente, destinazione_agente,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
@@ -393,7 +394,8 @@ def trascrivi(audio):
             )
             return ""
     testo = rimuovi_eco_glossario(esito["text"].strip(), cfg.get("glossario", []))
-    return applica_sostituzioni(testo, cfg.get("sostituzioni", {}))
+    testo = applica_sostituzioni(testo, cfg.get("sostituzioni", {}))
+    return converti_punteggiatura_dettata(testo)
 
 
 def app_frontale():

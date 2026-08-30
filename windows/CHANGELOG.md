@@ -14,6 +14,10 @@
   il lettore parte sganciato con `DETACHED_PROCESS` e ogni lettura ha un
   tetto proporzionale al testo, cosi' una voce incantata non ammutolisce le
   risposte successive.
+- Punteggiatura dettata (gemella Mac): "punto esclamativo", "punto
+  interrogativo", "punto e virgola", "puntini di sospensione", "a capo"
+  detti a voce diventano segni veri; con l'articolo davanti non si tocca e
+  "venirne a capo" resta un idioma.
 - Limite noto (preesistente su questo asse): su Windows la dettatura non
   zittisce la lettura in corso dell'hook, che arriva comunque in fondo. Il
   barge-in immediato per ora e' solo Mac. Come il resto della versione

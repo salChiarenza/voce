@@ -967,3 +967,23 @@ def test_stessa_risposta_dopo_la_finestra_si_rilegge(tmp_path, monkeypatch):
 
     assert voce_hook.gia_letto_da_poco("stessa risposta") is False
     assert voce_hook.gia_letto_da_poco("stessa risposta") is False
+
+
+def test_punteggiatura_dettata_diventa_segni_veri():
+    f = voce_lib.converti_punteggiatura_dettata
+    assert f("Domani si parte punto esclamativo") == "Domani si parte!"
+    assert f("Si parte, punto esclamativo, e andiamo") == "Si parte! E andiamo"
+    assert f("Hai capito punto interrogativo") == "Hai capito?"
+    assert f("Aspetta puntini di sospensione") == "Aspetta..."
+    assert f("prima riga a capo seconda riga") == "prima riga\nSeconda riga"
+    assert f("poi vai a capo subito") == "poi\nSubito"
+
+
+def test_punteggiatura_dettata_non_tocca_il_parlato_normale():
+    f = voce_lib.converti_punteggiatura_dettata
+    # con l'articolo si parla DEL segno: resta parola
+    assert f("Il punto esclamativo non me lo becca") == "Il punto esclamativo non me lo becca"
+    # idioma, non comando
+    assert f("Non ne vengo a capo") == "Non ne vengo a capo"
+    # "punto" e "virgola" da soli restano parole (li mette gia' Whisper)
+    assert f("Il punto e' questo, virgola piu' virgola meno") == "Il punto e' questo, virgola piu' virgola meno"

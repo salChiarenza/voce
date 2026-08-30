@@ -133,6 +133,58 @@ def applica_sostituzioni(testo: str, sostituzioni: dict) -> str:
     return testo
 
 
+def converti_punteggiatura_dettata(testo: str) -> str:
+    """I segni di punteggiatura DETTATI diventano segni veri: "si parte punto
+    esclamativo" -> "si parte!". (Gemella di converti_punteggiatura_dettata
+    in mac/voce_lib.py: stesse regole, stessi casi.)
+
+    Solo comandi inequivocabili al singolare: "punto" e "virgola" da soli
+    restano parole. Con l'articolo davanti ("il punto esclamativo") si sta
+    parlando DEL segno e non si tocca; "venirne a capo" resta un idioma.
+    Il segno si attacca alla parola prima, al posto dell'eventuale segno gia'
+    messo da Whisper; dopo ! ? e a-capo la frase riparte maiuscola."""
+    comandi = [
+        (r"punto\s+esclamativo", "!"),
+        (r"punto\s+interrogativo", "?"),
+        (r"punto\s+e\s+virgola", ";"),
+        (r"punt(?:ini|i)\s+di\s+sospensione", "..."),
+        (r"a\s+capo|nuova\s+riga", "\n"),
+    ]
+    articoli = {"il", "lo", "la", "i", "gli", "le", "un", "uno", "una",
+                "del", "dello", "della", "dei", "degli", "delle",
+                "al", "allo", "alla", "ai", "agli", "alle",
+                "quel", "quello", "quella", "quei", "questo", "questa",
+                "ogni", "nessun", "senza"}
+    venire = {"vengo", "vieni", "viene", "veniamo", "venite", "vengono",
+              "venirne", "venuto", "venuta", "venuti", "venute"}
+    for motivo, segno in comandi:
+        schema = re.compile(
+            r"(\w[\w'’]*)?([\s.,;:]*)\b(?:" + motivo + r")\b[.,;:]?",
+            re.IGNORECASE,
+        )
+
+        def rimpiazza(m, segno=segno):
+            prima = m.group(1) or ""
+            nuda = prima.lower()
+            if nuda in articoli:
+                return m.group(0)  # si parla del segno, non lo si detta
+            if segno == "\n" and nuda in venire:
+                return m.group(0)  # "non ne vengo a capo" resta com'e'
+            if segno == "\n" and nuda == "vai":
+                return segno       # "vai a capo": sparisce tutto il comando
+            return prima + segno
+
+        testo = schema.sub(rimpiazza, testo)
+    testo = re.sub(r"[ \t]+\n", "\n", testo)  # niente spazi attorno alla riga nuova
+    testo = re.sub(r"\n[ \t]+", "\n", testo)
+    testo = re.sub(  # dopo ! ? o riga nuova la frase riparte maiuscola
+        r"([!?\n])(\s*)(\w)",
+        lambda m: m.group(1) + m.group(2) + m.group(3).upper(),
+        testo,
+    )
+    return testo.strip()
+
+
 def scegli_casella(candidati):
     """Indice della casella migliore tra quelle trovate nella finestra.
 
@@ -920,6 +972,7 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             eventi.put("nascosto")
             return
         text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
+        text = converti_punteggiatura_dettata(text)
         # Windows non ha una corsia locale rapida equivalente al Comando
         # Rapido Apple. Il vecchio ripiego Claude/Codex poteva bloccare ogni
         # dettatura per 20s: ora il grezzo viene incollato subito.

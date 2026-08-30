@@ -33,6 +33,14 @@ tre cause, tutte con lo stesso effetto (audio mozzato, mai ripreso).
 - Ogni lettura iniziata lascia una riga nel registro ("lettore: lettura
   iniziata"): una lettura uccisa e una mai partita non sono piu' identiche
   viste da fuori.
+- Punteggiatura dettata (`converti_punteggiatura_dettata`): "punto
+  esclamativo", "punto interrogativo", "punto e virgola", "puntini di
+  sospensione", "a capo"/"vai a capo"/"nuova riga" detti a voce diventano
+  segni veri, su ogni destinazione (Whisper virgole e domande le mette a
+  orecchio, l'esclamativo in italiano quasi mai). Solo comandi
+  inequivocabili: "punto" e "virgola" da soli restano parole; con l'articolo
+  davanti ("il punto esclamativo") non si tocca; "venirne a capo" resta un
+  idioma. Dopo ! ? e a-capo la frase riparte maiuscola.
 
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 
