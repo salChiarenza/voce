@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.3.0-rc.9 - 30/08/2026 — la voce agenti arriva in fondo
+
+La voce agenti si troncava a meta' lettura. Analisi del 30/08 sui log veri:
+tre cause, tutte con lo stesso effetto (audio mozzato, mai ripreso).
+
+- Doppio evento di fine risposta (10 letture doppie su 26 misurate): l'hook
+  ora ricorda impronta sha1 e istante dell'ultima risposta letta e scarta la
+  ripetizione identica entro 8 secondi (`gia_letto_da_poco`, file di stato
+  `ULTIMA_LETTURA`), tracciandola nel registro.
+- Una nuova risposta uccideva la lettura in corso (`parla()` faceva
+  `ferma()` cieco: tre risposte in 21 secondi, solo l'ultima arrivava in
+  fondo). Ora `parla()` deposita il testo in `LETTURA_PENDENTE` e un processo
+  "lettore" unico legge una voce per volta fino a svuotare l'attesa: la
+  lettura in corso si finisce SEMPRE, e tra i testi arrivati nel frattempo
+  vince l'ultimo (mai minuti di audio arretrato). Il flag `PARLANDO` resta
+  alzato per tutta la corsa, cosi' il mani-libere non si riarma nei buchi
+  tra due letture.
+- Il lettore unico e' garantito da un flock del kernel (`LETTORE_LOCK`):
+  si libera da solo alla morte del processo, comunque muoia, quindi non
+  esistono lock stantii da rubare ne' le corse che ne derivano (trovate
+  dalla revisione avversaria sulla prima stesura a file-pid).
+- Ogni lettura ha un tetto proporzionale al testo (~4x la durata stimata,
+  pavimento 60s): uno `shortcuts run` incantato — classe di guasto gia'
+  vista nella corsia di pulizia — viene ucciso e si passa oltre, invece di
+  tenere il lock per sempre e ammutolire tutte le risposte successive.
+- Il lettore e' sganciato (`start_new_session`) e l'hook torna subito:
+  il timeout di 10s dell'hook Stop non puo' piu' toccare l'audio.
+- Il barge-in resta immediato: la dettatura (tasto o mani libere) e
+  `parla.py --stop` zittiscono subito e svuotano l'attesa; il toggle voce
+  annuncia lo stato senza mettersi in coda dietro una lettura lunga.
+- Ogni lettura iniziata lascia una riga nel registro ("lettore: lettura
+  iniziata"): una lettura uccisa e una mai partita non sono piu' identiche
+  viste da fuori.
+
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 
 Aggiornata nello stesso giorno: nel cursore automatico il tetto di ricerca

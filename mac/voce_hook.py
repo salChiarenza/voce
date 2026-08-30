@@ -238,9 +238,9 @@ def controlla_hook_agenti() -> bool:
 
 # Finestra entro cui una seconda chiamata con lo STESSO testo e' un doppione.
 # Serve perche' l'evento di fine risposta puo' arrivare due volte a pochi
-# millisecondi (misurato il 30/08/2026: 10 letture doppie su 26). Ogni parla()
-# uccide la lettura in corso ("una voce per volta"), quindi il doppione tronca
-# l'audio subito dopo l'inizio: il guasto che Sal sentiva come voce mozzata.
+# millisecondi (misurato il 30/08/2026: 10 letture doppie su 26). Prima della
+# coda in parla() il doppione troncava l'audio appena partito; oggi lo
+# rileggerebbe per intero una seconda volta. In entrambi i casi va scartato.
 FINESTRA_DOPPIONE_SEC = 8.0
 ULTIMA_LETTURA = BASE / "ULTIMA_LETTURA"
 
@@ -288,7 +288,7 @@ def main():
             traccia(f"lettura doppia scartata ({len(testo)} caratteri, {origine})")
             return
         traccia(f"leggo {len(testo)} caratteri ({origine})")
-        parla(testo)  # Popen: parte e non aspetta la fine
+        parla(testo)  # deposita e torna subito: legge un lettore sganciato
     else:
         traccia(f"nessun testo da leggere ({origine})")
 

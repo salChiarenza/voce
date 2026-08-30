@@ -260,7 +260,8 @@ def seleziona_voce(nome: str) -> None:
     CFG_PATH.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def parla(testo: str, voice_name: str | None = None, attendi: bool = False) -> None:
+def parla(testo: str, voice_name: str | None = None, attendi: bool = False,
+          tetto_sec: float | None = None) -> None:
     """Legge il testo con la voce italiana di Windows (System.Speech via PowerShell)."""
     testo = pulisci_per_voce(testo)
     if not testo:
@@ -281,9 +282,173 @@ def parla(testo: str, voice_name: str | None = None, attendi: bool = False) -> N
         p.stdin.write(testo.encode("utf-8"))
         p.stdin.close()
         if attendi:
-            p.wait()
+            try:
+                p.wait(timeout=tetto_sec)
+            except subprocess.TimeoutExpired:
+                p.kill()  # voce incantata: non deve bloccare il lettore per sempre
     except Exception:
         pass
+
+
+# --- una voce per volta: la lettura in corso si finisce, vince l'ultima ---
+# Specchio del Mac (mac/parla.py e mac/voce_hook.py, 30/08/2026): l'evento di
+# fine risposta puo' arrivare doppio a pochi millisecondi, e piu' risposte
+# ravvicinate non devono sovrapporsi ne' troncarsi. Il doppione identico si
+# scarta; il testo nuovo va in attesa e, se ne arrivano altri, vince l'ultimo.
+
+FINESTRA_DOPPIONE_SEC = 8.0
+ULTIMA_LETTURA = BASE / "ULTIMA_LETTURA"
+LETTURA_PENDENTE = BASE / "LETTURA_PENDENTE"  # prossimo testo: vince l'ultimo
+LETTORE_LOCK = BASE / "LETTORE_LOCK"          # lock del lettore unico (mai eliminato)
+
+_fd_lock = None  # tenuto aperto dal lettore: il lock vive quanto il processo
+
+
+def gia_letto_da_poco(testo: str) -> bool:
+    """Vero se questo identico testo e' gia' stato mandato in lettura da poco."""
+    import hashlib
+    import time
+
+    impronta = hashlib.sha1(testo.encode("utf-8")).hexdigest()
+    adesso = time.time()
+    try:
+        precedente, istante = ULTIMA_LETTURA.read_text(encoding="utf-8").split(None, 1)
+        doppione = precedente == impronta and (adesso - float(istante)) < FINESTRA_DOPPIONE_SEC
+    except Exception:
+        doppione = False  # nessuno stato leggibile: si legge, il silenzio e' peggio
+    if not doppione:
+        try:
+            ULTIMA_LETTURA.write_text(f"{impronta} {adesso}", encoding="utf-8")
+        except Exception:
+            pass
+    return doppione
+
+
+def scrivi_pendente(testo: str, pendente: Path | None = None) -> None:
+    """Deposita il testo in attesa in modo atomico: chi arriva dopo sovrascrive
+    (vince l'ultimo), chi preleva non vede mai un file scritto a meta'."""
+    pendente = pendente or LETTURA_PENDENTE
+    provvisorio = pendente.with_name(f"{pendente.name}.{os.getpid()}.tmp")
+    provvisorio.write_text(testo, encoding="utf-8")
+    os.replace(provvisorio, pendente)
+
+
+def prendi_pendente(pendente: Path | None = None) -> str | None:
+    """Preleva il testo in attesa (None se non c'e'). Il prelievo e' un rename
+    atomico: un deposito nello stesso istante non va mai perso."""
+    pendente = pendente or LETTURA_PENDENTE
+    in_corso = pendente.with_name(pendente.name + ".presa")
+    try:
+        os.replace(pendente, in_corso)
+    except FileNotFoundError:
+        return None
+    testo = in_corso.read_text(encoding="utf-8")
+    in_corso.unlink(missing_ok=True)
+    return testo or None
+
+
+def _blocca_esclusivo(fd) -> bool:
+    """Lock esclusivo non bloccante, arbitrato dal kernel: si libera da solo
+    alla morte del processo, comunque muoia (niente lock stantii, niente pid
+    riusati). Su Windows msvcrt; altrove flock (i test girano anche su Mac).
+    NIENTE os.kill su Windows: un segnale qualsiasi TERMINA il processo."""
+    try:
+        import msvcrt
+    except ImportError:
+        import fcntl
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        return True
+    except OSError:
+        return False
+
+
+def _prendi_lock() -> bool:
+    """Un solo lettore per volta. Il file del lock non va mai eliminato: un
+    lock su un file ricreato sarebbe un lock su un altro inode."""
+    global _fd_lock
+    fd = os.open(LETTORE_LOCK, os.O_CREAT | os.O_RDWR)
+    if not _blocca_esclusivo(fd):
+        os.close(fd)
+        return False
+    _fd_lock = fd
+    return True
+
+
+def _rilascia_lock() -> None:
+    global _fd_lock
+    if _fd_lock is not None:
+        try:
+            os.close(_fd_lock)  # chiudere rilascia il lock
+        except OSError:
+            pass
+        _fd_lock = None
+
+
+def _lettore_in_corsa() -> bool:
+    """Vero se un lettore tiene il lock in questo momento (prova non
+    bloccante, senza fidarsi di pid scritti su file)."""
+    try:
+        fd = os.open(LETTORE_LOCK, os.O_CREAT | os.O_RDWR)
+    except OSError:
+        return False  # non si sa: si prova a spawnare, decidera' il lock
+    try:
+        if not _blocca_esclusivo(fd):
+            return True
+        return False
+    finally:
+        os.close(fd)  # chiudere rilascia anche l'eventuale lock di prova
+
+
+def lettore() -> None:
+    """Legge l'attesa fino a svuotarla, una voce per volta, poi esce.
+    Il tetto proporzionale al testo evita che una voce incantata tenga il
+    lock per sempre e ammutolisca tutte le risposte successive."""
+    while True:
+        if not _prendi_lock():
+            return  # c'e' gia' un lettore in corsa: leggera' lui
+        try:
+            while True:
+                testo = prendi_pendente()
+                if testo is None:
+                    break
+                parla(testo, attendi=True, tetto_sec=max(60, len(testo) // 4))
+        finally:
+            _rilascia_lock()
+        if not LETTURA_PENDENTE.exists():
+            return
+        # un testo e' arrivato nell'attimo in cui uscivamo: un altro giro
+
+
+def _avvia_lettore_se_serve() -> None:
+    if _lettore_in_corsa():
+        return  # il lettore in corsa passera' da solo al testo in attesa
+    distacco = (  # sganciato dall'hook: sopravvive al suo timeout
+        getattr(subprocess, "DETACHED_PROCESS", 0)
+        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
+    subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--lettore"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        creationflags=distacco,
+    )
+
+
+def metti_in_lettura(testo: str) -> None:
+    """Deposita e torna subito: legge un lettore sganciato, senza troncare
+    ne' sovrapporre la lettura eventualmente in corso."""
+    testo = pulisci_per_voce(testo)
+    if not testo:
+        return
+    scrivi_pendente(testo)
+    _avvia_lettore_se_serve()
 
 
 def main() -> None:
@@ -300,7 +465,9 @@ def main() -> None:
         except Exception:
             return
     if testo:
-        parla(testo)
+        if gia_letto_da_poco(testo):
+            return
+        metti_in_lettura(testo)
 
 
 if __name__ == "__main__":
@@ -315,6 +482,8 @@ if __name__ == "__main__":
     elif len(sys.argv) == 3 and sys.argv[1] == "--set-voice":
         seleziona_voce(sys.argv[2])
         print(f"Voce scelta: {sys.argv[2]}")
+    elif len(sys.argv) == 2 and sys.argv[1] == "--lettore":
+        lettore()
     elif len(sys.argv) >= 2 and sys.argv[1] == "--test-voice":
         prova = sys.argv[2] if len(sys.argv) == 3 else None
         parla("Prova di Voce AI LeaderAI su Windows. Questo audio e' sintetico.", prova, attendi=True)

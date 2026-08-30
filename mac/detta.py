@@ -967,6 +967,9 @@ def commuta_voce():
         FLAG_VOICE_ON.touch()
         stato = "Voce AI accesa. Le risposte dell'agente sono audio sintetico."
     logging.getLogger("voce").info("combo voce: %s", stato)
+    # l'annuncio di stato non si mette in coda dietro una lettura lunga:
+    # zittisce e parla subito (spegnere la voce DEVE fare silenzio ora)
+    ferma_voce()
     pronuncia(stato)
 
 

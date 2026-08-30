@@ -299,3 +299,58 @@ def test_rimuovi_eco_glossario_gemella_del_mac():
     for testo in casi:
         assert spazio["rimuovi_eco_glossario"](testo, glossario) == \
             voce_lib.rimuovi_eco_glossario(testo, glossario), testo
+
+
+def test_lettura_doppia_windows_gemella_del_mac(tmp_path, monkeypatch):
+    """Il doppio evento di fine risposta si scarta anche su Windows."""
+    monkeypatch.setattr(voce_windows, "ULTIMA_LETTURA", tmp_path / "ULTIMA_LETTURA")
+
+    assert voce_windows.gia_letto_da_poco("stessa risposta") is False
+    assert voce_windows.gia_letto_da_poco("stessa risposta") is True
+    assert voce_windows.gia_letto_da_poco("risposta diversa") is False
+
+
+def test_attesa_windows_vince_l_ultima(tmp_path):
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    voce_windows.scrivi_pendente("risposta vecchia", pendente)
+    voce_windows.scrivi_pendente("risposta nuova", pendente)
+
+    assert voce_windows.prendi_pendente(pendente) == "risposta nuova"
+    assert voce_windows.prendi_pendente(pendente) is None
+
+
+def test_lettore_windows_legge_in_fila_e_pulisce(tmp_path, monkeypatch):
+    """La lettura in corso si finisce sempre (attendi=True), poi si passa a
+    cio' che e' arrivato nel frattempo; alla fine il lock sparisce."""
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    lette = []
+
+    def parla_finta(testo, voice_name=None, attendi=False, tetto_sec=None):
+        assert attendi is True       # mai fire-and-forget dentro il lettore
+        assert tetto_sec >= 60       # una voce incantata non tiene il lock per sempre
+        lette.append(testo)
+        if testo == "prima":
+            voce_windows.scrivi_pendente("arrivata durante", pendente)
+
+    monkeypatch.setattr(voce_windows, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(voce_windows, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+    monkeypatch.setattr(voce_windows, "parla", parla_finta)
+    voce_windows.scrivi_pendente("prima", pendente)
+
+    voce_windows.lettore()
+
+    assert lette == ["prima", "arrivata durante"]
+    assert voce_windows._lettore_in_corsa() is False  # lock rilasciato
+
+
+def test_metti_in_lettura_windows_non_avvia_un_secondo_lettore(tmp_path, monkeypatch):
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    avvii = []
+    monkeypatch.setattr(voce_windows, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(voce_windows, "_lettore_in_corsa", lambda: True)
+    monkeypatch.setattr(voce_windows.subprocess, "Popen", lambda *a, **k: avvii.append(a))
+
+    voce_windows.metti_in_lettura("testo da leggere")
+
+    assert pendente.read_text(encoding="utf-8") == "testo da leggere"
+    assert avvii == []  # il lettore vivo passera' da solo al nuovo testo

@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0-rc.9 - 30/08/2026 — la voce agenti arriva in fondo (gemella Mac)
+
+- Doppio evento di fine risposta: scarto della ripetizione identica entro 8
+  secondi (`gia_letto_da_poco`, file di stato `ULTIMA_LETTURA`), come sul Mac.
+- Una voce per volta: prima le letture partivano in sovrapposizione (nessun
+  coordinamento tra hook). Ora l'hook deposita il testo in `LETTURA_PENDENTE`
+  e un processo "lettore" unico legge in modo sincrono fino a svuotare
+  l'attesa: la lettura in corso si finisce sempre e tra i testi arrivati nel
+  frattempo vince l'ultimo. Il lettore unico e' garantito da un lock del
+  kernel (`LETTORE_LOCK`, `msvcrt.locking`): si libera da solo alla morte del
+  processo (niente `os.kill`, che su Windows termina invece di interrogare);
+  il lettore parte sganciato con `DETACHED_PROCESS` e ogni lettura ha un
+  tetto proporzionale al testo, cosi' una voce incantata non ammutolisce le
+  risposte successive.
+- Limite noto (preesistente su questo asse): su Windows la dettatura non
+  zittisce la lettura in corso dell'hook, che arriva comunque in fondo. Il
+  barge-in immediato per ora e' solo Mac. Come il resto della versione
+  Windows, va vista girare su un PC reale prima di considerarla stabile.
+
 ## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
 
 - `rimuovi_eco_glossario` (gemella Mac): la parola "Glossario" e i nomi del

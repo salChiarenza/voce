@@ -1,5 +1,6 @@
 """Test delle funzioni pure della versione Mac di Voce."""
 import json
+import os
 import plistlib
 import sqlite3
 import sys
@@ -244,54 +245,135 @@ def test_collegamento_hook_conserva_hook_esistenti(tmp_path):
     assert settings.with_name("settings.json.pre-voce.bak").exists()
 
 
-def test_monitor_voce_non_muore_prima_di_togliere_flag(tmp_path, monkeypatch):
+def test_parla_deposita_e_non_uccide_la_lettura_in_corso(tmp_path, monkeypatch):
+    """Una nuova risposta non tronca piu' quella in lettura: va in attesa e
+    la leggera' il lettore gia' in corsa (caso 30/08/2026: tre risposte in
+    21 secondi, solo l'ultima arrivava in fondo)."""
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    avvii, comandi = [], []
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(parla, "_lettore_in_corsa", lambda: True)  # lettore vivo
+    monkeypatch.setattr(parla.subprocess, "Popen", lambda *a, **k: avvii.append(a))
+    monkeypatch.setattr(parla.subprocess, "run", lambda c, **k: comandi.append(c))
+
+    parla.parla("prima risposta")
+    parla.parla("seconda risposta")
+
+    assert pendente.read_text(encoding="utf-8") == "seconda risposta"  # vince l'ultima
+    assert avvii == []    # nessun secondo lettore
+    assert comandi == []  # e soprattutto nessun pkill della voce in corso
+
+
+def test_parla_avvia_un_lettore_sganciato_quando_manca(tmp_path, monkeypatch):
+    """Senza lettore in corsa ne parte uno solo, in una sessione nuova: deve
+    sopravvivere all'hook Stop (timeout 10s) per letture piu' lunghe."""
+    avvii = []
+    monkeypatch.setattr(parla, "BASE", tmp_path)
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+    monkeypatch.setattr(
+        parla.subprocess, "Popen",
+        lambda comando, **kw: avvii.append((comando, kw.get("start_new_session"))),
+    )
+
+    parla.parla("risposta da leggere")
+
+    assert len(avvii) == 1
+    comando, sessione_nuova = avvii[0]
+    assert comando[-1] == "--lettore"
+    assert sessione_nuova is True
+
+
+def test_prendi_pendente_vince_l_ultimo(tmp_path):
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    parla.scrivi_pendente("risposta vecchia", pendente)
+    parla.scrivi_pendente("risposta nuova", pendente)
+
+    assert parla.prendi_pendente(pendente) == "risposta nuova"
+    assert parla.prendi_pendente(pendente) is None  # l'attesa e' un posto solo
+
+
+def test_lettore_legge_in_fila_e_poi_pulisce(tmp_path, monkeypatch):
+    """Il lettore legge anche cio' che arriva DURANTE una lettura, col flag
+    PARLANDO alzato per tutta la corsa; alla fine toglie flag e lock."""
     flag = tmp_path / "PARLANDO"
-    thread_creato = {}
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    lock = tmp_path / "LETTORE_PID"
+    lette = []
 
-    class StdinFinto:
-        def write(self, _data):
-            pass
+    def leggi_finto(testo):
+        assert flag.exists()  # mani-libere in pausa mentre la voce parla
+        lette.append(testo)
+        if testo == "prima":
+            parla.scrivi_pendente("arrivata durante", pendente)
 
-        def close(self):
-            pass
-
-    class ProcessoFinto:
-        stdin = StdinFinto()
-
-    class ThreadFinto:
-        def __init__(self, **kwargs):
-            thread_creato.update(kwargs)
-
-        def start(self):
-            thread_creato["avviato"] = True
-
+    monkeypatch.setattr(parla, "BASE", tmp_path)  # il registro resta nel tmp
     monkeypatch.setattr(parla, "FLAG_PARLANDO", flag)
-    monkeypatch.setattr(parla, "ferma", lambda: None)
-    monkeypatch.setattr(parla, "carica_config", lambda: {"voce": "Alice", "velocita": 195})
-    monkeypatch.setattr(parla.subprocess, "Popen", lambda *_args, **_kwargs: ProcessoFinto())
-    monkeypatch.setattr(parla.threading, "Thread", ThreadFinto)
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(parla, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+    monkeypatch.setattr(parla, "LETTORE_PID", lock)
+    monkeypatch.setattr(parla, "_leggi_adesso", leggi_finto)
+    parla.scrivi_pendente("prima", pendente)
 
-    parla.parla("Voce LeaderAI pronta")
+    parla.lettore()
 
-    assert flag.exists()
-    assert thread_creato["daemon"] is False
-    assert thread_creato["avviato"] is True
+    assert lette == ["prima", "arrivata durante"]
+    assert not flag.exists()
+    assert not lock.exists()
 
 
-def test_monitor_voce_rimuove_flag_quando_audio_finito(tmp_path, monkeypatch):
+def test_lettore_unico_col_lock_del_kernel(tmp_path, monkeypatch):
+    """Il flock ammette un solo lettore e si libera col rilascio (o con la
+    morte del processo): niente lock stantii da rubare."""
+    monkeypatch.setattr(parla, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+
+    assert parla._prendi_lock() is True        # primo lettore
+    assert parla._lettore_in_corsa() is True   # visto da fuori
+    assert parla._prendi_lock() is False       # niente secondo lettore
+
+    parla._rilascia_lock()
+    assert parla._lettore_in_corsa() is False
+    assert parla._prendi_lock() is True        # libero: si riprende subito
+    parla._rilascia_lock()
+
+
+def test_lettura_incantata_viene_uccisa_e_si_va_avanti(tmp_path, monkeypatch):
+    """Uno `shortcuts run` appeso non deve ammutolire le risposte successive:
+    scaduto il tetto (proporzionale al testo) la lettura si uccide."""
+    comandi = []
+
+    def run_finto(comando, **kw):
+        if comando[0] != "pkill":
+            raise parla.subprocess.TimeoutExpired(comando, kw.get("timeout"))
+        comandi.append(comando)
+
+    monkeypatch.setattr(parla, "BASE", tmp_path)  # il registro resta nel tmp
+    monkeypatch.setattr(parla, "carica_config", lambda: {"voce": "Siri (Voce 2)"})
+    monkeypatch.setattr(parla.subprocess, "run", run_finto)
+
+    parla._leggi_adesso("testo che incanta la voce")
+
+    assert ["pkill", "-x", "say"] in comandi
+    assert ["pkill", "-f", "shortcuts run"] in comandi
+
+
+def test_ferma_svuota_attesa_voce_e_stato(tmp_path, monkeypatch):
     flag = tmp_path / "PARLANDO"
     flag.touch()
-    attese = []
-
-    class ProcessoFinto:
-        def wait(self):
-            attese.append(True)
-
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    pendente.write_text("in attesa")
+    lock = tmp_path / "LETTORE_PID"
+    lock.write_text("999999999")
+    comandi = []
     monkeypatch.setattr(parla, "FLAG_PARLANDO", flag)
-    parla._segna_fine_a_processo_finito(ProcessoFinto())
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(parla, "LETTORE_PID", lock)
+    monkeypatch.setattr(parla.subprocess, "run", lambda c, **k: comandi.append(c))
 
-    assert attese == [True]
-    assert not flag.exists()
+    parla.ferma()
+
+    assert not flag.exists() and not pendente.exists() and not lock.exists()
+    assert ["pkill", "-x", "say"] in comandi
 
 
 def test_voce_attiva_segue_il_flag(tmp_path, monkeypatch):
