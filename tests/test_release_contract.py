@@ -83,6 +83,20 @@ def test_email_impone_pacchetto_drive_e_prova_destinatario():
         "INVIO_OK",
     ):
         assert frase in email
+    assert email.index("Rigenera lo stesso pacchetto Voce su Drive") < email.index(
+        "soltanto dopo aggiorna GitHub"
+    )
+
+
+def test_drive_e_corrente_e_github_e_solo_backup():
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    for testo in (agents, readme, changelog):
+        assert "Drive" in testo
+        assert "GitHub" in testo
+        assert "backup" in testo
+    assert agents.index("prova Drive") < agents.index("aggiorna GitHub")
 
 
 def test_consegna_senza_passaggi_tecnici_del_proprietario():

@@ -1,6 +1,6 @@
 # Voce — prodotto LeaderAI di dettatura (Mac + Windows)
 
-> Repo UNICA del prodotto "Voce". Due app gemelle, una cartella per sistema.
+> Copia di lavoro UNICA del prodotto "Voce". Due app gemelle, una cartella per sistema.
 > **Leggere TUTTO questo file PRIMA di toccare qualsiasi cosa.** Vale per Claude Code e Codex.
 > `CLAUDE.md` qui accanto contiene `@AGENTS.md`: e' un ponte portabile anche
 > nelle copie locali su Windows.
@@ -8,8 +8,9 @@
 Mac e Windows si presentano e si distribuiscono sempre insieme come un solo
 prodotto. La prova su hardware reale cambia l'etichetta di collaudo della
 singola versione, non la sua presenza nel catalogo ne' la sua disponibilita'.
-Gli intoppi dei primi utilizzi aggiornano questa stessa fonte e il medesimo
-pacchetto, senza creare copie o rami di consegna paralleli.
+Gli intoppi dei primi utilizzi aggiornano questa stessa copia di lavoro e il
+medesimo pacchetto su Drive, senza creare copie o rami di consegna paralleli.
+GitHub riceve soltanto il backup successivo alla prova Drive.
 
 ## Cosa è
 
@@ -77,7 +78,8 @@ Due versioni, **stessa anima**:
 - Si consegna come **UNA email** rivolta al proprietario: il suo Claude Code o
   Codex prende da Google Drive l'unico pacchetto Voce mostrato nel modulo App di
   LeaderAI Ecosystem, sceglie `mac/` oppure `windows/`, installa e collauda. La
-  repo resta l'officina tecnica dietro le quinte.
+  copia di lavoro locale serve agli agenti per costruire e provare; GitHub
+  conserva soltanto il backup dopo che Drive ha superato il controllo.
 - Il proprietario non preleva, non estrae e non avvia pacchetti. Interviene solo per permessi, conferme di sicurezza, scelte reali e prova fisica.
 - Se l'agente non puo' eseguire direttamente l'installer, legge i sorgenti e ne riproduce localmente i passaggi. Il blocco non viene spostato sul proprietario.
 - Nel catalogo e nel pacchetto sono presenti entrambe le versioni; l'agente
@@ -86,7 +88,7 @@ Due versioni, **stessa anima**:
 
 ## GOAL OPERATIVO — installazione sul computer del cliente
 
-Quando questa repo viene data a un cliente, il suo agente deve portare a termine questa missione:
+Quando questo pacchetto viene dato a un cliente, il suo agente deve portare a termine questa missione:
 
 > Installa o aggiorna Voce sul sistema giusto, ripara da solo tutto cio' che e' recuperabile, crea il modo semplice per avviarla e chiudi solo dopo una prova reale di dettatura.
 
@@ -125,7 +127,9 @@ Percorso tecnico richiesto per l'agente del cliente:
   computer reale** di quel sistema. Questo limite non autorizza a nasconderla o
   a distribuirla separatamente dall'altra versione.
 - **NON** degradare la voce Mac per semplificare la distribuzione: il file firmato e la prova audio fanno parte del prodotto.
-- **NON** mettere questa repo dentro `leaderai` (è il workspace privato di Sal): qui è un prodotto pubblico a sé.
+- **NON** mettere questa copia di lavoro dentro `leaderai` (è il workspace
+  privato di Sal). La distribuzione corrente vive su Drive; GitHub e' solo il
+  backup remoto.
 
 ## QUANDO FINISCI una modifica
 
@@ -135,4 +139,7 @@ Percorso tecnico richiesto per l'agente del cliente:
 4. Aggiorna `VERSION` e il `CHANGELOG.md` generale quando nasce una versione
    consegnabile.
 5. Se cambia l'esperienza di consegna o installazione, aggiorna `EMAIL_CONSEGNA.md` nello stesso commit.
-6. Lascia il pointer nell'anagrafe del cervello: `leaderai/memory/reference_kit_pubblici_leaderai.md`.
+6. Rigenera l'unico pacchetto su Google Drive e riparti dal suo collegamento:
+   solo la prova Drive `PASSA` rende corrente la modifica.
+7. Dopo la prova Drive, aggiorna GitHub come copia di sicurezza.
+8. Lascia il pointer nell'anagrafe del cervello: `leaderai/memory/reference_kit_pubblici_leaderai.md`.

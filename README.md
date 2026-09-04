@@ -15,7 +15,9 @@ Mac e Windows sono disponibili insieme nello stesso pacchetto Voce. Dal modulo
 **App** di LeaderAI Ecosystem apri il collegamento Google Drive e affidalo al
 tuo Claude Code o Codex: sceglie la cartella del tuo sistema, segue
 `INSTALLA_CON_AI.md`, installa, ripara e completa il collaudo. A te restano
-permessi e prova fisica. La repo e' l'officina tecnica dietro le quinte.
+permessi e prova fisica. Google Drive contiene la distribuzione corrente; questa
+cartella locale e' la copia di lavoro e GitHub riceve soltanto il backup dopo
+la prova Drive.
 
 Per consegnare Voce a un cliente, usa il modello versionato [`EMAIL_CONSEGNA.md`](EMAIL_CONSEGNA.md). L'email, il launcher e le istruzioni locali vengono aggiornati insieme.
 

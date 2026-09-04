@@ -180,9 +180,9 @@ gesto del cliente e le prove visibili che definiscono la chiusura.
    tiene il filo.
 2. Cerca `in:sent newer_than:1d to:[EMAIL_DESTINATARIO]` e confronta oggetto,
    sistema, versione e scopo.
-3. Apri lo stato corrente della fonte tecnica e scegli Windows oppure Mac.
-4. Pubblica la versione tecnica verificata e rigenera lo stesso pacchetto Voce
-   su Drive: quello che il cliente riceve e' quel pacchetto corrente.
+3. Apri la copia di lavoro locale corrente e scegli Windows oppure Mac.
+4. Rigenera lo stesso pacchetto Voce su Drive e rileggilo dal suo collegamento:
+   quello che il cliente riceve e' quel pacchetto corrente.
 5. Leggi la cartella madre del cliente dal suo stato o da un suo rapporto e
    scrivila in forma portabile.
 6. Riparti dal collegamento Drive come fa il cliente e verifica che il pacchetto
@@ -217,5 +217,5 @@ Quando una consegna incontra un ostacolo:
    l'esperienza del destinatario;
 4. aggiorna i changelog Mac e Windows;
 5. ripeti il percorso completo del destinatario;
-6. pubblica la fonte tecnica, rigenera il pacchetto unico su Drive e riparti da
-   quel collegamento nell'invio successivo.
+6. sostituisci il pacchetto unico su Drive, riparti da quel collegamento e
+   chiudi la prova; soltanto dopo aggiorna GitHub come copia di sicurezza.

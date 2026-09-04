@@ -15,7 +15,8 @@ restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 - Il ripasso notturno prova gli agenti disponibili in sequenza e registra
   l'errore vero quando nessuno risponde.
 - La consegna visibile parte dal modulo App di LeaderAI Ecosystem e da un solo
-  pacchetto Google Drive; Git resta l'officina tecnica dietro le quinte.
+  pacchetto Google Drive. Ogni modifica aggiorna e prova prima Drive; GitHub
+  riceve soltanto il backup successivo.
 
 ## 1.3.0-rc.8 - 29/08/2026
 
