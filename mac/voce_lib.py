@@ -91,6 +91,25 @@ def timeout_scaduto(attivo, inizio, ora, limite_sec):
     return bool(attivo and inizio is not None and (ora - inizio) > limite_sec)
 
 
+def stop_anti_incanto(registrando, inizio, ora, tasto_giu, tetto_soft, tetto_duro):
+    """Decide se l'airbag anti-incanto deve fermare la registrazione.
+
+    Caso reale 04/09 06:41: Sal dettava da 90s col tasto ancora premuto e il
+    tetto a tempo gli ha tagliato la frase (159 parole). Il tetto "soft"
+    (tetto_soft, 90s) serve contro il rilascio perso da pynput: ha senso SOLO
+    se il tasto-detta NON e' piu' fisicamente giu'. Se e' giu' l'utente sta
+    dettando davvero e non si ferma. Resta un tetto DURO (tetto_duro, 300s)
+    che ferma comunque, per il tasto incastrato. Nel VAD mani-libere il tasto
+    non c'entra: si passa tasto_giu=False e vale il solo tetto soft come prima.
+    """
+    if not registrando or inizio is None:
+        return False
+    durata = ora - inizio
+    if durata > tetto_duro:
+        return True
+    return durata > tetto_soft and not tasto_giu
+
+
 # Whisper-italiano inventa testo sul silenzio/rumore ("Grazie.", "Sottotitoli…")
 # e lo fa con alta confidenza (no_speech_prob ~0): i suoi punteggi interni NON
 # distinguono il parlato vero. Per questo qui filtriamo in due modi indipendenti:
@@ -409,6 +428,104 @@ def applica_sostituzioni(testo, sostituzioni):
     return testo
 
 
+# --- trascrizione progressiva (04/09/2026) ---
+# Dati reali 27/08→04/09: 1.422 dettature, 517 oltre i 30s, 181 oltre i 60s.
+# Whisper partiva solo al rilascio del tasto: 90s di parlato = 17s di attesa
+# prima dell'incolla. Qui la logica pura (dove tagliare, come rincollare,
+# cosa dire a Whisper del pezzo prima); il runtime (thread, lock) sta in
+# detta.py. Windows replica queste funzioni nel suo unico file.
+
+SILENZIO_PROGRESSIVO_SEC = 0.5   # pausa minima continua su cui e' lecito tagliare
+BLOCCO_PROGRESSIVO_SEC = 12.0    # durata minima del segmento prima di cercare un taglio
+# Soglia di "silenzio" tra due parole: sopra il rumore di stanza a guadagno
+# giusto (0.006-0.0074, misure 01/08) e sotto il parlato piano di Sal
+# (0.012-0.015). Con la pausa di 0,5s obbligatoria, spezzare una parola
+# richiederebbe mezzo secondo di voce sotto questa soglia: non succede.
+SOGLIA_SILENZIO_PROGRESSIVA = 0.010
+CONTESTO_PROGRESSIVO_CARATTERI = 200
+
+
+def trova_taglio(rms, campioni, inizio, freq=16000, soglia=SOGLIA_SILENZIO_PROGRESSIVA,
+                 silenzio_min_sec=SILENZIO_PROGRESSIVO_SEC,
+                 blocco_min_sec=BLOCCO_PROGRESSIVO_SEC):
+    """Indice (escluso) del blocco audio dove chiudere il segmento aperto da
+    `inizio`, oppure None se un punto sicuro non c'e' ancora.
+
+    rms[i] e campioni[i] sono volume e numero di campioni del blocco i, cosi'
+    come li consegna il callback audio. Si taglia SOLO alla fine di un
+    silenzio continuo di almeno silenzio_min_sec (ogni blocco sotto soglia)
+    e SOLO se il segmento chiuso durerebbe almeno blocco_min_sec: dentro un
+    silenzio non c'e' nessuna parola da spezzare. Il resto della pausa, se
+    piu' lunga, resta in testa al segmento successivo (Whisper la ignora)."""
+    n = min(len(rms), len(campioni))
+    durata = 0.0
+    silenzio = 0.0
+    for i in range(max(0, inizio), n):
+        d = campioni[i] / float(freq)
+        durata += d
+        if rms[i] < soglia:
+            silenzio += d
+            if silenzio >= silenzio_min_sec and durata >= blocco_min_sec:
+                return i + 1
+        else:
+            silenzio = 0.0
+    return None
+
+
+_FINE_FRASE = ".!?…"
+_SEGNI = _FINE_FRASE + ",;:"
+
+
+def unisci_segmenti(pezzi, glossario=()):
+    """Rincolla i testi dei segmenti trascritti uno alla volta in un testo
+    solo: spazi singoli, mai due segni di punteggiatura attaccati, maiuscola
+    dopo un punto. Se il pezzo prima finiva a meta' frase (nessun segno, o
+    una virgola) e quello dopo parte con l'iniziale maiuscola che Whisper
+    mette sempre in testa, l'iniziale torna minuscola — tranne i nomi del
+    glossario e le sigle, che non si toccano."""
+    # nomi a piu' parole ("Claude Code"): conta la prima parola
+    protetti = {v.split()[0].lower() for v in glossario if v and v.strip()}
+    testo = ""
+    for pezzo in pezzi:
+        p = " ".join((pezzo or "").split())
+        if not p:
+            continue
+        if not testo:
+            testo = p
+            continue
+        ultimo = testo[-1]
+        if ultimo in _SEGNI:
+            p = p.lstrip(_SEGNI + " ")
+            if not p:
+                continue
+        if p[0] in _SEGNI:  # ", e poi" dopo una parola nuda: si attacca
+            testo += p
+            continue
+        prima = p.split(" ", 1)[0]
+        if ultimo in _FINE_FRASE:
+            p = p[0].upper() + p[1:]
+        elif (p[0].isupper() and not prima.isupper()
+              and prima.strip(_SEGNI).lower() not in protetti):
+            p = p[0].lower() + p[1:]
+        testo += " " + p
+    return testo
+
+
+def prompt_con_contesto(glossario_prompt, precedente, max_caratteri=CONTESTO_PROGRESSIVO_CARATTERI):
+    """initial_prompt di Whisper per un segmento: il glossario di sempre piu'
+    la coda del testo del segmento prima (ultimi ~max_caratteri, tagliati a
+    inizio parola), cosi' nomi e punteggiatura restano coerenti da un pezzo
+    all'altro. Senza glossario ne' testo prima torna None (come oggi)."""
+    coda = " ".join((precedente or "").split())
+    if len(coda) > max_caratteri:
+        coda = coda[-max_caratteri:]
+        spazio = coda.find(" ")
+        if 0 <= spazio < len(coda) - 1:
+            coda = coda[spazio + 1:]
+    parti = [p for p in (glossario_prompt, coda) if p]
+    return " ".join(parti) or None
+
+
 def converti_punteggiatura_dettata(testo):
     """I segni di punteggiatura DETTATI diventano segni veri: "si parte punto
     esclamativo" -> "si parte!" (richiesta di Sal 30/08/2026: Whisper virgole
@@ -511,6 +628,25 @@ def destinazione_agente(nome_app="", url=""):
         dominio in indirizzo
         for dominio in ("chatgpt.com", "chat.openai.com", "claude.ai")
     )
+
+
+def ritardo_invio(cfg, voce_accesa, chat_ai):
+    """Secondi di pausa prima dell'Invio automatico, scelti dal contesto.
+
+    - voce agenti accesa: botta e risposta con l'agente
+      (`invio_automatico_ritardo_conversazione_sec`);
+    - chat AI a voce spenta: il testo si vede e non c'e' nulla da rileggere
+      (`invio_automatico_ritardo_chat_ai_sec`, default 1.0). Dati reali
+      30/08→04/09: con la pausa dei documenti il 40% degli Invii automatici
+      veniva annullato da Sal che premeva Invio a mano prima dell'app;
+    - documenti, email, social: serve tempo per correggere
+      (`invio_automatico_ritardo_sec`, default 2.5).
+    """
+    if voce_accesa:
+        return float(cfg.get("invio_automatico_ritardo_conversazione_sec", 0.3))
+    if chat_ai:
+        return float(cfg.get("invio_automatico_ritardo_chat_ai_sec", 1.0))
+    return float(cfg.get("invio_automatico_ritardo_sec", 2.5))
 
 
 def prompt_pulizia(testo, glossario=()):
@@ -645,23 +781,69 @@ def pulisci_con_shortcut(testo, nome, timeout=10, glossario=()):
         return None
 
 
-def comando_agente(_quale=None):
-    """L'agente gia' presente sul PC che fa la pulizia: Claude Code prima,
-    Codex come riserva. Nessuno dei due installato -> niente pulizia.
+def comandi_agente():
+    """TUTTI gli agenti gia' presenti sul PC, in ordine di preferenza: Claude
+    Code, poi Codex. L'app non impone un agente: usa quello che il
+    proprietario ha (regola di Sal 04/09/2026: i clienti hanno Claude o
+    ChatGPT/Codex, non per forza entrambi). Chi chiama prova la lista in
+    ordine e si ferma al primo che risponde (vedi chiedi_arbitro): se il primo
+    e' installato ma rotto (sessione scaduta, CLI vecchia) si passa al
+    secondo. Nessuno installato -> lista vuota.
 
-    Avvio "spoglio" (misurato: ~2-3s in meno a chiamata): la pulizia non deve
-    caricare MCP, tool, settings ne' salvare la sessione su disco."""
+    Avvio "spoglio" di Claude (misurato: ~2-3s in meno a chiamata): niente
+    MCP, tool, settings ne' sessione salvata su disco."""
+    comandi = []
     if shutil.which("claude"):
-        return [
+        comandi.append([
             "claude", "--model", "haiku", "-p",
             "--tools", "",              # nessun tool built-in
             "--strict-mcp-config",      # senza --mcp-config = zero server MCP
             "--setting-sources", "",    # niente settings utente/progetto
             "--no-session-persistence", # niente sessione salvata su disco
-        ]
+        ])
     if shutil.which("codex"):
-        return ["codex", "exec"]
-    return None
+        comandi.append(["codex", "exec", "--skip-git-repo-check"])
+    return comandi
+
+
+def comando_agente(_quale=None):
+    """Il primo agente disponibile (compatibilita': la corsia di pulizia
+    interattiva ne usa uno solo). None se non ce n'e'."""
+    comandi = comandi_agente()
+    return comandi[0] if comandi else None
+
+
+def _catena_arbitri(comando):
+    """Accetta un comando solo (lista di stringhe) o una lista di comandi;
+    torna sempre una lista di comandi."""
+    if not comando:
+        return []
+    if isinstance(comando[0], str):
+        return [list(comando)]
+    return [list(c) for c in comando if c]
+
+
+def chiedi_arbitro(comando, prompt, timeout=60):
+    """Passa il prompt agli agenti locali in ordine e torna (proposte, errore)
+    del PRIMO che risponde. Prima l'arbitro era uno solo: Claude installato
+    ma con la sessione scaduta significava zero apprendimento ogni notte
+    anche con Codex a portata di mano (caso reale 04/09/2026: 5 notti a
+    vuoto). errore=None = risposta valida; altrimenti riassume il guasto di
+    ogni agente provato, cosi' il registro dice CHI ha fallito e perche'."""
+    errori = []
+    for cmd in _catena_arbitri(comando):
+        try:
+            esito = subprocess.run(
+                cmd + [prompt], capture_output=True, text=True, timeout=timeout,
+            )
+        except Exception as exc:
+            errori.append(f"{cmd[0]}: {type(exc).__name__}: {exc}")
+            continue
+        proposte, errore = risposta_arbitro(esito.returncode, esito.stdout, esito.stderr)
+        if errore is None:
+            return proposte, None
+        errori.append(f"{cmd[0]}: {errore}")
+    return {}, ("; ".join(errori) if errori else "nessun agente locale installato")
 
 
 def pulisci_con_agente(testo, comando, timeout=10, glossario=()):
@@ -733,6 +915,22 @@ def estrai_json(testo):
         return {}
 
 
+def risposta_arbitro(returncode, stdout, stderr=""):
+    """(proposte, errore) dalla risposta dell'agente locale. Proposte solo se
+    l'agente ha risposto davvero; altrimenti l'errore reale da mettere nel
+    registro. Caso vero del 04/09/2026: la CLI con la sessione OAuth scaduta
+    esce con codice 1 e stampa `Failed to authenticate: ...` su stdout; prima
+    quel testo passava per una risposta senza coppie e nel registro finiva
+    "nessuna correzione sicura", cinque notti su cinque."""
+    stdout = (stdout or "").strip()
+    stderr = (stderr or "").strip()
+    if returncode != 0:
+        return {}, f"agente uscito con codice {returncode}: {(stdout or stderr)[:200]}"
+    if "{" not in stdout:
+        return {}, f"agente senza JSON: {(stdout or stderr or 'risposta vuota')[:200]}"
+    return estrai_json(stdout), None
+
+
 def prompt_apprendimento(grezzi):
     righe = [
         "Queste sono dettature vocali trascritte da Whisper in italiano.",
@@ -755,11 +953,11 @@ def impara_sostituzioni(log_path, config_path, comando, timeout=60):
     if not grezzi:
         return {}
     try:
-        esito = subprocess.run(
-            comando + [prompt_apprendimento(grezzi)],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        proposte = estrai_json(esito.stdout or "")
+        proposte, errore = chiedi_arbitro(comando, prompt_apprendimento(grezzi), timeout)
+        if errore:
+            logging.getLogger("voce").warning(
+                "apprendimento sostituzioni: agente fallito (%s)", errore)
+            return {}
         with open(config_path) as f:
             cfg = json.load(f)
         nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
@@ -894,11 +1092,11 @@ def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
         log.info("ripasso audio: i due riconoscitori sono d'accordo su tutto")
         return {}
     try:
-        esito = subprocess.run(
-            comando + [prompt_arbitro_ripasso(casi)],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        proposte = estrai_json(esito.stdout or "")
+        proposte, errore = chiedi_arbitro(comando, prompt_arbitro_ripasso(casi), timeout)
+        if errore:
+            log.warning("ripasso audio: %d disaccordi, arbitro fallito (%s)",
+                        len(casi), errore)
+            return {}
         with open(config_path, encoding="utf-8") as f:
             cfg_locale = json.load(f)
         nuove = unisci_sostituzioni(cfg_locale.get("sostituzioni", {}), proposte)
@@ -968,7 +1166,7 @@ if __name__ == "__main__":
             BASE / "audio_recenti",
             [BASE / "voce.log"] + sorted(BASE.glob("voce.log.*"))[-1:],
             config_scrivibile(),
-            comando_agente(),
+            comandi_agente(),
             cfg.get("modello_ripasso", "mlx-community/whisper-large-v3-turbo"),
             massimo_file=int(cfg.get("conserva_audio_n", 0)) or 30,
         )

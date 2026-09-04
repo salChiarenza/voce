@@ -5,13 +5,16 @@ L'installer e l'email evolvono insieme: ogni cambiamento che tocca il modo di
 arrivare sul computer del cliente, il launcher, i permessi, la cartella locale
 o il collaudo aggiorna anche questo file nello stesso commit.
 
-La cronologia Git conserva i miglioramenti. I dati del singolo cliente restano
-nel testo mostrato a Sal e nella copia Gmail inviata.
+La cronologia Git conserva i miglioramenti dietro le quinte. Il cliente parte
+dal modulo App di LeaderAI Ecosystem e dal suo unico pacchetto su Google Drive.
+I dati del singolo cliente restano nel testo mostrato a Sal e nella copia Gmail
+inviata.
 
 ## Regola fissa: consegna gestita dall'agente
 
-Voce arriva sul computer del cliente attraverso il suo agente, che prende la
-struttura dalla repo pubblica ed esegue l'installer. Il proprietario dà le
+Voce arriva sul computer del cliente attraverso il suo agente, che prende
+l'unico pacchetto Mac + Windows dal collegamento Google Drive del modulo App,
+sceglie la cartella del sistema ed esegue l'installer. Il proprietario dà le
 conferme di sistema e fa la prova con il microfono.
 
 La consegna chiude sempre allo stesso modo: l'agente del cliente legge
@@ -28,6 +31,8 @@ Prima di mostrare l'email a Sal, sostituisci tutti i campi tra parentesi quadre:
 - `[CARTELLA_MADRE]`: cartella dell'Ecosistema del cliente, letta dal suo
   stato o da un suo rapporto, in forma portabile;
 - `[FIRMA_AGENTE]`: agente LeaderAI che ha preparato e verificato la consegna.
+- `[LINK_VOCE_DRIVE]`: collegamento corrente all'unico pacchetto Voce su Google
+  Drive, letto dalla lezione `Voce/Dettatura · Mac e Windows`.
 
 Percorsi standard:
 
@@ -77,8 +82,8 @@ Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e copia soltanto il testo
 fra le due righe:
 
 ------------------------------------------------------------
-Installa o aggiorna Voce LeaderAI dalla repo pubblica
-https://github.com/salChiarenza/voce, usando la cartella windows. Leggi prima
+Installa o aggiorna Voce LeaderAI dal pacchetto corrente
+[LINK_VOCE_DRIVE], usando la cartella windows. Leggi prima
 AGENTS.md e poi windows/INSTALLA_CON_AI.md. Esegui tu diagnosi, installazione,
 riparazione e prova reale. Quando trovi un errore del software, applica una
 correzione locale sicura, ripeti la prova e prosegui.
@@ -118,8 +123,8 @@ Apri [AGENTE_CLIENTE] nella cartella [CARTELLA_MADRE] e copia soltanto il testo
 fra le due righe:
 
 ------------------------------------------------------------
-Installa o aggiorna Voce LeaderAI dalla repo pubblica
-https://github.com/salChiarenza/voce, usando la cartella mac. Leggi prima
+Installa o aggiorna Voce LeaderAI dal pacchetto corrente
+[LINK_VOCE_DRIVE], usando la cartella mac. Leggi prima
 AGENTS.md e poi mac/INSTALLA_CON_AI.md. Esegui tu diagnosi, installazione,
 riparazione e prova reale. Quando trovi un errore del software, applica una
 correzione locale sicura, ripeti la prova e prosegui.
@@ -175,14 +180,14 @@ gesto del cliente e le prove visibili che definiscono la chiusura.
    tiene il filo.
 2. Cerca `in:sent newer_than:1d to:[EMAIL_DESTINATARIO]` e confronta oggetto,
    sistema, versione e scopo.
-3. Apri lo stato corrente della repo e scegli Windows oppure Mac.
-4. Pubblica su `main` la versione da consegnare: quello che il cliente riceve
-   e' il contenuto pubblico della repo in quel momento.
+3. Apri lo stato corrente della fonte tecnica e scegli Windows oppure Mac.
+4. Pubblica la versione tecnica verificata e rigenera lo stesso pacchetto Voce
+   su Drive: quello che il cliente riceve e' quel pacchetto corrente.
 5. Leggi la cartella madre del cliente dal suo stato o da un suo rapporto e
    scrivila in forma portabile.
-6. Clona la repo pubblica senza credenziali, come fa il cliente, e verifica che
-   il launcher e `INSTALLA_CON_AI.md` siano presenti nella cartella del sistema
-   scelto.
+6. Riparti dal collegamento Drive come fa il cliente e verifica che il pacchetto
+   contenga entrambe le versioni e che launcher e `INSTALLA_CON_AI.md` siano
+   presenti nella cartella del sistema scelto.
 7. Prova il primo avvio sul sistema previsto oppure dichiara nella scheda del
    cliente cosa resta in carico all'agente del destinatario.
 8. Registra `PROVA_DESTINATARIO_OK`.
@@ -212,4 +217,5 @@ Quando una consegna incontra un ostacolo:
    l'esperienza del destinatario;
 4. aggiorna i changelog Mac e Windows;
 5. ripeti il percorso completo del destinatario;
-6. pubblica su `main` e riparti dalla repo pubblica nell'invio successivo.
+6. pubblica la fonte tecnica, rigenera il pacchetto unico su Drive e riparti da
+   quel collegamento nell'invio successivo.

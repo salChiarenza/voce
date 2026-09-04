@@ -5,6 +5,12 @@
 > `CLAUDE.md` qui accanto contiene `@AGENTS.md`: e' un ponte portabile anche
 > nelle copie locali su Windows.
 
+Mac e Windows si presentano e si distribuiscono sempre insieme come un solo
+prodotto. La prova su hardware reale cambia l'etichetta di collaudo della
+singola versione, non la sua presenza nel catalogo ne' la sua disponibilita'.
+Gli intoppi dei primi utilizzi aggiornano questa stessa fonte e il medesimo
+pacchetto, senza creare copie o rami di consegna paralleli.
+
 ## Cosa è
 
 "Voce" è l'app di dettatura locale di Sal (brand **salchiarenza.ai**). Tieni premuto un tasto, parli, e il testo si incolla dove hai il cursore. Audio e trascrizione Whisper restano sul computer. Nelle chat AI arriva sempre il grezzo immediato; sul Mac, fuori da quelle chat, la pulizia opzionale usa soltanto Apple Intelligence con un tetto breve. C'è anche la modalità **voce agenti**: legge ad alta voce le risposte dell'agente (Claude/Codex), così ci parli e ti risponde a voce.
@@ -68,10 +74,14 @@ Due versioni, **stessa anima**:
 ## CONSEGNA AL CLIENTE
 
 - La fonte unica del testo di consegna e' [`EMAIL_CONSEGNA.md`](EMAIL_CONSEGNA.md). Ogni modifica al percorso di installazione, launcher, permessi, cartella locale o collaudo aggiorna quel file nello stesso commit. Ogni invio parte da quel modello compilato e verificato.
-- Si consegna come **UNA email** rivolta al proprietario: il suo Claude Code o Codex prende la versione verificata dalla repo pubblica, installa e collauda.
+- Si consegna come **UNA email** rivolta al proprietario: il suo Claude Code o
+  Codex prende da Google Drive l'unico pacchetto Voce mostrato nel modulo App di
+  LeaderAI Ecosystem, sceglie `mac/` oppure `windows/`, installa e collauda. La
+  repo resta l'officina tecnica dietro le quinte.
 - Il proprietario non preleva, non estrae e non avvia pacchetti. Interviene solo per permessi, conferme di sicurezza, scelte reali e prova fisica.
 - Se l'agente non puo' eseguire direttamente l'installer, legge i sorgenti e ne riproduce localmente i passaggi. Il blocco non viene spostato sul proprietario.
-- Scegliere prima la versione: **Mac** o **Windows** secondo il sistema del cliente.
+- Nel catalogo e nel pacchetto sono presenti entrambe le versioni; l'agente
+  sceglie **Mac** o **Windows** secondo il computer del destinatario.
 - L'aggiornamento NON è "reinstalla da zero": il testo-istruzioni dice di **aggiornare** quella già installata e aggiungere ciò che manca.
 
 ## GOAL OPERATIVO — installazione sul computer del cliente
@@ -111,7 +121,9 @@ Percorso tecnico richiesto per l'agente del cliente:
 - **NON** rinominare app, cartelle o file.
 - **NON** cambiare i tasti senza un motivo reale. Su Windows mai tasti F.
 - **NON** spezzare dettatura/voce in più file: l'app Windows è **UN file solo** (`voice_dettatura_windows.py`) + `voce_hook.py` opzionale.
-- **NON** dichiarare "pronta" senza averla **vista girare su un PC reale** di quel sistema.
+- **NON** dichiarare "stabile" una versione senza averla **vista girare su un
+  computer reale** di quel sistema. Questo limite non autorizza a nasconderla o
+  a distribuirla separatamente dall'altra versione.
 - **NON** degradare la voce Mac per semplificare la distribuzione: il file firmato e la prova audio fanno parte del prodotto.
 - **NON** mettere questa repo dentro `leaderai` (è il workspace privato di Sal): qui è un prodotto pubblico a sé.
 

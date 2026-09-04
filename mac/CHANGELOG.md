@@ -1,5 +1,130 @@
 # Changelog
 
+## 1.3.0-rc.11 - 04/09/2026 — quattro migliorie dai registri veri
+
+Quattro interventi nati dai log reali 27/08→04/09 (1.422 dettature), fatti da quattro agenti in parallelo e fusi lo stesso giorno. Da provare a voce vera su Mac; Windows su PC reale.
+
+### trascrizione mentre parli
+- Dato reale (log 27/08→04/09): 1.422 dettature, 517 oltre i 30s e 181
+  oltre i 60s. Whisper partiva solo al rilascio del tasto, quindi l'attesa
+  cresceva col parlato: 27s = 2,7s, 66s = 14,5s, 90s = 17s prima
+  dell'incolla. Sal detta monologhi lunghi e aspettava a fine frase.
+- Trascrizione progressiva (`trascrizione_progressiva: true`, tetto
+  `trascrizione_progressiva_blocco_sec: 12`): mentre tieni premuto, un
+  thread di sottofondo (`SessioneProgressiva`) trascrive i segmenti gia'
+  chiusi; al rilascio resta da trascrivere solo la coda dall'ultimo taglio,
+  cosi' l'attesa dipende dalla coda e non dalla lunghezza totale.
+- Dove si taglia (`trova_taglio` in `voce_lib.py`): solo su una pausa vera,
+  volume per blocco sotto soglia per almeno 0,5s di fila, e solo quando il
+  segmento aperto ha superato i 12s. Dentro una pausa non c'e' nessuna
+  parola da spezzare; senza pause (parlato continuo) non si taglia e si
+  torna al passaggio unico. Sotto i 12s di audio niente cambia.
+- Coerenza tra i pezzi: ogni segmento riceve come `initial_prompt` il
+  glossario di sempre piu' gli ultimi ~200 caratteri del segmento prima
+  (`prompt_con_contesto`), cosi' nomi e punteggiatura non cambiano da un
+  pezzo all'altro. I pezzi vengono rincollati da `unisci_segmenti` (spazi
+  singoli, mai due segni attaccati, maiuscola dopo il punto, iniziale
+  minuscola dopo una frase lasciata a meta' salvo nomi del glossario e sigle).
+- Il post-processing e' lo stesso di oggi, una volta sola sul testo unito:
+  eco del glossario, sostituzioni, punteggiatura dettata, guardia
+  anti-allucinazione e anti-non-parlato. Un pezzo che da solo e' una
+  frase-fantasma (coda cortissima) viene scartato prima dell'unione.
+- La pill resta su "ascolto" per tutta la registrazione: "Trascrivo…"
+  compare solo al rilascio, sulla coda. Il callback audio e il thread
+  tastiera non fanno nulla di nuovo (un solo `append` in piu' per blocco);
+  Whisper resta uno per volta sotto `_lock_trascrizione`, incluso lo scaldo
+  del modello. Un errore in sottofondo riporta al passaggio unico su tutto
+  l'audio, senza perdere niente.
+- Limiti: da provare a voce vera su Mac (soglia di pausa 0,010 rms
+  calibrata sulle misure del 01/08, eventuale eco del contesto nel prompt,
+  coerenza delle frasi a cavallo di un taglio); Windows da provare su PC
+  reale. Interruttore a `false` = comportamento identico a prima.
+
+### il ripasso notturno taceva il suo errore
+Segnalazione del 04/09: "22 righe `audio conservato` nel registro ma
+`audio_recenti/` vuota, e il ripasso notturno non impara mai". Verifica sui
+dati veri della macchina di Sal, non a memoria.
+
+- Gli audio NON spariscono. Alle 07:53 la cartella operativa
+  `tools/voce/audio_recenti/` conteneva esattamente 30 WAV (= `conserva_audio_n`),
+  28 di oggi + 2 di ieri, uno per ogni riga `audio conservato` del registro;
+  i piu' vecchi li toglie la rotazione a N, come da progetto. Nella cartella
+  sorgente della repo (`mac/audio_recenti`) non c'e' niente, ed e' giusto
+  cosi': `BASE` e' la cartella operativa (symlink), `.gitignore` la esclude.
+  Chi ha guardato una cartella vuota ha guardato quella sbagliata. Per
+  togliere l'ambiguita' la riga `audio conservato:` ora scrive il percorso
+  intero del file, non solo il nome.
+- Il ripasso notturno "non produce niente" per una causa provata, non per
+  soglie: l'arbitro (`claude --model haiku -p ...`) esce con codice 1 e stampa
+  su stdout `Failed to authenticate: OAuth session expired and could not be
+  refreshed`. `ripassa_audio_conservati` ignorava il codice di uscita, dava
+  quel testo a `estrai_json`, otteneva `{}` e scriveva "N disaccordi, nessuna
+  correzione sicura": 5 notti su 5 (21, 20, 23, 20, 33 disaccordi), stesso
+  esito riprodotto oggi coi 30 WAV veri (33 disaccordi, rc=1 in 4 secondi).
+  Anche l'apprendimento giornaliero dal registro (`impara_sostituzioni`)
+  inghiottiva lo stesso errore: mai una riga `imparate` da fine agosto.
+- Nuova funzione pura `risposta_arbitro(returncode, stdout, stderr)`: coppie
+  solo se l'agente ha risposto davvero; uscita non zero o risposta senza JSON
+  diventano l'errore reale nel registro (`ripasso audio: N disaccordi,
+  arbitro fallito (agente uscito con codice 1: Failed to authenticate ...)`,
+  `apprendimento sostituzioni: agente fallito (...)`). Cosi' il registro dice
+  cosa riparare. Rimedio umano sulla macchina di Sal: `claude login` dal
+  Terminal (la sessione OAuth della CLI e' scaduta; il codice non puo' farlo).
+- Test: `test_risposta_arbitro_smaschera_agente_fallito`,
+  `test_ripasso_arbitro_fallito_lo_dice_nel_registro`.
+- **Nessun agente imposto, catena di arbitri**: regola di Sal (04/09): l'app
+  non deve dipendere da Claude, i clienti hanno Claude oppure ChatGPT/Codex.
+  Il codice gia' sceglieva "Claude se c'e', altrimenti Codex", ma se il primo
+  era installato e rotto non provava il secondo: sul Mac di Sal Claude CLI ha
+  la sessione OAuth scaduta e Codex CLI e' troppo vecchio per il suo modello,
+  quindi 5 notti a vuoto. Ora `comandi_agente()` elenca tutti gli agenti
+  presenti e `chiedi_arbitro()` li prova in ordine fermandosi al primo che
+  risponde; apprendimento e ripasso notturno passano da li' e il registro
+  dice CHI ha fallito e perche' (`claude: ...; codex: ...`).
+
+### Invio automatico al ritmo delle chat AI
+- **Pausa pre-Invio piu' corta nelle chat AI**: dai log veri 30/08→04/09 il
+  40% degli Invii automatici veniva ANNULLATO (137 su 363 il 30/08, 92 su
+  239 l'01/09, 10 su 22 il 04/09): in ChatGPT, Claude, Codex e Claude Code
+  Sal vede il testo incollato, non aspetta i 2,5s pensati per i documenti e
+  preme Invio a mano, e quel tasto annulla l'Invio dell'app. Il ritardo era
+  piu' lungo del suo ritmo. Nuova chiave
+  `invio_automatico_ritardo_chat_ai_sec` (default 1.0), usata SOLO quando il
+  bersaglio e' una chat AI (stesso riconoscimento di `destinazione_agente`,
+  nessun rilevamento nuovo) e la voce agenti e' spenta. A voce accesa resta
+  `invio_automatico_ritardo_conversazione_sec`; fuori dalle chat AI resta
+  `invio_automatico_ritardo_sec` (2,5s: nei documenti serve tempo per
+  correggere). La scelta vive in `ritardo_invio()` di `voce_lib.py`,
+  testata su tutti e tre i rami; l'annullamento su tasto premuto o nuova
+  dettatura e' identico a prima, e il log dell'Invio riporta l'attesa usata.
+
+### tetto 90s legato al tasto
+- Caso reale (log 04/09 06:41): Sal dettava da 90 secondi col tasto-detta
+  ancora fisicamente premuto e l'airbag anti-incanto (`max_registrazione_sec`
+  = 90) ha fermato la registrazione tagliandogli la frase (159 parole). Sal
+  detta spesso monologhi lunghi: 181 dettature su 1.422 superano i 60s.
+  Causa: il tetto a tempo era cieco sul tasto, nato per il rilascio perso da
+  pynput ma applicato anche alla dettatura vera. Cosa cambia: il tetto dei
+  90s scatta SOLO se il tasto-detta non e' piu' fisicamente giu' secondo il
+  sistema (Quartz, `_cmd_giu()`, la stessa lettura del combo mani libere);
+  finche' Cmd e' giu' si continua a registrare. Resta un tetto DURO separato,
+  `max_registrazione_tasto_sec` (300s), che ferma comunque per il tasto
+  incastrato. La decisione vive in `voce_lib.stop_anti_incanto` (testata) ed
+  e' usata sia dal timer del pannello sia da `watchdog_audio`. Il VAD
+  mani-libere non cambia: li' il tasto non c'entra e vale il tetto di prima.
+
+## 1.3.0-rc.10 - 04/09/2026 — mezzo secondo di coda al rilascio
+
+- Richiesta di Sal: mollando Cmd destro un pelo prima di finire la frase,
+  l'ultima sillaba andava persa. Ora al rilascio il microfono resta in
+  ascolto ancora `0.5s` (`coda_rilascio_sec`) prima di chiudere e
+  trascrivere: lo stream e' sempre aperto e il callback continua ad
+  accodare blocchi, quindi l'attesa vive nel worker audio (`stop_coda`),
+  mai nel thread tastiera. Vale solo per la dettatura manuale: il VAD
+  mani-libere ha gia' la sua pausa di silenzio e l'anti-incanto resta
+  immediato. Mezzo secondo, non uno intero: un secondo pieno si pagherebbe
+  su ogni dettatura come ritardo prima dell'incolla.
+
 ## 1.3.0-rc.9 - 30/08/2026 — la voce agenti arriva in fondo
 
 La voce agenti si troncava a meta' lettura. Analisi del 30/08 sui log veri:

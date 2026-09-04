@@ -1,27 +1,26 @@
 # Installa Voce LeaderAI su Windows
 
-Voce arriva dalla repo pubblica `salChiarenza/voce`. Il percorso separa due momenti:
+Voce arriva dall'unico pacchetto Mac + Windows collegato nel modulo App di
+LeaderAI Ecosystem. Il percorso separa due momenti:
 
-1. l'agente del proprietario prende la struttura dalla repo ed esegue l'installer;
+1. l'agente del proprietario apre il pacchetto, sceglie `windows/` ed esegue l'installer;
 2. lo stesso agente lavora sulla cartella installata, completa la diagnosi e guida il collaudo.
 
 Al proprietario restano le conferme di Windows e la prova con il microfono. L'installazione avviene nel profilo Windows dell'utente tramite `install.bat`.
 
 ## Missione unica dell'agente
 
-1. Verifica che Git sia disponibile e installalo se manca.
-2. Prendi la struttura dalla repo pubblica dentro la cartella madre del proprietario:
-
-```text
-git clone https://github.com/salChiarenza/voce.git "%USERPROFILE%\<cartella madre>\voce"
-```
-
-3. Entra nella copia appena creata e poi in `windows`.
+1. Apri il collegamento Google Drive ricevuto nell'email e scarica tu il
+   pacchetto Voce in una cartella temporanea; il proprietario non fa da tramite.
+2. Verifica che il pacchetto contenga `VERSION`, `mac/` e `windows/`: le due
+   versioni devono restare insieme anche se su questo computer ne installi una.
+3. Estrai il pacchetto, entra in `windows` e verifica la versione dichiarata.
 4. Esegui `install.bat` e resta sulla finestra fino al messaggio `Installazione completata`.
 5. Chiedi al proprietario di confermare gli avvisi di Windows e dell'antivirus, indicando con precisione cosa deve autorizzare.
 6. Se l'installazione si interrompe, leggi il messaggio nella finestra, correggi la causa ed esegui di nuovo `install.bat`.
 
-Una copia della repo già presente sul computer si aggiorna con `git pull` invece di essere clonata di nuovo.
+Se Voce e' gia' installata, usa il nuovo pacchetto come aggiornamento e conserva
+la configurazione personale prevista dall'installer.
 
 L'installer crea o aggiorna:
 

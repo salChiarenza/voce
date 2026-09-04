@@ -28,7 +28,7 @@ def _funzioni_pure_app(*nomi):
                 isinstance(target, ast.Name)
                 and target.id in ("_FRASI_FANTASMA", "_CSHARP_MIC",
                                   "GUADAGNO_INGRESSO_MINIMO", "GUADAGNO_INGRESSO_TARGET",
-                                  "SOGLIA_GUASTI_CORSIA", "RIPOSO_CORSIA_SEC")
+                                  "SOGLIA_GUASTI_CORSIA", "RIPOSO_CORSIA_SEC", "_VK_TASTI")
                 for target in nodo.targets
             )
         )
@@ -149,6 +149,41 @@ def test_windows_annulla_enter_su_tasto_o_nuova_dettatura():
     assert funzione(9.9, 10.0, False) is False
 
 
+def test_destinazione_agente_windows_gemella_del_mac():
+    funzione = _funzioni_pure_app("destinazione_agente")["destinazione_agente"]
+
+    assert funzione("ChatGPT - Google Chrome ChatGPT") is True
+    assert funzione("Claude - Google Chrome chrome") is True
+    assert funzione("claude WindowsTerminal") is True
+    assert funzione("Google Chrome", "https://chatgpt.com/c/123") is True
+    assert funzione("Documento1 - Word WINWORD") is False
+    assert funzione("") is False
+
+
+def test_ritardo_invio_windows_gemello_del_mac():
+    funzione = _funzioni_pure_app("ritardo_invio")["ritardo_invio"]
+    cfg = {
+        "invio_automatico_ritardo_sec": 2.5,
+        "invio_automatico_ritardo_conversazione_sec": 0.4,
+        "invio_automatico_ritardo_chat_ai_sec": 1.0,
+    }
+    assert funzione(cfg, True, True) == 0.4
+    assert funzione(cfg, True, False) == 0.4
+    assert funzione(cfg, False, True) == 1.0
+    assert funzione(cfg, False, False) == 2.5
+    assert funzione({}, True, False) == 0.3
+    assert funzione({}, False, True) == 1.0
+    assert funzione({}, False, False) == 2.5
+
+
+def test_invio_automatico_windows_usa_il_ritardo_di_contesto():
+    sorgente = (REPO_ROOT / "windows" / "voice_dettatura_windows.py").read_text(encoding="utf-8")
+    corpo = sorgente.split("def transcribe_and_paste", 1)[1].split("\ndef ", 1)[0]
+    assert "chat_agente = destinazione_agente(nome_finestra(finestra_bersaglio))" in corpo
+    assert "ritardo_invio(CFG, voce_attiva(), chat_agente)" in corpo
+    assert "invio automatico ANNULLATO" in corpo
+
+
 # --- audio muto: guadagno d'ingresso abbassato vs stream morto (gemello Mac) ---
 # Caso 01/08/2026: su Mac il volume d'ingresso di sistema e' sceso da solo a
 # 36/100 e l'app e' diventata muta senza diagnosi. Stessa rete su Windows.
@@ -246,6 +281,49 @@ def test_guardia_pulizia_windows_gemella_del_mac():
             voce_lib.pulizia_inventa_nomi(grezzo, pulito, glossario)
         assert spazio["pulizia_sospetta"](grezzo, pulito, glossario) == \
             voce_lib.pulizia_sospetta(grezzo, pulito, glossario)
+
+
+def test_tetto_anti_incanto_windows_gemello_del_mac():
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+    win = _funzioni_pure_app("stop_anti_incanto")["stop_anti_incanto"]
+    casi = [
+        (True, 0.0, 91.0, True, 90.0, 300.0),    # tasto giu' oltre il soft: non ferma
+        (True, 0.0, 91.0, False, 90.0, 300.0),   # tasto su oltre il soft: ferma
+        (True, 0.0, 89.0, False, 90.0, 300.0),   # sotto il soft: non ferma
+        (True, 0.0, 301.0, True, 90.0, 300.0),   # tasto incastrato oltre il duro: ferma
+        (False, 0.0, 500.0, False, 90.0, 300.0),  # non registra
+        (True, None, 500.0, False, 90.0, 300.0),  # senza inizio
+    ]
+    for caso in casi:
+        assert win(*caso) is voce_lib.stop_anti_incanto(*caso), caso
+    assert win(True, 0.0, 91.0, True, 90.0, 300.0) is False
+    assert win(True, 0.0, 301.0, True, 90.0, 300.0) is True
+
+
+def test_vk_del_tasto_windows_mappa_il_tasto_configurato():
+    spazio = _funzioni_pure_app("vk_del_tasto")
+    vk = spazio["vk_del_tasto"]
+    assert vk("ctrl_r") == 0xA3
+    assert vk("ctrl_l") == 0xA2
+    assert vk("menu") == 0x5D
+    assert vk("f8") == 0x77
+    assert vk("tasto_inesistente") is None
+    assert vk(None) is None
+    cfg = json.loads((REPO_ROOT / "windows" / "config.json").read_text(encoding="utf-8"))
+    assert vk(cfg["hotkey"]) is not None  # il tasto-detta di prodotto e' leggibile
+
+
+def test_watchdog_windows_legge_il_tasto_fisico_in_modo_portabile():
+    sorgente = (REPO_ROOT / "windows" / "voice_dettatura_windows.py").read_text(encoding="utf-8")
+    corpo = sorgente.split("def watchdog", 1)[1].split("\ndef ", 1)[0]
+    assert "stop_anti_incanto(" in corpo
+    assert "MAX_RECORDING_TASTO_SEC" in corpo
+    assert 'CFG.get("max_registrazione_tasto_sec", 300)' in sorgente
+    lettura = sorgente.split("def tasto_detta_giu", 1)[1].split("\ndef ", 1)[0]
+    assert "GetAsyncKeyState" in lettura
+    assert 'getattr(ctypes, "windll", None)' in lettura  # importabile anche su Mac
 
 
 def test_percorso_interattivo_windows_non_chiama_un_agente():
@@ -379,9 +457,103 @@ def test_ripasso_windows_gemello_del_mac():
     ) == [("colle", "call")]
 
 
+def test_risposta_arbitro_windows_gemella_del_mac():
+    spazio = _funzioni_pure_app("estrai_json", "risposta_arbitro")
+    spazio["json"] = json  # estrai_json ne ha bisogno: nel modulo vero c'e' gia'
+    f = spazio["risposta_arbitro"]
+    proposte, errore = f(1, "Failed to authenticate: OAuth session expired\n")
+    assert proposte == {} and "codice 1" in errore and "OAuth" in errore
+    proposte, errore = f(0, "Non posso rispondere.")
+    assert proposte == {} and "senza JSON" in errore
+    assert f(0, 'Ecco: {"colle": "call"}') == ({"colle": "call"}, None)
+    assert f(0, "{}") == ({}, None)
+
+
 def test_casella_ammissibile_windows_gemella_del_mac():
     spazio = _funzioni_pure_app("in_zona_scrittura", "casella_ammissibile")
     f = spazio["casella_ammissibile"]
     assert f(700, 40, 0, 800) is True    # chat in fondo
     assert f(60, 700, 0, 800) is True    # documento a tutta finestra
     assert f(40, 28, 0, 800) is False    # barra degli indirizzi
+
+
+# --- trascrizione progressiva (gemella Mac, 04/09/2026) ---
+
+def _blocchi_windows(*tratti):
+    rms, campioni = [], []
+    for secondi, volume in tratti:
+        for _ in range(int(round(secondi * 40))):
+            rms.append(volume)
+            campioni.append(400)
+    return rms, campioni
+
+
+def test_windows_trova_taglio_solo_su_pausa_dopo_i_12_secondi():
+    trova_taglio = _funzioni_pure_app("trova_taglio")["trova_taglio"]
+    rms, campioni = _blocchi_windows((5, 0.02), (1, 0.005), (5, 0.02))
+    assert trova_taglio(rms, campioni, 0) is None
+    rms, campioni = _blocchi_windows((13, 0.02), (1, 0.005), (13, 0.02), (1, 0.005))
+    primo = trova_taglio(rms, campioni, 0)
+    assert primo == 13 * 40 + 20
+    assert trova_taglio(rms, campioni, primo) == primo + 20 + 13 * 40 + 20
+    rms, campioni = _blocchi_windows((14, 0.02), (0.2, 0.005), (10, 0.02))
+    assert trova_taglio(rms, campioni, 0) is None  # micro-pause: mai a meta' parola
+
+
+def test_windows_unisci_segmenti_come_il_mac():
+    unisci = _funzioni_pure_app("unisci_segmenti")["unisci_segmenti"]
+    assert unisci(["Ciao a tutti.", "  oggi parliamo di voce.  "]) == "Ciao a tutti. Oggi parliamo di voce."
+    assert unisci(["Prima frase.", ". seconda frase"]) == "Prima frase. Seconda frase"
+    assert unisci(["prima parola", ", e poi"]) == "prima parola, e poi"
+    assert unisci(["stavo dicendo che", "Il cliente vuole"], ["LeaderAI"]) == "stavo dicendo che il cliente vuole"
+    assert unisci(["lo faccio con", "LeaderAI e basta"], ["LeaderAI"]) == "lo faccio con LeaderAI e basta"
+    assert unisci(["mando il", "PDF domani"]) == "mando il PDF domani"
+    assert unisci(["usa", "Claude Code per questo"], ["Claude Code"]) == "usa Claude Code per questo"
+    assert unisci([]) == ""
+
+
+def test_windows_prompt_con_contesto_come_il_mac():
+    prompt_con_contesto = _funzioni_pure_app("prompt_con_contesto")["prompt_con_contesto"]
+    glossario = "Glossario: LeaderAI, Codex."
+    assert prompt_con_contesto(glossario, "") == glossario
+    assert prompt_con_contesto(None, "") is None
+    lungo = " ".join(f"parola{i}" for i in range(80))
+    prompt = prompt_con_contesto(glossario, lungo)
+    assert prompt.startswith(glossario + " parola")
+    assert len(prompt) - len(glossario) - 1 <= 200
+    assert prompt.endswith("parola79")
+
+
+def test_windows_progressiva_specchia_il_runtime_mac():
+    sorgente = (REPO_ROOT / "windows" / "voice_dettatura_windows.py").read_text(encoding="utf-8")
+    for frase in (
+        'CFG.get("trascrizione_progressiva", False)',
+        'CFG.get("trascrizione_progressiva_blocco_sec", 12)',
+        "class SessioneProgressiva",
+        "_lock_trascrizione = threading.Lock()",
+        "rms_blocks.append(rms)",
+        "sessione_progressiva = SessioneProgressiva(blocks, rms_blocks)",
+        "text = _trascrivi_con_sessione(audio, sessione)",
+        "sessione.thread.join(timeout=120)",
+    ):
+        assert frase in sorgente, frase
+    # la pill dice "trascrivo" solo al rilascio: mai dal thread di sottofondo
+    inizio = sorgente.index("class SessioneProgressiva")
+    fine = sorgente.index("def _trascrivi_con_sessione")
+    assert 'eventi.put("trascrivo")' not in sorgente[inizio:fine]
+
+
+def test_catena_arbitri_windows_gemella_del_mac():
+    """Claude poi Codex, il primo che risponde vince: stesso contratto del Mac."""
+    codice = (REPO_ROOT / "windows" / "voice_dettatura_windows.py").read_text(encoding="utf-8")
+    assert "def comandi_agente() -> list:" in codice
+    assert "def chiedi_arbitro(comando, prompt: str, timeout: int = 60) -> tuple:" in codice
+    assert 'comandi.append(["codex", "exec", "--skip-git-repo-check"])' in codice
+    # apprendimento e ripasso passano dalla catena, non da un agente solo
+    assert codice.count("chiedi_arbitro(comando, prompt_") == 2
+    assert "COMANDO_APPRENDIMENTO = comandi_agente()" in codice
+    spazio = _funzioni_pure_app("_catena_arbitri")
+    catena = spazio["_catena_arbitri"]
+    assert catena(["claude", "-p"]) == [["claude", "-p"]]
+    assert catena([["claude"], ["codex"]]) == [["claude"], ["codex"]]
+    assert catena(None) == [] and catena([]) == []

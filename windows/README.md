@@ -13,7 +13,7 @@ installata.
 
 Versione Windows brandizzata, allineata nell'aspetto e nel comportamento alla versione Mac (pill + marchio + sorriso, due tasti, voce agenti). L'aggiornamento conserva la configurazione personale e collega davvero la lettura delle risposte a Claude Code/Codex. Va provata su un PC Windows reale prima di considerarla stabile.
 
-## Metodo unico: repo + installazione con Claude Code o Codex
+## Metodo unico: pacchetto LeaderAI + installazione con Claude Code o Codex
 
 Segui il percorso in:
 
@@ -21,7 +21,13 @@ Segui il percorso in:
 INSTALLA_CON_AI.md
 ```
 
-L'agente prende dalla repo la versione verificata, esegue `windows\install.bat` e continua dalla cartella locale. Conserva glossario e preferenze, ripara la parte locale, collega la voce delle risposte e chiude con una prova finale. Alla prima installazione elenca e fa ascoltare le voci italiane gia' presenti, suggerisce quella percepita come piu' naturale e salva la scelta del proprietario in `voce_nome`.
+L'agente prende dal collegamento Google Drive del modulo App l'unico pacchetto
+Voce, entra nella cartella `windows/`, esegue `windows\install.bat` e continua
+dalla cartella locale. Conserva glossario e preferenze, ripara la parte locale,
+collega la voce delle risposte e chiude con una prova finale. Alla prima
+installazione elenca e fa ascoltare le voci italiane gia' presenti, suggerisce
+quella percepita come piu' naturale e salva la scelta del proprietario in
+`voce_nome`.
 
 Comandi usati dall'agente per la scelta guidata:
 
@@ -34,7 +40,7 @@ voce_hook.py --set-voice "NOME"
 ## Installazione
 
 1. Apri Claude Code o Codex e fagli leggere l'email di consegna.
-2. L'agente prende la versione verificata dalla repo pubblica.
+2. L'agente apre il pacchetto Voce collegato nel modulo App e sceglie `windows/`.
 3. L'agente esegue `windows\install.bat` e legge `INSTALLA_CON_AI.md` nella cartella installata.
 4. Concedi soltanto i permessi Windows richiesti e prova microfono, tasti e voce.
 5. L'agente ripara gli errori recuperabili e chiude con il collaudo reale.

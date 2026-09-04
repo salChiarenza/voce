@@ -4,6 +4,19 @@ Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).
 
+## 1.3.0-rc.11 - 04/09/2026
+
+- Mac e Windows restano disponibili insieme nello stesso prodotto e nello
+  stesso pacchetto Drive; la prova hardware cambia l'etichetta di stabilita',
+  non la disponibilita' della versione.
+- Trascrizione progressiva sui discorsi lunghi, mezzo secondo di coda al
+  rilascio, Invio piu' rapido nelle chat AI e tetto anti-incanto legato allo
+  stato reale del tasto, specchiati sui due sistemi.
+- Il ripasso notturno prova gli agenti disponibili in sequenza e registra
+  l'errore vero quando nessuno risponde.
+- La consegna visibile parte dal modulo App di LeaderAI Ecosystem e da un solo
+  pacchetto Google Drive; Git resta l'officina tecnica dietro le quinte.
+
 ## 1.3.0-rc.8 - 29/08/2026
 
 - Tolto l'eco del glossario: su audio corto Whisper poteva ricopiare il

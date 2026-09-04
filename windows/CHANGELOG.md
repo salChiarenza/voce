@@ -1,5 +1,87 @@
 # Changelog
 
+## 1.3.0-rc.11 - 04/09/2026 — quattro migliorie dai registri veri (gemella Mac)
+
+Quattro interventi nati dai log reali 27/08→04/09 (1.422 dettature), fatti da quattro agenti in parallelo e fusi lo stesso giorno. Da provare a voce vera su Mac; Windows su PC reale.
+
+### trascrizione mentre parli
+- Dato reale Mac (log 27/08→04/09): 517 dettature su 1.422 oltre i 30s;
+  faster-whisper partiva solo al rilascio, e su CPU l'attesa cresceva ancora
+  piu' in fretta che sul Mac col parlato lungo.
+- Trascrizione progressiva con le STESSE chiavi del Mac in `config.json`
+  (`trascrizione_progressiva: true`, `trascrizione_progressiva_blocco_sec:
+  12`): mentre tieni premuto Ctrl destro, `SessioneProgressiva` trascrive
+  in sottofondo i segmenti chiusi su una pausa (0,5s sotto soglia, solo dopo
+  12s di segmento: `trova_taglio`, replicata nell'unico file); al rilascio
+  resta solo la coda dall'ultimo taglio. Sotto i 12s niente cambia.
+- Ogni segmento riceve glossario + coda del testo precedente come
+  `initial_prompt` (`prompt_con_contesto`); i pezzi si rincollano con
+  `unisci_segmenti` (stesse regole del Mac) e poi eco del glossario,
+  guardia anti-allucinazione, sostituzioni e punteggiatura dettata girano
+  una volta sola sul testo unito, nello stesso ordine di prima.
+- Nuovo `_lock_trascrizione`: una sola chiamata a faster-whisper per volta,
+  segmenti in sottofondo compresi. La pill mostra "Trascrivo..." solo al
+  rilascio. Un errore in sottofondo riporta al passaggio unico.
+- Limiti: Windows da provare su PC reale (su CPU `medium` int8 un segmento
+  di 12s puo' richiedere piu' dei 12s successivi: in quel caso il rilascio
+  aspetta il segmento in corso, comunque meno dell'intero audio). Soglia
+  di pausa 0,010 rms presa dal Mac, da verificare col microfono del PC.
+  Interruttore a `false` = comportamento identico a prima.
+
+### il ripasso notturno taceva il suo errore
+- Sul Mac gli audio non sparivano: erano nella cartella operativa, 30 su 30.
+  Qui `BASE` e cartella sorgente coincidono, quindi il rischio di guardare la
+  cartella sbagliata non c'e'; per parita' la riga `audio conservato:` scrive
+  comunque il percorso intero del file.
+- Ripasso notturno e apprendimento giornaliero: causa provata sul Mac, un
+  agente che esce con errore (es. sessione scaduta) veniva letto come
+  "nessuna correzione sicura". Nuova funzione pura `risposta_arbitro`
+  (gemella Mac): uscita non zero o risposta senza JSON finiscono nel registro
+  come `arbitro fallito (...)` / `agente fallito (...)` con il messaggio vero.
+- Test: `test_risposta_arbitro_windows_gemella_del_mac`.
+- **Nessun agente imposto, catena di arbitri** (gemella Mac): `comandi_agente()`
+  elenca Claude e Codex se presenti, `chiedi_arbitro()` prova in ordine e si
+  ferma al primo che risponde; apprendimento e ripasso notturno passano da
+  li' e il registro dice chi ha fallito e perche'.
+
+### Invio automatico al ritmo delle chat AI
+- **Pausa pre-Invio piu' corta nelle chat AI**: sul Mac i log 30/08→04/09
+  mostravano il 40% degli Invii automatici annullati (Sal vede il testo
+  nella chat e preme Invio a mano prima dei 2,5s pensati per i documenti).
+  Stessa chiave `invio_automatico_ritardo_chat_ai_sec` (default 1.0) in
+  `config.json`, usata SOLO quando la finestra bersaglio e' una chat AI e la
+  voce agenti e' spenta; a voce accesa resta
+  `invio_automatico_ritardo_conversazione_sec`, altrove resta
+  `invio_automatico_ritardo_sec`. Nascono le gemelle `destinazione_agente()`
+  (riconosce ChatGPT, Claude, Codex dal titolo della finestra bersaglio e
+  dal nome del suo eseguibile, letti da `nome_finestra()`) e
+  `ritardo_invio()`, con gli stessi nomi e contratto del Mac. Annullamento
+  su tasto o nuova dettatura identico a prima; il log dell'Invio riporta
+  l'attesa usata. Come il resto della versione Windows, va vista girare su
+  un PC reale.
+
+### tetto 90s legato al tasto
+- Gemella Mac. Caso reale sul Mac (log 04/09 06:41): dettatura di 90 secondi
+  col tasto-detta ancora premuto, fermata dall'anti-incanto a meta' frase.
+  Causa: `watchdog()` guardava solo il tempo (`max_recording_sec` = 90), non
+  il tasto. Cosa cambia: il tetto dei 90s scatta SOLO se il tasto-detta
+  (`hotkey`, es. Ctrl destro) non e' piu' fisicamente premuto secondo Windows
+  (`GetAsyncKeyState`, VK ricavato dal tasto configurato con `vk_del_tasto`);
+  finche' e' giu' si continua a registrare. Resta un tetto DURO separato,
+  `max_registrazione_tasto_sec` (300s, stessa chiave e valore del Mac), che
+  ferma comunque per il tasto incastrato. La decisione e' la funzione pura
+  `stop_anti_incanto`, gemella di quella Mac e confrontata nei test; la
+  lettura di `ctypes.windll` e' protetta, cosi' il file resta importabile
+  anche su Mac.
+
+## 1.3.0-rc.10 - 04/09/2026 — mezzo secondo di coda al rilascio (gemella Mac)
+
+- Al rilascio di Ctrl destro il microfono resta in ascolto ancora `0.5s`
+  (`coda_rilascio_sec`) prima di chiudere lo stream e trascrivere, cosi'
+  l'ultima sillaba non si perde. L'attesa vive nel worker audio
+  (`stop_coda`), mai nella callback tastiera; l'anti-incanto resta
+  immediato. Da provare su PC Windows reale.
+
 ## 1.3.0-rc.9 - 30/08/2026 — la voce agenti arriva in fondo (gemella Mac)
 
 - Doppio evento di fine risposta: scarto della ripetizione identica entro 8

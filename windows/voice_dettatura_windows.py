@@ -46,11 +46,23 @@ SAMPLE_RATE = int(CFG.get("sample_rate", 16000))
 HOTKEY = getattr(Key, CFG.get("hotkey", "f8"))
 TASTO_VOCE = getattr(Key, CFG.get("tasto_voce", "f9"), None)  # on/off voce agenti
 INVIO_AUTOMATICO = bool(CFG.get("invio_automatico", True))
-RITARDO_INVIO_AUTOMATICO = float(CFG.get("invio_automatico_ritardo_sec", 2.5))
-RITARDO_INVIO_CONVERSAZIONE = float(CFG.get("invio_automatico_ritardo_conversazione_sec", 0.3))
+# pause pre-Invio: chiavi invio_automatico_ritardo_*_sec, scelte da ritardo_invio()
 VOICE_THRESHOLD = float(CFG.get("voice_threshold", 0.004))
 MIN_RECORDING_SEC = float(CFG.get("min_recording_sec", 0.4))
 MAX_RECORDING_SEC = float(CFG.get("max_recording_sec", 90))
+# Coda al rilascio del tasto-detta (gemella Mac): il microfono resta in
+# ascolto ancora un attimo, cosi' l'ultima sillaba non si perde se il tasto
+# viene mollato un pelo prima di finire la frase.
+CODA_RILASCIO_SEC = float(CFG.get("coda_rilascio_sec", 0.5))
+
+# tetto DURO: ferma anche col tasto fisicamente giu' (tasto incastrato); stessa chiave del Mac
+MAX_RECORDING_TASTO_SEC = float(CFG.get("max_registrazione_tasto_sec", 300))
+
+# Trascrizione progressiva (gemella Mac, 04/09): segmenti chiusi su una pausa
+# trascritti in sottofondo mentre si registra; al rilascio resta la coda.
+PROGRESSIVA = bool(CFG.get("trascrizione_progressiva", False))
+PROGRESSIVA_BLOCCO_SEC = float(CFG.get("trascrizione_progressiva_blocco_sec", 12))
+PROGRESSIVA_SOGLIA_SILENZIO = float(CFG.get("trascrizione_progressiva_soglia_silenzio", 0.010))
 
 # --- aspetto della pill (uguale alla versione Mac) ---
 BRAND = CFG.get("brand", "salchiarenza.ai")
@@ -67,6 +79,8 @@ commands: queue.Queue[str] = queue.Queue()    # "start"/"stop" dal thread tastie
 eventi: queue.Queue[str] = queue.Queue()      # "ascolto"/"trascrivo"/"sistemo"/"nascosto" verso l'overlay
 livelli = collections.deque([0.0] * N_BARRE, maxlen=N_BARRE)
 blocks: list[np.ndarray] = []
+rms_blocks: list[float] = []                   # parallelo a blocks: volume per blocco, per trovare le pause
+sessione_progressiva = None                    # sessione della registrazione in corso (None se spenta)
 stream = None
 recording = False
 key_down = False
@@ -186,6 +200,80 @@ def converti_punteggiatura_dettata(testo: str) -> str:
     return testo.strip()
 
 
+# --- trascrizione progressiva: funzioni pure (gemelle di mac/voce_lib.py) ---
+# Dati reali Mac 27/08→04/09: 517 dettature su 1.422 oltre i 30s; Whisper
+# partiva solo al rilascio e 90s di parlato costavano 17s di attesa.
+
+def trova_taglio(rms, campioni, inizio, freq=16000, soglia=0.010,
+                 silenzio_min_sec=0.5, blocco_min_sec=12.0):
+    """Indice (escluso) del blocco dove chiudere il segmento aperto da
+    `inizio`, o None se un punto sicuro non c'e' ancora. Si taglia SOLO alla
+    fine di un silenzio continuo di almeno silenzio_min_sec (ogni blocco
+    sotto soglia) e SOLO se il segmento chiuso dura almeno blocco_min_sec:
+    dentro un silenzio non c'e' nessuna parola da spezzare."""
+    n = min(len(rms), len(campioni))
+    durata = 0.0
+    silenzio = 0.0
+    for i in range(max(0, inizio), n):
+        d = campioni[i] / float(freq)
+        durata += d
+        if rms[i] < soglia:
+            silenzio += d
+            if silenzio >= silenzio_min_sec and durata >= blocco_min_sec:
+                return i + 1
+        else:
+            silenzio = 0.0
+    return None
+
+
+def unisci_segmenti(pezzi, glossario=()):
+    """Rincolla i testi dei segmenti in un testo solo: spazi singoli, mai due
+    segni attaccati, maiuscola dopo un punto; dopo una frase lasciata a meta'
+    l'iniziale maiuscola di Whisper torna minuscola, tranne nomi del
+    glossario e sigle."""
+    fine_frase = ".!?…"
+    segni = fine_frase + ",;:"
+    # nomi a piu' parole ("Claude Code"): conta la prima parola
+    protetti = {v.split()[0].lower() for v in glossario if v and v.strip()}
+    testo = ""
+    for pezzo in pezzi:
+        p = " ".join((pezzo or "").split())
+        if not p:
+            continue
+        if not testo:
+            testo = p
+            continue
+        ultimo = testo[-1]
+        if ultimo in segni:
+            p = p.lstrip(segni + " ")
+            if not p:
+                continue
+        if p[0] in segni:  # ", e poi" dopo una parola nuda: si attacca
+            testo += p
+            continue
+        prima = p.split(" ", 1)[0]
+        if ultimo in fine_frase:
+            p = p[0].upper() + p[1:]
+        elif (p[0].isupper() and not prima.isupper()
+              and prima.strip(segni).lower() not in protetti):
+            p = p[0].lower() + p[1:]
+        testo += " " + p
+    return testo
+
+
+def prompt_con_contesto(glossario_prompt, precedente, max_caratteri=200):
+    """initial_prompt per un segmento: glossario + coda del testo del segmento
+    prima (ultimi ~max_caratteri, a inizio parola). Senza niente torna None."""
+    coda = " ".join((precedente or "").split())
+    if len(coda) > max_caratteri:
+        coda = coda[-max_caratteri:]
+        spazio = coda.find(" ")
+        if 0 <= spazio < len(coda) - 1:
+            coda = coda[spazio + 1:]
+    parti = [p for p in (glossario_prompt, coda) if p]
+    return " ".join(parti) or None
+
+
 def scegli_casella(candidati):
     """Indice della casella migliore tra quelle trovate nella finestra.
 
@@ -291,23 +379,58 @@ def prompt_pulizia(testo: str, glossario=()) -> str:
     return "\n".join(righe)
 
 
-def comando_agente() -> list | None:
-    """L'agente gia' presente sul PC che fa la pulizia: Claude Code prima,
-    Codex come riserva. Nessuno dei due installato -> niente pulizia.
-
-    Avvio "spoglio" (misurato: ~2-3s in meno a chiamata): la pulizia non deve
-    caricare MCP, tool, settings ne' salvare la sessione su disco."""
+def comandi_agente() -> list:
+    """TUTTI gli agenti gia' presenti sul PC, in ordine di preferenza: Claude
+    Code, poi Codex (gemella Mac). L'app non impone un agente: usa quello
+    che il proprietario ha. Chi chiama prova la lista in ordine e si ferma al
+    primo che risponde (chiedi_arbitro). Nessuno installato -> lista vuota."""
+    comandi = []
     if shutil.which("claude"):
-        return [
+        comandi.append([
             "claude", "--model", "haiku", "-p",
             "--tools", "",              # nessun tool built-in
             "--strict-mcp-config",      # senza --mcp-config = zero server MCP
             "--setting-sources", "",    # niente settings utente/progetto
             "--no-session-persistence", # niente sessione salvata su disco
-        ]
+        ])
     if shutil.which("codex"):
-        return ["codex", "exec"]
-    return None
+        comandi.append(["codex", "exec", "--skip-git-repo-check"])
+    return comandi
+
+
+def comando_agente() -> list | None:
+    """Il primo agente disponibile (compatibilita'). None se non ce n'e'."""
+    comandi = comandi_agente()
+    return comandi[0] if comandi else None
+
+
+def _catena_arbitri(comando) -> list:
+    """Un comando solo (lista di stringhe) o una lista di comandi -> lista di comandi."""
+    if not comando:
+        return []
+    if isinstance(comando[0], str):
+        return [list(comando)]
+    return [list(c) for c in comando if c]
+
+
+def chiedi_arbitro(comando, prompt: str, timeout: int = 60) -> tuple:
+    """Passa il prompt agli agenti locali in ordine e torna (proposte, errore)
+    del PRIMO che risponde (gemella Mac). errore=None = risposta valida;
+    altrimenti riassume il guasto di ogni agente provato."""
+    errori = []
+    for cmd in _catena_arbitri(comando):
+        try:
+            esito = subprocess.run(
+                cmd + [prompt], capture_output=True, text=True, timeout=timeout,
+            )
+        except Exception as exc:
+            errori.append(f"{cmd[0]}: {type(exc).__name__}: {exc}")
+            continue
+        proposte, errore = risposta_arbitro(esito.returncode, esito.stdout, esito.stderr)
+        if errore is None:
+            return proposte, None
+        errori.append(f"{cmd[0]}: {errore}")
+    return {}, ("; ".join(errori) if errori else "nessun agente locale installato")
 
 
 def estrai_grezzi_dal_log(log_path, massimo=50) -> list:
@@ -350,6 +473,19 @@ def estrai_json(testo: str) -> dict:
         return {}
 
 
+def risposta_arbitro(returncode: int, stdout: str, stderr: str = "") -> tuple:
+    """Gemella Mac: (proposte, errore). Proposte solo se l'agente ha risposto
+    davvero; altrimenti l'errore reale (uscita non zero o risposta senza
+    JSON) da mettere nel registro, invece di "nessuna correzione sicura"."""
+    stdout = (stdout or "").strip()
+    stderr = (stderr or "").strip()
+    if returncode != 0:
+        return {}, f"agente uscito con codice {returncode}: {(stdout or stderr)[:200]}"
+    if "{" not in stdout:
+        return {}, f"agente senza JSON: {(stdout or stderr or 'risposta vuota')[:200]}"
+    return estrai_json(stdout), None
+
+
 def prompt_apprendimento(grezzi) -> str:
     righe = [
         "Queste sono dettature vocali trascritte da Whisper in italiano.",
@@ -371,11 +507,10 @@ def impara_sostituzioni(log_path, config_path, comando, timeout=60) -> dict:
     if not grezzi:
         return {}
     try:
-        esito = subprocess.run(
-            comando + [prompt_apprendimento(grezzi)],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        proposte = estrai_json(esito.stdout or "")
+        proposte, errore = chiedi_arbitro(comando, prompt_apprendimento(grezzi), timeout)
+        if errore:
+            logging.warning("apprendimento sostituzioni: agente fallito (%s)", errore)
+            return {}
         cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
         nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
         if nuove:
@@ -400,7 +535,7 @@ def impara_dagli_errori_giornaliero() -> None:
         pass
     if not CFG.get("debug_dettature", False):
         return  # senza log dei testi non c'e' niente da cui imparare
-    comando = COMANDO_APPRENDIMENTO or comando_agente()
+    comando = COMANDO_APPRENDIMENTO or comandi_agente()  # tutti gli agenti presenti, in ordine
     if not comando:
         return
     nuove = impara_sostituzioni(LOG, BASE / "config.json", comando)
@@ -535,11 +670,11 @@ def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
         logging.info("ripasso audio: i due riconoscitori sono d'accordo su tutto")
         return {}
     try:
-        esito = subprocess.run(
-            comando + [prompt_arbitro_ripasso(casi)],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        proposte = estrai_json(esito.stdout or "")
+        proposte, errore = chiedi_arbitro(comando, prompt_arbitro_ripasso(casi), timeout)
+        if errore:
+            logging.warning("ripasso audio: %d disaccordi, arbitro fallito (%s)",
+                            len(casi), errore)
+            return {}
         cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
         nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
         if nuove:
@@ -622,7 +757,7 @@ def pulisci_con_agente(testo: str, comando: list, timeout=10, glossario=()):
 GLOSSARIO_PROMPT = glossario_iniziale(CFG)  # nomi/brand scritti giusti da Whisper
 # L'agente resta disponibile per l'apprendimento giornaliero, ma non entra piu'
 # nel percorso interattivo: su Windows il testo grezzo viene incollato subito.
-COMANDO_APPRENDIMENTO = comando_agente() if CFG.get("debug_dettature", False) else None
+COMANDO_APPRENDIMENTO = comandi_agente() if CFG.get("debug_dettature", False) else None
 
 
 def pulisci_per_voce(testo: str) -> str:
@@ -821,6 +956,20 @@ def load_model() -> WhisperModel:
     return model
 
 
+_lock_trascrizione = threading.Lock()  # una trascrizione per volta (segmenti in sottofondo compresi)
+
+
+def _whisper_grezzo(audio: np.ndarray, prompt) -> str:
+    """Un passaggio di faster-whisper, testo grezzo dei segmenti uniti."""
+    segments, _info = load_model().transcribe(
+        audio,
+        language=CFG.get("language", "it"),
+        vad_filter=True,
+        initial_prompt=prompt,
+    )
+    return " ".join(segment.text.strip() for segment in segments).strip()
+
+
 def audio_fuori_scala(rms: float, massimo: float = 1.0) -> bool:
     """True se l'rms e' impossibile per uno stream float32 sano: i sample vivono
     in [-1, 1], quindi rms <= 1 sempre. Sopra = il driver ha rimappato il device
@@ -939,6 +1088,35 @@ def invio_da_annullare(
     return ultima_pressione > riferimento or nuova_registrazione
 
 
+def destinazione_agente(nome_app="", url=""):
+    """True quando il testo e' destinato a una chat con un agente AI
+    (gemella di mac/voce_lib.py: stesso nome, stesso contratto). Su Windows
+    `nome_app` e' il titolo della finestra bersaglio piu' il nome del suo
+    eseguibile: i browser mettono il titolo della pagina nel titolo della
+    finestra, le app desktop e i terminali il proprio nome."""
+    nome = str(nome_app or "").strip().lower()
+    indirizzo = str(url or "").strip().lower()
+    if any(marcatore in nome for marcatore in ("chatgpt", "claude", "codex")):
+        return True
+    return any(
+        dominio in indirizzo
+        for dominio in ("chatgpt.com", "chat.openai.com", "claude.ai")
+    )
+
+
+def ritardo_invio(cfg, voce_accesa, chat_ai):
+    """Secondi di pausa prima dell'Invio automatico, scelti dal contesto
+    (gemella di mac/voce_lib.py): voce agenti accesa = botta e risposta;
+    chat AI a voce spenta = il testo si vede e parte quasi subito (dati Mac
+    30/08→04/09: con la pausa dei documenti il 40% degli Invii veniva
+    annullato a mano); documenti, email, social = tempo per correggere."""
+    if voce_accesa:
+        return float(cfg.get("invio_automatico_ritardo_conversazione_sec", 0.3))
+    if chat_ai:
+        return float(cfg.get("invio_automatico_ritardo_chat_ai_sec", 1.0))
+    return float(cfg.get("invio_automatico_ritardo_sec", 2.5))
+
+
 def has_voice(audio: np.ndarray) -> bool:
     flat = np.asarray(audio, dtype="float32").reshape(-1)
     if flat.size == 0:
@@ -950,15 +1128,18 @@ def audio_callback(indata, frames, current_time, status) -> None:
     if status:
         logging.warning("audio status: %s", status)
     blocks.append(indata.copy())
-    livelli.append(float(np.sqrt(np.mean(indata ** 2))))  # volume per le lineette
+    rms = float(np.sqrt(np.mean(indata ** 2)))
+    rms_blocks.append(rms)  # parallelo a blocks: serve a trovare le pause
+    livelli.append(rms)     # volume per le lineette
 
 
 def start_recording() -> None:
-    global blocks, stream, recording, recording_started_at
+    global blocks, rms_blocks, stream, recording, recording_started_at, sessione_progressiva
     if recording:
         return
     ferma_voce()  # se l'agente sta parlando, ti zittisco: tocca a te
     blocks = []
+    rms_blocks = []
     livelli.extend([0.0] * N_BARRE)
     stream = sd.InputStream(
         samplerate=SAMPLE_RATE,
@@ -972,6 +1153,9 @@ def start_recording() -> None:
     logging.info("registrazione avviata")
     eventi.put("ascolto")
     beep(880, 80)
+    if PROGRESSIVA:
+        sessione_progressiva = SessioneProgressiva(blocks, rms_blocks)
+        sessione_progressiva.avvia()
 
 
 def finestra_frontale():
@@ -981,6 +1165,36 @@ def finestra_frontale():
         return ctypes.windll.user32.GetForegroundWindow()
     except Exception:
         return None
+
+
+def nome_finestra(hwnd) -> str:
+    """Titolo della finestra bersaglio + nome del suo eseguibile: e' quello
+    che destinazione_agente() legge per riconoscere una chat AI (gemello di
+    localizedName() + scheda del browser su Mac)."""
+    if not hwnd:
+        return ""
+    parti = []
+    try:
+        user32 = ctypes.windll.user32
+        titolo = ctypes.create_unicode_buffer(512)
+        user32.GetWindowTextW(hwnd, titolo, 512)
+        parti.append(titolo.value)
+        pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        processo = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid.value)  # QUERY_LIMITED_INFORMATION
+        if processo:
+            try:
+                percorso = ctypes.create_unicode_buffer(1024)
+                lunghezza = ctypes.c_ulong(1024)
+                if ctypes.windll.kernel32.QueryFullProcessImageNameW(
+                    processo, 0, percorso, ctypes.byref(lunghezza)
+                ):
+                    parti.append(Path(percorso.value).stem)
+            finally:
+                ctypes.windll.kernel32.CloseHandle(processo)
+    except Exception:
+        logging.exception("impossibile leggere la finestra bersaglio")
+    return " ".join(p for p in parti if p)
 
 
 def riattiva_bersaglio(hwnd) -> None:
@@ -1071,11 +1285,14 @@ def metti_cursore_in_casella(hwnd):
 
 
 def stop_recording() -> None:
-    global stream, recording, recording_started_at
+    global stream, recording, recording_started_at, sessione_progressiva
     if not recording:
         return
     finestra_bersaglio = finestra_frontale()  # bersaglio: la finestra davanti ORA, non a fine pulizia
     recording = False
+    sessione, sessione_progressiva = sessione_progressiva, None
+    if sessione is not None:
+        sessione.ferma()  # niente nuovi tagli: la coda la fa il thread di incolla
     started = recording_started_at
     recording_started_at = None
     if stream is not None:
@@ -1109,11 +1326,105 @@ def stop_recording() -> None:
 
     eventi.put("trascrivo")
     threading.Thread(
-        target=transcribe_and_paste, args=(audio, finestra_bersaglio), daemon=True
+        target=transcribe_and_paste, args=(audio, finestra_bersaglio, sessione), daemon=True
     ).start()
 
 
-def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
+class SessioneProgressiva:
+    """Trascrizione a segmenti MENTRE si registra (gemella Mac, 04/09/2026).
+
+    Un thread di sottofondo guarda i volumi per blocco (rms_blocks) e, quando
+    il segmento aperto supera trascrizione_progressiva_blocco_sec e cade su
+    una pausa di 0,5s (trova_taglio), trascrive quel segmento sotto
+    _lock_trascrizione, passando a Whisper glossario + coda del testo
+    precedente. Legge solo fette della lista blocks per indice: mai il
+    callback audio ne' il thread tastiera. Al rilascio _trascrivi_con_sessione
+    aspetta il segmento in corso, trascrive solo la coda e rincolla. Un
+    errore in sottofondo alza `guasta`: si torna al passaggio unico."""
+
+    def __init__(self, blocks_ref, rms_ref):
+        self.blocks = blocks_ref
+        self.rms = rms_ref
+        self.campioni = []      # numero di campioni per blocco (cresce con blocks)
+        self.inizio_segmento = 0
+        self.pezzi = []
+        self.guasta = False
+        self.fermata = threading.Event()
+        self.thread = threading.Thread(target=self._lavora, daemon=True)
+
+    def avvia(self):
+        self.thread.start()
+
+    def ferma(self):
+        self.fermata.set()
+
+    def _lavora(self):
+        while not self.fermata.is_set():
+            time.sleep(0.2)
+            n = min(len(self.blocks), len(self.rms))
+            for b in self.blocks[len(self.campioni):n]:
+                self.campioni.append(len(b))
+            taglio = trova_taglio(
+                self.rms, self.campioni, self.inizio_segmento, SAMPLE_RATE,
+                PROGRESSIVA_SOGLIA_SILENZIO, blocco_min_sec=PROGRESSIVA_BLOCCO_SEC,
+            )
+            if taglio is None or self.fermata.is_set():
+                continue
+            inizio, self.inizio_segmento = self.inizio_segmento, taglio
+            try:
+                segmento = np.concatenate(self.blocks[inizio:taglio], axis=0)[:, 0]
+                prompt = prompt_con_contesto(GLOSSARIO_PROMPT, self.pezzi[-1] if self.pezzi else "")
+                partenza = time.monotonic()
+                with _lock_trascrizione:
+                    testo = _whisper_grezzo(segmento, prompt)
+                testo = rimuovi_eco_glossario(testo, CFG.get("glossario", []))
+                self.pezzi.append(testo)
+                logging.info(
+                    "progressiva: segmento %d (%.1fs) trascritto in %.1fs, %d parole",
+                    len(self.pezzi), len(segmento) / SAMPLE_RATE, time.monotonic() - partenza,
+                    len(testo.split()),
+                )
+            except Exception:
+                logging.exception("progressiva: errore sul segmento, torno al passaggio unico")
+                self.guasta = True
+                return
+
+
+def _trascrivi_con_sessione(audio: np.ndarray, sessione) -> str:
+    """Testo grezzo (eco del glossario gia' tolto) dell'audio intero. Senza
+    sessione, o senza segmenti chiusi (dettature sotto ~12s), e' il percorso
+    di sempre: un solo passaggio Whisper. Altrimenti si trascrive solo la coda
+    dall'ultimo taglio e si rincolla."""
+    if sessione is not None:
+        sessione.ferma()
+        sessione.thread.join(timeout=120)  # FUORI dal lock: il segmento in corso lo vuole
+    if sessione is None or sessione.guasta or not sessione.pezzi or sessione.thread.is_alive():
+        with _lock_trascrizione:
+            text = _whisper_grezzo(audio, GLOSSARIO_PROMPT)
+        return rimuovi_eco_glossario(text, CFG.get("glossario", []))
+    coperti = sum(sessione.campioni[:sessione.inizio_segmento])
+    if coperti > len(audio):
+        logging.warning("progressiva: segmenti oltre l'audio (%d > %d), passaggio unico", coperti, len(audio))
+        with _lock_trascrizione:
+            text = _whisper_grezzo(audio, GLOSSARIO_PROMPT)
+        return rimuovi_eco_glossario(text, CFG.get("glossario", []))
+    coda = audio[coperti:]
+    pezzi = list(sessione.pezzi)
+    partenza = time.monotonic()
+    with _lock_trascrizione:
+        if len(coda) >= SAMPLE_RATE * 0.2 and has_voice(coda):
+            prompt = prompt_con_contesto(GLOSSARIO_PROMPT, pezzi[-1])
+            pezzi.append(rimuovi_eco_glossario(_whisper_grezzo(coda, prompt), CFG.get("glossario", [])))
+    # frase-fantasma su un pezzo (tipico: coda cortissima) = pezzo scartato
+    pezzi = [p for p in pezzi if not e_allucinazione(p)]
+    logging.info(
+        "progressiva: %d segmenti in sottofondo, coda %.1fs trascritta in %.1fs",
+        len(sessione.pezzi), len(coda) / SAMPLE_RATE, time.monotonic() - partenza,
+    )
+    return unisci_segmenti(pezzi, CFG.get("glossario", []))
+
+
+def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio, sessione=None) -> None:
     try:
         try:
             conservato = salva_audio_recente(
@@ -1121,23 +1432,22 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
                 CFG.get("conserva_audio_n", 0), freq=SAMPLE_RATE,
             )
             if conservato:
-                logging.info("audio conservato: %s", conservato.name)
+                logging.info("audio conservato: %s", conservato)  # percorso intero
         except Exception:
             logging.exception("conservazione audio fallita")
-        segments, _info = load_model().transcribe(
-            audio,
-            language=CFG.get("language", "it"),
-            vad_filter=True,
-            initial_prompt=GLOSSARIO_PROMPT,
-        )
-        text = " ".join(segment.text.strip() for segment in segments).strip()
-        text = rimuovi_eco_glossario(text, CFG.get("glossario", []))
+        text = _trascrivi_con_sessione(audio, sessione)
         if e_allucinazione(text):
             logging.info("scartato come allucinazione (%d caratteri)", len(text))
             eventi.put("nascosto")
             return
         text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
         text = converti_punteggiatura_dettata(text)
+        chat_agente = destinazione_agente(nome_finestra(finestra_bersaglio))
+        logging.info(
+            "trascritto: %d parole%s",
+            len(text.split()),
+            " (grezzo, chat agente)" if text and chat_agente else "",
+        )
         # Windows non ha una corsia locale rapida equivalente al Comando
         # Rapido Apple. Il vecchio ripiego Claude/Codex poteva bloccare ogni
         # dettatura per 20s: ora il grezzo viene incollato subito.
@@ -1158,13 +1468,12 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             logging.info("incollato alla cieca: testo conservato negli Appunti")
         # invio automatico: parte sempre. La pausa prima dell'Invio dipende
         # dal contesto: a voce ON e' conversazione vera con l'agente (botta e
-        # risposta), a voce OFF serve tempo per correggere il testo incollato.
+        # risposta); in una chat AI a voce OFF il testo si vede e parte quasi
+        # subito (dati Mac 30/08→04/09: con la pausa dei documenti il 40%
+        # degli Invii veniva annullato a mano); nei documenti serve tempo per
+        # correggere il testo incollato.
         if INVIO_AUTOMATICO and not senza_casella:
-            attesa = (
-                RITARDO_INVIO_CONVERSAZIONE
-                if voce_attiva()
-                else RITARDO_INVIO_AUTOMATICO
-            )
+            attesa = ritardo_invio(CFG, voce_attiva(), chat_agente)
             time.sleep(0.15)  # il Ctrl+V sintetico non conta come gesto dell'utente
             riferimento = time.monotonic()
             trascorso = 0.0
@@ -1185,7 +1494,8 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio) -> None:
             else:
                 keyboard_controller.press(Key.enter)
                 keyboard_controller.release(Key.enter)
-                logging.info("invio automatico premuto")
+                logging.info("invio automatico premuto (attesa %.1fs%s)",
+                             attesa, ", chat AI" if chat_agente else "")
         print("Inserito:", text)
     except Exception:
         logging.exception("errore trascrizione/incolla")
@@ -1221,18 +1531,87 @@ def worker() -> None:
                 start_recording()
             elif command == "stop":
                 stop_recording()
+            elif command == "stop_coda":
+                # rilascio del tasto: lo stream resta aperto e audio_callback
+                # continua ad accodare blocchi, quindi basta aspettare qui
+                # (mai nella callback tastiera) prima di chiudere.
+                if recording and CODA_RILASCIO_SEC > 0:
+                    time.sleep(CODA_RILASCIO_SEC)
+                stop_recording()
         except Exception:
             logging.exception("errore comando audio")
 
 
+# Codici virtuali Windows (VK) dei tasti usabili come tasto-detta, per leggere
+# lo stato FISICO del tasto dal sistema (GetAsyncKeyState) invece che fidarsi
+# degli eventi pynput (gemello di _cmd_giu() su Mac, che legge Quartz).
+_VK_TASTI = {
+    "ctrl_r": 0xA3, "ctrl_l": 0xA2, "ctrl": 0x11,
+    "alt_r": 0xA5, "alt_l": 0xA4, "alt": 0x12, "alt_gr": 0xA5,
+    "shift_r": 0xA1, "shift_l": 0xA0, "shift": 0x10,
+    "cmd_r": 0x5C, "cmd_l": 0x5B, "cmd": 0x5B,
+    "menu": 0x5D,
+}
+
+
+def vk_del_tasto(nome) -> int | None:
+    """VK del tasto configurato in `hotkey` (es. "ctrl_r" -> 0xA3); i tasti
+    F1..F24 si ricavano dal numero. None se il tasto non e' mappato: in quel
+    caso lo stato fisico non e' leggibile e vale il solo tetto soft."""
+    nome = str(nome or "").strip().lower()
+    if nome in _VK_TASTI:
+        return _VK_TASTI[nome]
+    if nome.startswith("f") and nome[1:].isdigit() and 1 <= int(nome[1:]) <= 24:
+        return 0x70 + int(nome[1:]) - 1
+    return None
+
+
+def stop_anti_incanto(registrando, inizio, ora, tasto_giu, tetto_soft, tetto_duro) -> bool:
+    """Gemella di voce_lib.stop_anti_incanto (Mac). Il tetto soft (90s) vale
+    SOLO se il tasto-detta non e' piu' fisicamente giu': se e' giu' l'utente
+    sta dettando davvero (caso 04/09: monologo tagliato a 90s). Il tetto duro
+    (300s) ferma comunque, per il tasto incastrato."""
+    if not registrando or inizio is None:
+        return False
+    durata = ora - inizio
+    if durata > tetto_duro:
+        return True
+    return durata > tetto_soft and not tasto_giu
+
+
+VK_TASTO_DETTA = vk_del_tasto(CFG.get("hotkey", "f8"))
+
+
+def tasto_detta_giu() -> bool:
+    """True se la dettatura e' manuale (key_down) E il tasto-detta e' ancora
+    fisicamente premuto secondo Windows. `ctypes.windll` esiste solo su
+    Windows: altrove (o senza VK mappato) si assume tasto su, cosi' vale il
+    tetto soft come prima."""
+    if not key_down or VK_TASTO_DETTA is None:
+        return False
+    user32 = getattr(getattr(ctypes, "windll", None), "user32", None)
+    if user32 is None:
+        return False
+    try:
+        return bool(user32.GetAsyncKeyState(VK_TASTO_DETTA) & 0x8000)
+    except Exception:
+        return False
+
+
 def watchdog() -> None:
+    global key_down
     while True:
         time.sleep(1)
-        if recording and recording_started_at is not None:
-            duration = time.monotonic() - recording_started_at
-            if duration > MAX_RECORDING_SEC:
-                logging.warning("registrazione oltre %.1fs: stop anti-incanto", duration)
-                commands.put("stop")
+        ora = time.monotonic()
+        tasto_giu = tasto_detta_giu()
+        if stop_anti_incanto(recording, recording_started_at, ora, tasto_giu,
+                             MAX_RECORDING_SEC, MAX_RECORDING_TASTO_SEC):
+            duration = ora - recording_started_at
+            logging.warning(
+                "registrazione oltre %.1fs: stop anti-incanto (tasto giu': %s)", duration, tasto_giu
+            )
+            key_down = False
+            commands.put("stop")
 
 
 def commuta_voce() -> None:
@@ -1266,7 +1645,7 @@ def on_release(key) -> None:
     global key_down, voice_key_down
     if key == HOTKEY and key_down:
         key_down = False
-        commands.put("stop")
+        commands.put("stop_coda")  # rilascio manuale: coda di CODA_RILASCIO_SEC
     elif key == TASTO_VOCE:
         voice_key_down = False  # rilasciato: la prossima pressione ricommuta
 
@@ -1424,7 +1803,7 @@ if __name__ == "__main__":
             BASE / "audio_recenti",
             [LOG] + sorted(BASE.glob(LOG.name + ".*"))[-1:],
             BASE / "config.json",
-            comando_agente(),
+            comandi_agente(),
             CFG.get("modello_ripasso", "small"),
             massimo_file=int(CFG.get("conserva_audio_n", 0)) or 30,
         )

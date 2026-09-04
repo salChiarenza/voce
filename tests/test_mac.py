@@ -578,6 +578,32 @@ def test_stop_audio_bloccato_scade_solo_oltre_limite():
     assert voce_lib.timeout_scaduto(True, 20.0, 29.0, 10.0) is False
 
 
+def test_tetto_soft_non_scatta_col_tasto_fisicamente_giu():
+    # caso 04/09 06:41: 90s+ di dettatura, tasto ancora premuto -> non si ferma
+    assert voce_lib.stop_anti_incanto(True, 0.0, 91.0, True, 90.0, 300.0) is False
+    assert voce_lib.stop_anti_incanto(True, 0.0, 299.0, True, 90.0, 300.0) is False
+
+
+def test_tetto_soft_scatta_col_tasto_rilasciato():
+    # rilascio perso da pynput: tasto su, registrazione aperta -> stop come prima
+    assert voce_lib.stop_anti_incanto(True, 0.0, 91.0, False, 90.0, 300.0) is True
+    assert voce_lib.stop_anti_incanto(True, 0.0, 89.0, False, 90.0, 300.0) is False
+
+
+def test_tetto_duro_scatta_comunque_col_tasto_incastrato():
+    assert voce_lib.stop_anti_incanto(True, 0.0, 301.0, True, 90.0, 300.0) is True
+
+
+def test_tetto_anti_incanto_ignora_registrazione_ferma_o_senza_inizio():
+    assert voce_lib.stop_anti_incanto(False, 0.0, 500.0, False, 90.0, 300.0) is False
+    assert voce_lib.stop_anti_incanto(True, None, 500.0, False, 90.0, 300.0) is False
+
+
+def test_vad_mani_libere_conserva_il_solo_tetto_soft():
+    # nel VAD il tasto non c'entra: tasto_giu=False -> 90s ferma come prima
+    assert voce_lib.stop_anti_incanto(True, 0.0, 91.0, False, 90.0, 300.0) is True
+
+
 # --- glossario: nomi propri e termini del mestiere scritti giusti ---
 
 def test_glossario_iniziale_costruisce_il_prompt_per_whisper():
@@ -627,6 +653,35 @@ def test_destinazione_agente_riconosce_app_e_schede_web():
     assert voce_lib.destinazione_agente("Safari", "https://claude.ai/chat/123") is True
     assert voce_lib.destinazione_agente("Mail", "") is False
     assert voce_lib.destinazione_agente("Google Chrome", "https://example.com") is False
+
+
+def test_ritardo_invio_segue_il_contesto():
+    cfg = {
+        "invio_automatico_ritardo_sec": 2.5,
+        "invio_automatico_ritardo_conversazione_sec": 0.4,
+        "invio_automatico_ritardo_chat_ai_sec": 1.0,
+    }
+    # voce agenti accesa: botta e risposta, vince sempre la conversazione
+    assert voce_lib.ritardo_invio(cfg, True, True) == 0.4
+    assert voce_lib.ritardo_invio(cfg, True, False) == 0.4
+    # chat AI a voce spenta: il testo si vede, parte quasi subito
+    assert voce_lib.ritardo_invio(cfg, False, True) == 1.0
+    # documenti, email, social: tempo per correggere
+    assert voce_lib.ritardo_invio(cfg, False, False) == 2.5
+
+
+def test_ritardo_invio_default_senza_chiavi():
+    assert voce_lib.ritardo_invio({}, True, False) == 0.3
+    assert voce_lib.ritardo_invio({}, False, True) == 1.0
+    assert voce_lib.ritardo_invio({}, False, False) == 2.5
+    assert voce_lib.ritardo_invio({"invio_automatico_ritardo_chat_ai_sec": "0.8"}, False, True) == 0.8
+
+
+def test_invio_automatico_mac_usa_il_ritardo_di_contesto():
+    sorgente = (REPO_ROOT / "mac" / "detta.py").read_text(encoding="utf-8")
+    corpo = sorgente.split("def _trascrivi_e_incolla", 1)[1].split("\ndef ", 1)[0]
+    assert "ritardo_invio(cfg, voce_attiva(), chat_agente)" in corpo
+    assert "invio automatico ANNULLATO" in corpo  # l'annullamento su tasto resta
 
 
 def test_percorso_interattivo_mac_non_chiama_un_agente():
@@ -1032,6 +1087,7 @@ def test_ripasso_impara_solo_le_correzioni_sicure(tmp_path, monkeypatch):
     class Arbitro:
         returncode = 0
         stdout = '{"colle": "call"}'
+        stderr = ""
     monkeypatch.setattr(voce_lib.subprocess, "run", lambda *a, **k: Arbitro())
 
     nuove = voce_lib.ripassa_audio_conservati(
@@ -1039,6 +1095,61 @@ def test_ripasso_impara_solo_le_correzioni_sicure(tmp_path, monkeypatch):
 
     assert nuove == {"colle": "call"}
     assert json.loads(config.read_text())["sostituzioni"] == {"colle": "call"}
+
+
+def test_risposta_arbitro_smaschera_agente_fallito():
+    """Caso vero del 04/09/2026: la CLI con la sessione OAuth scaduta esce con
+    1 e stampa l'errore su stdout. Prima passava per 'nessuna correzione
+    sicura'; ora torna l'errore reale da mettere nel registro."""
+    proposte, errore = voce_lib.risposta_arbitro(
+        1, "Failed to authenticate: OAuth session expired and could not be refreshed\n")
+    assert proposte == {}
+    assert "codice 1" in errore and "OAuth session expired" in errore
+    # uscita zero ma senza JSON: e' comunque un fallimento, non "nessuna coppia"
+    proposte, errore = voce_lib.risposta_arbitro(0, "Non posso rispondere.")
+    assert proposte == {} and "senza JSON" in errore
+    proposte, errore = voce_lib.risposta_arbitro(0, "", "boom su stderr")
+    assert proposte == {} and "boom su stderr" in errore
+    # risposte vere: JSON con coppie, o {} sincero dell'arbitro
+    assert voce_lib.risposta_arbitro(0, 'Ecco: {"colle": "call"}') == ({"colle": "call"}, None)
+    assert voce_lib.risposta_arbitro(0, "{}") == ({}, None)
+
+
+def test_ripasso_arbitro_fallito_lo_dice_nel_registro(tmp_path, monkeypatch, caplog):
+    """Stesso giro del test sopra, ma l'arbitro fallisce come la notte del
+    04/09/2026: niente imparato, config intatto e nel registro l'errore vero,
+    non 'nessuna correzione sicura'."""
+    import logging
+    import types
+    cartella = tmp_path / "audio_recenti"
+    cartella.mkdir()
+    (cartella / "dettatura_20260830_141931.wav").touch()
+    log = tmp_path / "voce.log"
+    log.write_text("2026-08-30 14:19:32,000 INFO grezzo: Dalle colle è emerso questo.\n")
+    config = tmp_path / "config.local.json"
+    config.write_text('{"sostituzioni": {}}')
+    finto_mlx = types.SimpleNamespace(
+        transcribe=lambda *a, **k: {"text": "Dalle call è emerso questo."})
+    monkeypatch.setitem(sys.modules, "mlx_whisper", finto_mlx)
+    monkeypatch.setattr(
+        voce_lib, "carica_config",
+        lambda: {"lingua": "it", "glossario": [], "sostituzioni": {}})
+
+    class ArbitroScaduto:
+        returncode = 1
+        stdout = "Failed to authenticate: OAuth session expired and could not be refreshed\n"
+        stderr = ""
+    monkeypatch.setattr(voce_lib.subprocess, "run", lambda *a, **k: ArbitroScaduto())
+
+    caplog.set_level(logging.INFO, logger="voce")
+    nuove = voce_lib.ripassa_audio_conservati(
+        cartella, [log], config, ["agente-finto"], "modello-finto")
+
+    assert nuove == {}
+    assert json.loads(config.read_text())["sostituzioni"] == {}
+    assert "1 disaccordi, arbitro fallito" in caplog.text
+    assert "OAuth session expired" in caplog.text
+    assert "nessuna correzione sicura" not in caplog.text
 
 
 def test_casella_ammissibile_accetta_documenti_e_rifiuta_barre():
@@ -1051,3 +1162,151 @@ def test_casella_ammissibile_accetta_documenti_e_rifiuta_barre():
     # barra degli indirizzi: in alto E bassa di statura -> mai
     assert voce_lib.casella_ammissibile(y_casella=40, altezza_casella=28,
                                         y_finestra=0, altezza_finestra=800) is False
+
+
+# --- trascrizione progressiva (04/09/2026): dove tagliare, come rincollare ---
+# Blocchi sintetici: 400 campioni a 16 kHz = 25 ms l'uno, 40 blocchi = 1 s.
+
+def _blocchi(*tratti):
+    """tratti = (secondi, rms): torna (rms_per_blocco, campioni_per_blocco)."""
+    rms, campioni = [], []
+    for secondi, volume in tratti:
+        for _ in range(int(round(secondi * 40))):
+            rms.append(volume)
+            campioni.append(400)
+    return rms, campioni
+
+
+def test_trova_taglio_aspetta_i_12_secondi_anche_con_pause_prima():
+    rms, campioni = _blocchi((5, 0.02), (1, 0.005), (5, 0.02))  # pausa a 5s: troppo presto
+    assert voce_lib.trova_taglio(rms, campioni, 0) is None
+
+
+def test_trova_taglio_cade_sulla_prima_pausa_dopo_i_12_secondi():
+    rms, campioni = _blocchi((13, 0.02), (1, 0.005), (5, 0.02))
+    taglio = voce_lib.trova_taglio(rms, campioni, 0)
+    # 13 s di voce + 0,5 s di silenzio = blocco 540 (escluso)
+    assert taglio == 13 * 40 + 20
+    assert all(v < 0.010 for v in rms[13 * 40:taglio])  # il segmento chiude nel silenzio
+
+
+def test_trova_taglio_non_taglia_a_meta_parola():
+    # parlato continuo con micro-pause da 0,2 s: mai mezzo secondo sotto soglia
+    rms, campioni = _blocchi((14, 0.02), (0.2, 0.005), (10, 0.02), (0.2, 0.005), (10, 0.02))
+    assert voce_lib.trova_taglio(rms, campioni, 0) is None
+
+
+def test_trova_taglio_riparte_dall_inizio_del_segmento_aperto():
+    rms, campioni = _blocchi((13, 0.02), (1, 0.005), (13, 0.02), (1, 0.005))
+    primo = voce_lib.trova_taglio(rms, campioni, 0)
+    secondo = voce_lib.trova_taglio(rms, campioni, primo)
+    assert primo == 13 * 40 + 20
+    # dal primo taglio: 0,5 s di coda di pausa + 13 s voce + 0,5 s silenzio
+    assert secondo == primo + 20 + 13 * 40 + 20
+    assert voce_lib.trova_taglio(rms, campioni, secondo) is None
+
+
+def test_trova_taglio_tollera_liste_di_lunghezza_diversa():
+    rms, campioni = _blocchi((13, 0.02), (1, 0.005))
+    assert voce_lib.trova_taglio(rms + [0.02], campioni, 0) == 13 * 40 + 20
+    assert voce_lib.trova_taglio([], [], 0) is None
+
+
+def test_trova_taglio_rispetta_blocco_minimo_configurato():
+    rms, campioni = _blocchi((7, 0.02), (1, 0.005), (7, 0.02))
+    assert voce_lib.trova_taglio(rms, campioni, 0) is None
+    assert voce_lib.trova_taglio(rms, campioni, 0, blocco_min_sec=6) == 7 * 40 + 20
+
+
+def test_unisci_segmenti_spazi_singoli_e_maiuscola_dopo_il_punto():
+    assert voce_lib.unisci_segmenti(["Ciao a tutti.", "  oggi parliamo di voce.  "]) == (
+        "Ciao a tutti. Oggi parliamo di voce."
+    )
+    assert voce_lib.unisci_segmenti(["", "Solo questo", None]) == "Solo questo"
+    assert voce_lib.unisci_segmenti([]) == ""
+
+
+def test_unisci_segmenti_niente_doppi_segni():
+    assert voce_lib.unisci_segmenti(["Prima frase.", ". seconda frase"]) == "Prima frase. Seconda frase"
+    assert voce_lib.unisci_segmenti(["Prima frase,", ", e poi"]) == "Prima frase, e poi"
+    assert voce_lib.unisci_segmenti(["prima parola", ", e poi"]) == "prima parola, e poi"
+
+
+def test_unisci_segmenti_frase_a_meta_riparte_minuscola_ma_non_i_nomi():
+    glossario = ["Claude Code", "LeaderAI"]
+    assert voce_lib.unisci_segmenti(["stavo dicendo che", "Il cliente vuole"], glossario) == (
+        "stavo dicendo che il cliente vuole"
+    )
+    assert voce_lib.unisci_segmenti(["lo faccio con", "LeaderAI e basta"], glossario) == (
+        "lo faccio con LeaderAI e basta"
+    )
+    assert voce_lib.unisci_segmenti(["usa", "Claude Code per questo"], glossario) == (
+        "usa Claude Code per questo"
+    )
+    assert voce_lib.unisci_segmenti(["mando il", "PDF domani"]) == "mando il PDF domani"
+    assert voce_lib.unisci_segmenti(["mando il file,", "Domani"]) == "mando il file, domani"
+
+
+def test_prompt_con_contesto_glossario_piu_coda_del_pezzo_prima():
+    glossario = "Glossario: LeaderAI, Codex."
+    assert voce_lib.prompt_con_contesto(glossario, "") == glossario
+    assert voce_lib.prompt_con_contesto(None, "") is None
+    assert voce_lib.prompt_con_contesto(None, "ciao") == "ciao"
+    lungo = " ".join(f"parola{i}" for i in range(80))
+    prompt = voce_lib.prompt_con_contesto(glossario, lungo)
+    coda = prompt[len(glossario) + 1:]
+    assert prompt.startswith(glossario + " ")
+    assert len(coda) <= 200
+    assert coda.startswith("parola")  # tagliato a inizio parola
+    assert prompt.endswith("parola79")
+
+
+# --- catena di arbitri: il primo agente che risponde vince (04/09/2026) ---
+
+def test_comandi_agente_elenca_tutti_gli_agenti_presenti(monkeypatch):
+    monkeypatch.setattr(voce_lib.shutil, "which", lambda n: f"/usr/local/bin/{n}")
+    comandi = voce_lib.comandi_agente()
+    assert [c[0] for c in comandi] == ["claude", "codex"]
+    assert voce_lib.comando_agente() == comandi[0]  # compatibilita': il primo
+
+
+def test_chiedi_arbitro_ripiega_sul_secondo_agente(monkeypatch):
+    """Claude installato ma con la sessione scaduta (rc=1) non deve piu'
+    azzerare l'apprendimento: si passa a Codex nello stesso giro."""
+    chiamate = []
+
+    class Esito:
+        def __init__(self, rc, out):
+            self.returncode, self.stdout, self.stderr = rc, out, ""
+
+    def finto_run(cmd, **k):
+        chiamate.append(cmd[0])
+        if cmd[0] == "claude":
+            return Esito(1, "Failed to authenticate: OAuth session expired")
+        return Esito(0, '{"colle": "call"}')
+
+    monkeypatch.setattr(voce_lib.subprocess, "run", finto_run)
+    comandi = [["claude", "-p"], ["codex", "exec"]]
+    proposte, errore = voce_lib.chiedi_arbitro(comandi, "prompt")
+    assert (proposte, errore) == ({"colle": "call"}, None)
+    assert chiamate == ["claude", "codex"]
+
+
+def test_chiedi_arbitro_dice_chi_ha_fallito(monkeypatch):
+    class Esito:
+        returncode, stdout, stderr = 1, "sessione scaduta", ""
+
+    def finto_run(cmd, **k):
+        if cmd[0] == "codex":
+            raise OSError("codex non parte")
+        return Esito()
+
+    monkeypatch.setattr(voce_lib.subprocess, "run", finto_run)
+    proposte, errore = voce_lib.chiedi_arbitro([["claude"], ["codex"]], "prompt")
+    assert proposte == {}
+    assert "claude:" in errore and "codex:" in errore and "non parte" in errore
+    # nessun agente: errore parlante, niente eccezioni
+    assert voce_lib.chiedi_arbitro([], "prompt") == ({}, "nessun agente locale installato")
+    # un comando solo (lista di stringhe) resta accettato
+    proposte, errore = voce_lib.chiedi_arbitro(["claude"], "prompt")
+    assert proposte == {} and errore.startswith("claude:")

@@ -31,13 +31,15 @@ from voce_lib import (
     c_e_voce, aggiorna_scarti_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     diagnosi_audio_muto, GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
     corsia_utilizzabile, registra_esito_corsia, SOGLIA_GUASTI_CORSIA, RIPOSO_CORSIA_SEC,
-    timeout_scaduto, glossario_iniziale, applica_sostituzioni,
+    stop_anti_incanto, glossario_iniziale, applica_sostituzioni,
     converti_punteggiatura_dettata,
-    serve_pulizia, comando_agente, destinazione_agente,
+    serve_pulizia, comando_agente, comandi_agente, destinazione_agente, ritardo_invio,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
     casella_ammissibile,
     salva_audio_recente, rimuovi_eco_glossario,
+    trova_taglio, unisci_segmenti, prompt_con_contesto,
+    SOGLIA_SILENZIO_PROGRESSIVA, BLOCCO_PROGRESSIVO_SEC,
 )
 from parla import ferma as ferma_voce, parla as pronuncia
 
@@ -72,10 +74,28 @@ volume_corrente = 0.0  # RMS aggiornato ad ogni callback audio, anche fuori regi
 # anello di pre-registrazione (~1s): i blocchi audio appena precedenti allo
 # start, per non perdere l'attacco della frase quando parte il VAD mani-libere
 pre_registrazione = collections.deque(maxlen=32)
+# Trascrizione progressiva (04/09): mentre tieni premuto, i segmenti gia'
+# chiusi su una pausa vengono trascritti in sottofondo; al rilascio resta
+# solo la coda. rms_blocchi corre parallelo a blocchi (un valore per blocco)
+# e serve a trovare le pause; sessione_progressiva e' la sessione della
+# registrazione in corso (None se spenta o fuori registrazione).
+rms_blocchi = []
+sessione_progressiva = None
+PROGRESSIVA = bool(cfg.get("trascrizione_progressiva", False))
+PROGRESSIVA_BLOCCO_SEC = float(cfg.get("trascrizione_progressiva_blocco_sec", BLOCCO_PROGRESSIVO_SEC))
+PROGRESSIVA_SOGLIA_SILENZIO = float(cfg.get("trascrizione_progressiva_soglia_silenzio", SOGLIA_SILENZIO_PROGRESSIVA))
 
 BARRE = 18  # quante lineette nel visualizzatore
 livelli = collections.deque([0.0] * BARRE, maxlen=BARRE)
 MAX_REGISTRAZIONE_SEC = float(cfg.get("max_registrazione_sec", 90))
+# Coda al rilascio del tasto-detta: il microfono resta in ascolto ancora un
+# attimo, cosi' l'ultima sillaba non si perde se il tasto viene mollato un
+# pelo prima di finire la frase. Solo per la dettatura manuale: il VAD
+# mani-libere ha gia' la sua pausa di silenzio.
+CODA_RILASCIO_SEC = float(cfg.get("coda_rilascio_sec", 0.5))
+
+# tetto DURO: ferma anche col tasto fisicamente giu' (tasto incastrato)
+MAX_REGISTRAZIONE_TASTO_SEC = float(cfg.get("max_registrazione_tasto_sec", 300))
 
 # --- pannello di stato nativo (NonactivatingPanel: mai il focus) ---
 
@@ -241,13 +261,33 @@ def posiziona_mini_pannello():
     mini_pannello.setFrameOrigin_(AppKit.NSMakePoint(x, y))
 
 
+def _tasto_detta_giu():
+    """True se la dettatura e' MANUALE (tasto-detta premuto per l'app) E il
+    tasto e' ancora fisicamente giu' secondo il sistema (Quartz, non pynput).
+    Nel VAD mani-libere tasto_premuto e' False: qui torna False e il tetto
+    soft vale come prima. Se Quartz non risponde si assume tasto su: meglio
+    un tetto in piu' che una registrazione infinita."""
+    if not tasto_premuto:
+        return False
+    try:
+        return _cmd_giu()
+    except Exception:
+        return False
+
+
 def stop_se_registrazione_troppo_lunga():
-    """Airbag anti-incanto: non ferma mai subito, solo se resta aperta troppo."""
+    """Airbag anti-incanto: non ferma mai subito, solo se resta aperta troppo.
+    Col tasto-detta ancora fisicamente giu' (caso 04/09: monologo di 90s+)
+    NON ferma: vale solo il tetto duro."""
     global tasto_premuto
     ora = time.monotonic()
-    if timeout_scaduto(registrando, inizio_registrazione, ora, MAX_REGISTRAZIONE_SEC):
+    tasto_giu = _tasto_detta_giu()
+    if stop_anti_incanto(registrando, inizio_registrazione, ora, tasto_giu,
+                         MAX_REGISTRAZIONE_SEC, MAX_REGISTRAZIONE_TASTO_SEC):
         durata = ora - inizio_registrazione
-        logging.getLogger("voce").warning("registrazione oltre %.1fs: stop anti-incanto", durata)
+        logging.getLogger("voce").warning(
+            "registrazione oltre %.1fs: stop anti-incanto (tasto giu': %s)", durata, tasto_giu
+        )
         tasto_premuto = False
         comandi_audio.put("stop")
 
@@ -371,13 +411,15 @@ if SHORTCUT_PULIZIA and not shortcut_pulizia_disponibile(SHORTCUT_PULIZIA):
     # ZERO uso della corsia veloce e 123 pulizie tutte sull'agente lento,
     # perche' l'unico controllo era quello all'avvio.
     _guasti_shortcut, _ultimo_guasto_shortcut = SOGLIA_GUASTI_CORSIA, time.monotonic()
-COMANDO_APPRENDIMENTO = comando_agente() if cfg.get("debug_dettature", False) else None
+COMANDO_APPRENDIMENTO = comandi_agente() if cfg.get("debug_dettature", False) else None
 
 
-def trascrivi(audio):
+def _whisper_grezzo(audio, prompt=None):
+    """Un passaggio di Whisper: solo il modello e la sua guardia
+    anti-non-parlato. Nessuna rifinitura del testo (vedi _rifinisci)."""
     esito = mlx_whisper.transcribe(
         audio, path_or_hf_repo=cfg["modello"], language=cfg["lingua"],
-        initial_prompt=GLOSSARIO_PROMPT,
+        initial_prompt=prompt,
     )
     # Filtro anti-non-parlato (06/07): Whisper dichiara per ogni segmento
     # quanto e' sicuro che sia voce vera. Musica, rumori e audio di
@@ -394,9 +436,20 @@ def trascrivi(audio):
                 no_speech, confidenza,
             )
             return ""
-    testo = rimuovi_eco_glossario(esito["text"].strip(), cfg.get("glossario", []))
+    return esito["text"].strip()
+
+
+def _rifinisci(testo):
+    """Post-processing del testo trascritto, UNA volta sola per dettatura:
+    eco del glossario, sostituzioni, punteggiatura dettata."""
+    testo = rimuovi_eco_glossario(testo, cfg.get("glossario", []))
     testo = applica_sostituzioni(testo, cfg.get("sostituzioni", {}))
     return converti_punteggiatura_dettata(testo)
+
+
+def trascrivi(audio):
+    """Percorso classico: un solo passaggio Whisper sull'intero audio."""
+    return _rifinisci(_whisper_grezzo(audio, GLOSSARIO_PROMPT))
 
 
 def app_frontale():
@@ -673,6 +726,7 @@ def su_callback(indata, frames, t, status):
         pre_registrazione.append(indata.copy())
         return
     blocchi.append(indata.copy())
+    rms_blocchi.append(volume_corrente)  # parallelo a blocchi: serve a trovare le pause
     livelli.append(volume_corrente)
 
 
@@ -789,11 +843,12 @@ def _nascondi_o_arma():
 
 
 def avvia_registrazione():
-    global blocchi, registrando, inizio_registrazione
+    global blocchi, rms_blocchi, registrando, inizio_registrazione, sessione_progressiva
     ferma_voce()  # ti zittisco se parlo io: tocca a te
     # si parte dall'anello di pre-registrazione: il VAD scatta quando gia'
     # stai parlando, senza questi blocchi la prima parola andrebbe persa
     blocchi = list(pre_registrazione)
+    rms_blocchi = [float(np.sqrt(np.mean(b ** 2))) for b in blocchi]
     pre_registrazione.clear()
     livelli.extend([0.0] * BARRE)
     registrando = True
@@ -801,12 +856,113 @@ def avvia_registrazione():
     logging.getLogger("voce").info("registrazione avviata")
     suono("Pop")
     eventi.put("ascolto")
+    if PROGRESSIVA:
+        sessione_progressiva = SessioneProgressiva(blocchi, rms_blocchi)
+        sessione_progressiva.avvia()
 
 
 _lock_trascrizione = threading.Lock()
 
 
-def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
+class SessioneProgressiva:
+    """Trascrizione a segmenti MENTRE si registra (04/09/2026).
+
+    Un thread di sottofondo guarda i volumi per blocco (rms_blocchi) e, ogni
+    volta che il segmento aperto supera trascrizione_progressiva_blocco_sec
+    e cade su una pausa di 0,5s (trova_taglio), trascrive quel segmento sotto
+    _lock_trascrizione, passando a Whisper glossario + coda del testo
+    precedente. Non tocca mai il callback audio ne' il thread tastiera: legge
+    solo fette della lista blocchi per indice. Al rilascio
+    _trascrivi_con_sessione aspetta il segmento in corso, trascrive solo la
+    coda e rincolla. Un errore in sottofondo alza `guasta`: si torna al
+    passaggio unico su tutto l'audio, come oggi."""
+
+    def __init__(self, blocchi_ref, rms_ref):
+        self.blocchi = blocchi_ref
+        self.rms = rms_ref
+        self.campioni = []      # numero di campioni per blocco (cresce con blocchi)
+        self.inizio_segmento = 0
+        self.pezzi = []
+        self.guasta = False
+        self.fermata = threading.Event()
+        self.thread = threading.Thread(target=self._lavora, daemon=True)
+
+    def avvia(self):
+        self.thread.start()
+
+    def ferma(self):
+        self.fermata.set()
+
+    def _lavora(self):
+        log = logging.getLogger("voce")
+        while not self.fermata.is_set():
+            time.sleep(0.2)
+            n = min(len(self.blocchi), len(self.rms))
+            for b in self.blocchi[len(self.campioni):n]:
+                self.campioni.append(len(b))
+            taglio = trova_taglio(
+                self.rms, self.campioni, self.inizio_segmento, FREQ,
+                PROGRESSIVA_SOGLIA_SILENZIO, blocco_min_sec=PROGRESSIVA_BLOCCO_SEC,
+            )
+            if taglio is None or self.fermata.is_set():
+                continue
+            inizio, self.inizio_segmento = self.inizio_segmento, taglio
+            try:
+                segmento = np.concatenate(self.blocchi[inizio:taglio])[:, 0]
+                prompt = prompt_con_contesto(GLOSSARIO_PROMPT, self.pezzi[-1] if self.pezzi else "")
+                partenza = time.monotonic()
+                with _lock_trascrizione:
+                    testo = _whisper_grezzo(segmento, prompt)
+                testo = rimuovi_eco_glossario(testo, cfg.get("glossario", []))
+                self.pezzi.append(testo)
+                log.info(
+                    "progressiva: segmento %d (%.1fs) trascritto in %.1fs, %d parole",
+                    len(self.pezzi), len(segmento) / FREQ, time.monotonic() - partenza,
+                    len(testo.split()),
+                )
+            except Exception:
+                log.exception("progressiva: errore sul segmento, torno al passaggio unico")
+                self.guasta = True
+                return
+
+
+def _trascrivi_con_sessione(audio, sessione):
+    """Testo rifinito dell'audio intero. Senza sessione (interruttore spento,
+    o nessun segmento chiuso: dettature sotto ~12s) e' il percorso di sempre,
+    un solo passaggio Whisper. Con segmenti gia' trascritti si trascrive solo
+    la coda dall'ultimo taglio, si rincolla e si rifinisce una volta sola."""
+    log = logging.getLogger("voce")
+    if sessione is not None:
+        sessione.ferma()
+        sessione.thread.join(timeout=120)  # FUORI dal lock: il segmento in corso lo vuole
+    if sessione is None or sessione.guasta or not sessione.pezzi or sessione.thread.is_alive():
+        with _lock_trascrizione:  # una trascrizione per volta
+            eventi.put("trascrivo")
+            return trascrivi(audio)
+    coperti = sum(sessione.campioni[:sessione.inizio_segmento])
+    if coperti > len(audio):
+        log.warning("progressiva: segmenti oltre l'audio (%d > %d), passaggio unico", coperti, len(audio))
+        with _lock_trascrizione:
+            eventi.put("trascrivo")
+            return trascrivi(audio)
+    coda = audio[coperti:]
+    pezzi = list(sessione.pezzi)
+    partenza = time.monotonic()
+    with _lock_trascrizione:
+        eventi.put("trascrivo")
+        if len(coda) >= FREQ * 0.2 and c_e_voce(coda, cfg.get("soglia_voce", SOGLIA_VOCE)):
+            prompt = prompt_con_contesto(GLOSSARIO_PROMPT, pezzi[-1])
+            pezzi.append(rimuovi_eco_glossario(_whisper_grezzo(coda, prompt), cfg.get("glossario", [])))
+    # frase-fantasma su un pezzo (tipico: coda cortissima) = pezzo scartato
+    pezzi = [p for p in pezzi if not e_allucinazione(p)]
+    log.info(
+        "progressiva: %d segmenti in sottofondo, coda %.1fs trascritta in %.1fs",
+        len(sessione.pezzi), len(coda) / FREQ, time.monotonic() - partenza,
+    )
+    return _rifinisci(unisci_segmenti(pezzi, cfg.get("glossario", [])))
+
+
+def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio, sessione=None):
     """Parte pesante (Whisper ~2-3s + incolla): gira su un thread a parte e
     blindata. Se girasse sul thread della tastiera, macOS la vedrebbe "appesa"
     e disabiliterebbe l'hotkey; e un suo errore ucciderebbe il listener.
@@ -821,11 +977,9 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
             salva_audio_recente, audio, BASE / "audio_recenti",
             cfg.get("conserva_audio_n", 0),
         )
-        if conservato:
-            log.info("audio conservato: %s", conservato.name)
-        with _lock_trascrizione:  # una trascrizione per volta
-            eventi.put("trascrivo")
-            testo = trascrivi(audio)
+        if conservato:  # percorso intero: la cartella operativa, non quella sorgente
+            log.info("audio conservato: %s", conservato)
+        testo = _trascrivi_con_sessione(audio, sessione)
         debug = cfg.get("debug_dettature", False)
         allucinato = e_allucinazione(testo)
         if allucinato:  # frase-fantasma di Whisper sul non-parlato: scarta
@@ -896,21 +1050,20 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
             log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
             # invio automatico: parte sempre (indipendente dal toggle voce
             # agenti). La PAUSA prima dell'Invio dipende dal contesto: a voce
-            # ON e' botta e risposta (breve), a voce OFF e' dettatura su testo
-            # dove serve tempo per correggere. Durante l'attesa, QUALSIASI
-            # tasto premuto da Sal o una nuova registrazione gia' in corso
-            # ANNULLANO l'Invio (richiesta 06/07: "se clicco un tasto l'invio
-            # si deve bloccare" — stava aggiungendo una seconda frase e la
-            # prima e' partita da sola). La frase resta incollata: partira'
-            # con l'Invio del turno successivo, tutto insieme.
+            # ON e' botta e risposta (breve); in una chat AI a voce OFF il
+            # testo si vede e parte quasi subito (dati 30/08→04/09: con la
+            # pausa dei documenti il 40% degli Invii veniva annullato da Sal
+            # che premeva Invio a mano); nei documenti serve tempo per
+            # correggere. Durante l'attesa, QUALSIASI tasto premuto da Sal o
+            # una nuova registrazione gia' in corso ANNULLANO l'Invio
+            # (richiesta 06/07: "se clicco un tasto l'invio si deve
+            # bloccare" — stava aggiungendo una seconda frase e la prima e'
+            # partita da sola). La frase resta incollata: partira' con
+            # l'Invio del turno successivo, tutto insieme.
             if cfg.get("invio_automatico", True) and not senza_casella:
                 # senza una casella vera l'Invio andrebbe su un focus ignoto:
                 # in una pagina puo' essere un bottone qualunque
-                chiave_ritardo = (
-                    "invio_automatico_ritardo_conversazione_sec" if voce_attiva()
-                    else "invio_automatico_ritardo_sec"
-                )
-                attesa = float(cfg.get(chiave_ritardo, 0.3 if voce_attiva() else 2.5))
+                attesa = ritardo_invio(cfg, voce_attiva(), chat_agente)
                 time.sleep(0.15)  # margine: il Cmd+V dell'incolla non deve contare come "tasto di Sal"
                 riferimento = time.monotonic()
                 trascorso = 0.0
@@ -926,7 +1079,8 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio):
                 else:
                     tastiera.press(Key.enter)
                     tastiera.release(Key.enter)
-                    log.info("invio automatico premuto")
+                    log.info("invio automatico premuto (attesa %.1fs%s)",
+                             attesa, ", chat AI" if chat_agente else "")
         else:
             log.info("niente da incollare (testo vuoto dopo trascrizione/pulizia)")
     except Exception:
@@ -940,7 +1094,7 @@ scarti_fuori_scala = 0  # dettature di fila con sample fuori [-1,1]: al 2° si r
 def ferma_e_trascrivi():
     """Chiude la registrazione (il microfono resta aperto: vedi avvia_stream)
     e lancia la trascrizione su un thread a parte."""
-    global registrando, inizio_registrazione, scarti_fuori_scala
+    global registrando, inizio_registrazione, scarti_fuori_scala, sessione_progressiva
     if not registrando:
         _nascondi_o_arma()
         return
@@ -948,6 +1102,9 @@ def ferma_e_trascrivi():
     scheda_bersaglio = scheda_browser_frontale(app_bersaglio)  # idem, la scheda se e' un browser noto
     registrando = False
     inizio_registrazione = None
+    sessione, sessione_progressiva = sessione_progressiva, None
+    if sessione is not None:
+        sessione.ferma()  # niente nuovi tagli: la coda la fa il thread di incolla
     logging.getLogger("voce").info("registrazione fermata")
     suono("Bottle")
     if not blocchi:
@@ -979,7 +1136,8 @@ def ferma_e_trascrivi():
             airbag_stream_muto(len(audio) / FREQ)
         return
     threading.Thread(
-        target=_trascrivi_e_incolla, args=(audio, app_bersaglio, scheda_bersaglio), daemon=True
+        target=_trascrivi_e_incolla, args=(audio, app_bersaglio, scheda_bersaglio, sessione),
+        daemon=True,
     ).start()
 
 
@@ -1113,6 +1271,13 @@ def worker_audio():
             esegui_sicuro(avvia_registrazione)
         elif cmd == "stop":
             esegui_sicuro(ferma_e_trascrivi)
+        elif cmd == "stop_coda":
+            # rilascio del tasto: il callback audio continua ad accodare
+            # blocchi finche' registrando e' True, quindi basta aspettare
+            # qui (mai nel thread tastiera) prima di chiudere.
+            if registrando and CODA_RILASCIO_SEC > 0:
+                time.sleep(CODA_RILASCIO_SEC)
+            esegui_sicuro(ferma_e_trascrivi)
 
 
 def riavvia_processo(motivo):
@@ -1161,10 +1326,13 @@ def watchdog_audio():
     while True:
         time.sleep(0.5)
         ora = time.monotonic()
-        if timeout_scaduto(registrando, inizio_registrazione, ora, MAX_REGISTRAZIONE_SEC):
+        tasto_giu = _tasto_detta_giu()
+        if stop_anti_incanto(registrando, inizio_registrazione, ora, tasto_giu,
+                             MAX_REGISTRAZIONE_SEC, MAX_REGISTRAZIONE_TASTO_SEC):
             durata = ora - inizio_registrazione
             logging.getLogger("voce").warning(
-                "registrazione oltre %.1fs: stop anti-incanto watchdog", durata
+                "registrazione oltre %.1fs: stop anti-incanto watchdog (tasto giu': %s)",
+                durata, tasto_giu,
             )
             tasto_premuto = False
             comandi_audio.put("stop")
@@ -1231,7 +1399,7 @@ def su_rilascio(tasto):
     if tasto == TASTO:
         if tasto_premuto:
             tasto_premuto = False
-            comandi_audio.put("stop")
+            comandi_audio.put("stop_coda")  # rilascio manuale: coda di CODA_RILASCIO_SEC
     elif tasto == TASTO_COMBO_VOCE:
         combo_voce_scattato = False
 
@@ -1304,7 +1472,7 @@ def _impara_dagli_errori():
         pass
     if not cfg.get("debug_dettature", False):
         return  # senza log dei testi non c'e' niente da cui imparare
-    comando = COMANDO_APPRENDIMENTO or comando_agente()
+    comando = COMANDO_APPRENDIMENTO or comandi_agente()  # tutti gli agenti presenti, in ordine
     if not comando:
         return
     nuove = impara_sostituzioni(

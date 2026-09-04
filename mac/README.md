@@ -37,7 +37,7 @@ Il primo download puo' essere pesante: il modello Whisper viene scaricato una vo
 
 ## Installazione
 
-### Metodo unico: repo + installazione con Claude Code o Codex
+### Metodo unico: pacchetto LeaderAI + installazione con Claude Code o Codex
 
 Segui il percorso in:
 
@@ -45,7 +45,10 @@ Segui il percorso in:
 INSTALLA_CON_AI.md
 ```
 
-Il tuo agente prende dalla repo la versione verificata, esegue `mac/install.sh` e continua dalla cartella locale. Conserva cio' che hai personalizzato, ripara la parte locale, collega la voce e chiude con una prova finale.
+Il tuo agente prende dal modulo App l'unico pacchetto Mac + Windows, sceglie
+`mac/`, esegue `mac/install.sh` e continua dalla cartella locale. Conserva cio'
+che hai personalizzato, ripara la parte locale, collega la voce e chiude con
+una prova finale.
 
 L'installer applica la fotocopia funzionale di Sal e conserva glossario,
 sostituzioni apprese e preferenza di log. macOS chiede un solo gesto umano:
@@ -56,7 +59,7 @@ esegue poi `voce_hook.py --check-profile` e chiude solo con
 ### Installazione
 
 1. Apri Claude Code o Codex e fagli leggere l'email di consegna.
-2. L'agente prende la versione verificata dalla repo pubblica.
+2. L'agente apre il pacchetto Voce collegato nel modulo App e sceglie `mac/`.
 3. L'agente esegue `mac/install.sh` e legge `INSTALLA_CON_AI.md` nella cartella installata.
 4. Concedi soltanto i permessi macOS richiesti e prova microfono, tasti e voce.
 5. L'agente ripara gli errori recuperabili e chiude con il collaudo reale.

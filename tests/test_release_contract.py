@@ -71,13 +71,13 @@ def test_collaudo_codex_richiede_fiducia_e_prova_reale():
         assert "risposta completa" in testo
 
 
-def test_email_impone_repo_pubblica_e_prova_destinatario():
+def test_email_impone_pacchetto_drive_e_prova_destinatario():
     email = (ROOT / "EMAIL_CONSEGNA.md").read_text(encoding="utf-8")
     for frase in (
-        "https://github.com/salChiarenza/voce",
+        "[LINK_VOCE_DRIVE]",
         "windows/INSTALLA_CON_AI.md",
         "mac/INSTALLA_CON_AI.md",
-        "senza credenziali",
+        "Riparti dal collegamento Drive",
         "PROVA_DESTINATARIO_OK",
         "AI_ACT_CHECK_OK",
         "INVIO_OK",
@@ -101,9 +101,11 @@ def test_consegna_senza_passaggi_tecnici_del_proprietario():
         for frase in vietate:
             assert frase not in testo, f"{nome} chiede ancora un passaggio tecnico al proprietario: {frase}"
 
-    assert "https://github.com/salChiarenza/voce" in testi["EMAIL_CONSEGNA.md"]
+    assert "[LINK_VOCE_DRIVE]" in testi["EMAIL_CONSEGNA.md"]
+    assert "https://github.com/salChiarenza/voce" not in testi["EMAIL_CONSEGNA.md"]
     for nome in ("mac/INSTALLA_CON_AI.md", "windows/INSTALLA_CON_AI.md"):
-        assert "git clone https://github.com/salChiarenza/voce.git" in testi[nome]
+        assert "pacchetto Mac + Windows" in testi[nome]
+        assert "git clone" not in testi[nome]
 
 
 def test_consegna_resta_una_missione_unica_fino_alla_prova():
@@ -160,6 +162,7 @@ def test_profilo_mac_pubblico_e_la_fotocopia_funzionale_di_sal():
     assert cfg["invio_automatico"] is True
     assert cfg["invio_automatico_ritardo_sec"] == 2.5
     assert cfg["invio_automatico_ritardo_conversazione_sec"] == 2.5
+    assert cfg["invio_automatico_ritardo_chat_ai_sec"] == 1.0
     assert cfg["mani_libere_soglia_voce"] == 0.018
     assert cfg["mani_libere_soglia_stop"] == 0.013
     codice = (ROOT / "mac/detta.py").read_text(encoding="utf-8")
@@ -182,6 +185,49 @@ def test_comportamento_invio_gemello_su_windows():
         windows["invio_automatico_ritardo_conversazione_sec"]
         == mac["invio_automatico_ritardo_conversazione_sec"]
     )
+    assert (
+        windows["invio_automatico_ritardo_chat_ai_sec"]
+        == mac["invio_automatico_ritardo_chat_ai_sec"]
+    )
+
+
+def test_coda_al_rilascio_del_tasto_gemella():
+    """Mollare il tasto un pelo prima della fine frase non deve tagliare
+    l'ultima sillaba: mezzo secondo di coda, solo sulla dettatura manuale."""
+    mac = json.loads((ROOT / "mac/config.json").read_text(encoding="utf-8"))
+    windows = json.loads((ROOT / "windows/config.json").read_text(encoding="utf-8"))
+    assert mac["coda_rilascio_sec"] == 0.5
+    assert windows["coda_rilascio_sec"] == mac["coda_rilascio_sec"]
+    for sorgente in ("mac/detta.py", "windows/voice_dettatura_windows.py"):
+        codice = (ROOT / sorgente).read_text(encoding="utf-8")
+        assert 'CFG.get("coda_rilascio_sec", 0.5)' in codice or 'cfg.get("coda_rilascio_sec", 0.5)' in codice
+        assert 'put("stop_coda")' in codice  # il rilascio manuale passa dalla coda
+        assert 'elif cmd == "stop_coda":' in codice or 'elif command == "stop_coda":' in codice
+        assert "time.sleep(CODA_RILASCIO_SEC)" in codice
+    # il rilascio manuale e' l'unico a usare la coda: VAD e anti-incanto restano "stop"
+    detta = (ROOT / "mac/detta.py").read_text(encoding="utf-8")
+    assert detta.count('put("stop_coda")') == 1
+    win = (ROOT / "windows/voice_dettatura_windows.py").read_text(encoding="utf-8")
+    assert win.count('put("stop_coda")') == 1
+
+def test_tetto_registrazione_col_tasto_gemello_su_windows():
+    mac = json.loads((ROOT / "mac/config.json").read_text(encoding="utf-8"))
+    windows = json.loads((ROOT / "windows/config.json").read_text(encoding="utf-8"))
+    assert mac["max_registrazione_tasto_sec"] == 300
+    assert windows["max_registrazione_tasto_sec"] == mac["max_registrazione_tasto_sec"]
+    # il tetto duro deve stare sopra il tetto soft, su entrambe
+    assert mac["max_registrazione_tasto_sec"] > mac["max_registrazione_sec"]
+    assert windows["max_registrazione_tasto_sec"] > windows["max_recording_sec"]
+
+
+def test_trascrizione_progressiva_gemella_su_windows():
+    mac = json.loads((ROOT / "mac/config.json").read_text(encoding="utf-8"))
+    windows = json.loads((ROOT / "windows/config.json").read_text(encoding="utf-8"))
+    for chiave in ("trascrizione_progressiva", "trascrizione_progressiva_blocco_sec"):
+        assert chiave in mac and chiave in windows, chiave
+        assert windows[chiave] == mac[chiave], chiave
+    assert mac["trascrizione_progressiva"] is True
+    assert mac["trascrizione_progressiva_blocco_sec"] == 12
 
 
 def test_app_viva_sal_non_puo_derivare_dal_profilo_pubblico():
@@ -200,6 +246,9 @@ def test_app_viva_sal_non_puo_derivare_dal_profilo_pubblico():
         "invio_automatico",
         "invio_automatico_ritardo_sec",
         "invio_automatico_ritardo_conversazione_sec",
+        "coda_rilascio_sec",
+
+        "invio_automatico_ritardo_chat_ai_sec",
         "detta_pulito",
         "pulizia_in_conversazione",
         "mani_libere_attivazione_sec",

@@ -11,7 +11,11 @@ Mentre parli compare in basso al centro una pill con il marchio **salchiarenza.a
 | **Mac** | [`mac/`](mac/) | Cmd destro | Option + freccia sinistra |
 | **Windows** | [`windows/`](windows/) | Ctrl destro | tasto Menu |
 
-Affida l'installazione al tuo Claude Code o Codex: prende dalla repo la versione verificata del tuo sistema, segue `INSTALLA_CON_AI.md`, installa, ripara e completa il collaudo. A te restano permessi e prova fisica.
+Mac e Windows sono disponibili insieme nello stesso pacchetto Voce. Dal modulo
+**App** di LeaderAI Ecosystem apri il collegamento Google Drive e affidalo al
+tuo Claude Code o Codex: sceglie la cartella del tuo sistema, segue
+`INSTALLA_CON_AI.md`, installa, ripara e completa il collaudo. A te restano
+permessi e prova fisica. La repo e' l'officina tecnica dietro le quinte.
 
 Per consegnare Voce a un cliente, usa il modello versionato [`EMAIL_CONSEGNA.md`](EMAIL_CONSEGNA.md). L'email, il launcher e le istruzioni locali vengono aggiornati insieme.
 
@@ -20,8 +24,9 @@ Per consegnare Voce a un cliente, usa il modello versionato [`EMAIL_CONSEGNA.md`
 La versione unica è in [`VERSION`](VERSION); la storia generale è in
 [`CHANGELOG.md`](CHANGELOG.md). Mac è la sorgente usata ogni giorno da Sal.
 La versione Windows resta candidata finché dettatura, tasti e voce non vengono
-provati su un PC Windows reale. Ogni cliente riceve il tag o il commit esatto
-verificato, non un collegamento generico a `main`.
+provati su un PC Windows reale, ma e' gia' disponibile nello stesso pacchetto
+della versione Mac. Ogni correzione nata dagli utilizzi aggiorna questa stessa
+fonte e il pacchetto unico, senza creare copie.
 
 Il collaudo della voce agenti include una risposta realmente ascoltata. Su
 Codex il proprietario verifica e autorizza il comando da `/hooks`: trovare il
