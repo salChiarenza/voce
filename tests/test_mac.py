@@ -253,13 +253,14 @@ def test_parla_deposita_e_non_uccide_la_lettura_in_corso(tmp_path, monkeypatch):
     avvii, comandi = [], []
     monkeypatch.setattr(parla, "LETTURA_PENDENTE", pendente)
     monkeypatch.setattr(parla, "_lettore_in_corsa", lambda: True)  # lettore vivo
+    monkeypatch.setattr(parla, "_pid_lettore", lambda: 123)
     monkeypatch.setattr(parla.subprocess, "Popen", lambda *a, **k: avvii.append(a))
     monkeypatch.setattr(parla.subprocess, "run", lambda c, **k: comandi.append(c))
 
     parla.parla("prima risposta")
     parla.parla("seconda risposta")
 
-    assert pendente.read_text(encoding="utf-8") == "seconda risposta"  # vince l'ultima
+    assert parla.prendi_pendente(pendente) == "seconda risposta"  # vince l'ultima
     assert avvii == []    # nessun secondo lettore
     assert comandi == []  # e soprattutto nessun pkill della voce in corso
 
@@ -284,6 +285,81 @@ def test_parla_avvia_un_lettore_sganciato_quando_manca(tmp_path, monkeypatch):
     assert sessione_nuova is True
 
 
+def test_parla_scartata_se_arriva_mentre_sal_sta_dettando(tmp_path, monkeypatch):
+    """Una risposta chiusa mentre il turno vocale e' ancora aperto e' vecchia:
+    non deve parlare sopra Sal ne' restare in coda dopo la sua domanda."""
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    turno_utente = tmp_path / "TURNO_UTENTE"
+    turno_utente.touch()
+    avvii = []
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(parla, "FLAG_TURNO_UTENTE", turno_utente, raising=False)
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: avvii.append(True))
+    monkeypatch.setattr(parla, "_traccia", lambda _messaggio: None)
+
+    parla.parla("Risposta del turno precedente")
+
+    assert parla.prendi_pendente(pendente) is None
+    assert avvii == []
+
+
+def test_lettore_non_parte_se_sal_inizia_a_dettare_dopo_la_coda(tmp_path, monkeypatch):
+    lette = []
+    turno_utente = tmp_path / "TURNO_UTENTE"
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+    monkeypatch.setattr(parla, "LETTORE_PID", tmp_path / "LETTORE_PID")
+    monkeypatch.setattr(parla, "FLAG_PARLANDO", tmp_path / "PARLANDO")
+    monkeypatch.setattr(parla, "FLAG_TURNO_UTENTE", turno_utente, raising=False)
+    monkeypatch.setattr(parla, "_leggi_adesso", lambda testo: lette.append(testo))
+    monkeypatch.setattr(parla, "_traccia", lambda _messaggio: None)
+    parla.scrivi_pendente("Risposta gia' accodata")
+    turno_utente.touch()
+
+    parla.lettore()
+
+    assert lette == []
+    assert parla.prendi_pendente() is None
+
+
+def test_turni_vocali_sovrapposti_non_liberano_il_turno_piu_nuovo(tmp_path, monkeypatch):
+    """La trascrizione vecchia puo' finire dopo l'inizio della nuova dettatura:
+    chiudendo il suo turno non deve riaprire la voce sopra Sal."""
+    flag = tmp_path / "TURNO_UTENTE"
+    monkeypatch.setattr(voce_lib, "FLAG_TURNO_UTENTE", flag, raising=False)
+    apri = getattr(voce_lib, "apri_turno_utente", None)
+    chiudi = getattr(voce_lib, "chiudi_turno_utente", None)
+    assert callable(apri) and callable(chiudi)
+
+    primo = apri()
+    secondo = apri()
+    chiudi(primo)
+    assert flag.exists()
+    chiudi(secondo)
+    assert not flag.exists()
+
+
+def test_parla_rilettura_immediata_dopo_stop_attende_rilascio_nel_figlio(tmp_path, monkeypatch):
+    avvii = []
+    monkeypatch.setattr(parla, "BASE", tmp_path)
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "LETTORE_PID", tmp_path / "LETTORE_PID")
+    monkeypatch.setattr(parla, "FLAG_PARLANDO", tmp_path / "PARLANDO")
+    monkeypatch.setattr(parla.subprocess, "run", lambda *a, **kw: None)
+    monkeypatch.setattr(parla, "_lettore_in_corsa", lambda: True)
+    monkeypatch.setattr(parla.subprocess, "Popen", lambda comando, **kw: avvii.append(comando))
+    parla.scrivi_pendente("risposta interrotta", origine={"id": "A", "nome": "Claude"})
+    assert parla.prendi_pendente() == "risposta interrotta"
+    parla.ferma()
+
+    # Il vecchio processo sta ancora rilasciando il lock dopo SIGTERM.
+    assert parla.rileggi_ultima()
+
+    assert len(avvii) == 1
+    assert avvii[0][-1] == "--lettore-attendi"
+    assert parla.prendi_pendente() == "risposta interrotta"
+
+
 def test_prendi_pendente_vince_l_ultimo(tmp_path):
     pendente = tmp_path / "LETTURA_PENDENTE"
     parla.scrivi_pendente("risposta vecchia", pendente)
@@ -291,6 +367,159 @@ def test_prendi_pendente_vince_l_ultimo(tmp_path):
 
     assert parla.prendi_pendente(pendente) == "risposta nuova"
     assert parla.prendi_pendente(pendente) is None  # l'attesa e' un posto solo
+
+
+def test_prendi_pendente_conserva_fonti_distinte_e_aggiorna_solo_la_stessa(tmp_path):
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    parla.scrivi_pendente("prima A", pendente, {"id": "A", "nome": "Claude: Proposta"})
+    parla.scrivi_pendente("prima B", pendente, {"id": "B", "nome": "Codex: Voce"})
+    parla.scrivi_pendente("ultima A", pendente, {"id": "A", "nome": "Claude: Proposta"})
+
+    assert parla.prendi_pendente(pendente, con_origine=True) == {
+        "id": "A", "nome": "Claude: Proposta", "testo": "ultima A",
+    }
+    assert parla.prendi_pendente(pendente, con_origine=True)["testo"] == "prima B"
+    assert not parla.ha_pendenti(pendente)
+
+
+def test_prendi_pendente_scelta_legge_solo_conversazione_selezionata(tmp_path, monkeypatch):
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    avvii = []
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: avvii.append(True))
+    parla.scrivi_pendente("risposta A", origine={"id": "A", "nome": "Claude"})
+    parla.scrivi_pendente("risposta B", origine={"id": "B", "nome": "Codex"})
+
+    assert not parla.scegli_conversazione("inesistente")
+    assert parla.scegli_conversazione("B")
+    assert parla.prendi_pendente() == "risposta B"
+    assert parla.prendi_pendente() is None
+    assert not parla.ha_pendenti()
+    stato = parla.elenco_conversazioni()
+    assert stato["preferita"] == "B"
+    assert stato["rileggibile"]
+    assert next(c for c in stato["conversazioni"] if c["id"] == "A")["in_attesa"]
+    assert parla.scegli_conversazione(None)
+    assert parla.ha_pendenti()
+    assert parla.prendi_pendente() == "risposta A"
+    assert len(avvii) == 2
+
+
+def test_prendi_pendente_migra_vecchio_testo_e_conserva_ultima(tmp_path, monkeypatch):
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    pendente.write_text("risposta dalla versione precedente", encoding="utf-8")
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", pendente)
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: None)
+
+    assert parla.prendi_pendente() == "risposta dalla versione precedente"
+    assert parla.prendi_pendente() is None
+    assert parla.rileggi_ultima()
+    assert parla.prendi_pendente() == "risposta dalla versione precedente"
+    assert pendente.stat().st_mode & 0o777 == 0o600
+
+
+def test_ferma_conserva_rilettura_e_preferenza(tmp_path, monkeypatch):
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "LETTORE_PID", tmp_path / "LETTORE_PID")
+    monkeypatch.setattr(parla, "FLAG_PARLANDO", tmp_path / "PARLANDO")
+    monkeypatch.setattr(parla.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: None)
+    parla.scrivi_pendente("risposta da recuperare", origine={"id": "A", "nome": "Claude"})
+    assert parla.scegli_conversazione("A")
+    assert parla.prendi_pendente() == "risposta da recuperare"
+    parla.scrivi_pendente("altra risposta", origine={"id": "B", "nome": "Codex"})
+
+    parla.ferma()
+
+    assert not parla.ha_pendenti()
+    assert parla.elenco_conversazioni()["preferita"] == "A"
+    assert parla.rileggi_ultima()
+    assert parla.prendi_pendente() == "risposta da recuperare"
+
+
+def test_prendi_pendente_rilettura_non_perde_risposta_nuova(tmp_path, monkeypatch):
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: None)
+    assert not parla.rileggi_ultima()
+    parla.scrivi_pendente("già ascoltata")
+    assert parla.prendi_pendente() == "già ascoltata"
+    parla.scrivi_pendente("appena arrivata")
+    assert parla.rileggi_ultima()
+
+    assert parla.prendi_pendente() == "già ascoltata"
+    assert parla.prendi_pendente() == "appena arrivata"
+
+
+def test_prendi_pendente_annuncio_non_sostituisce_ultima_risposta(tmp_path, monkeypatch):
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: None)
+    parla.scrivi_pendente("risposta dell'agente", origine={"id": "A", "nome": "Claude"})
+    assert parla.prendi_pendente() == "risposta dell'agente"
+    parla.scrivi_pendente("Voce AI spenta")
+    assert parla.prendi_pendente() == "Voce AI spenta"
+
+    assert parla.rileggi_ultima()
+    assert parla.prendi_pendente() == "risposta dell'agente"
+
+
+def test_prendi_pendente_annunci_toggle_passano_anche_con_scelta(tmp_path, monkeypatch):
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: None)
+    parla.scrivi_pendente("risposta A", origine={"id": "A", "nome": "Claude"})
+    assert parla.prendi_pendente() == "risposta A"
+    assert parla.scegli_conversazione("A")
+    parla.scrivi_pendente("Voce AI accesa")
+
+    assert parla.ha_pendenti()
+    assert parla.prendi_pendente() == "Voce AI accesa"
+    assert [c["id"] for c in parla.elenco_conversazioni()["conversazioni"]] == ["A"]
+    assert parla.rileggi_ultima()
+    assert parla.prendi_pendente() == "risposta A"
+
+
+def test_prendi_pendente_rilettura_scelta_non_legge_due_volte_la_stessa_attesa(tmp_path, monkeypatch):
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: None)
+    parla.scrivi_pendente("risposta da leggere", origine={"id": "A", "nome": "Claude"})
+    assert parla.scegli_conversazione("A")
+    assert parla.rileggi_ultima()
+
+    assert parla.prendi_pendente() == "risposta da leggere"
+    assert parla.prendi_pendente() is None
+
+
+def test_prendi_pendente_scritture_parallele_non_perdono_fonti(tmp_path):
+    import subprocess
+    pendente = tmp_path / "LETTURA_PENDENTE"
+    script = (
+        "import sys; from pathlib import Path; import parla; "
+        "parla.scrivi_pendente(sys.argv[2], Path(sys.argv[1]), "
+        "{'id': sys.argv[2], 'nome': 'Conversazione ' + sys.argv[2]})"
+    )
+    env = dict(os.environ, PYTHONPATH=str(REPO_ROOT / "mac"))
+    processi = [subprocess.Popen(
+        [sys.executable, "-c", script, str(pendente), str(i)], env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    ) for i in range(8)]
+    for processo in processi:
+        _, errore = processo.communicate(timeout=15)
+        assert processo.returncode == 0, errore.decode()
+    lette = [parla.prendi_pendente(pendente, con_origine=True)["id"] for _ in range(8)]
+    assert set(lette) == {str(i) for i in range(8)}
+    assert parla.prendi_pendente(pendente) is None
+
+
+def test_prendi_pendente_limita_storia_a_otto_conversazioni(tmp_path, monkeypatch):
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "_avvia_lettore_se_serve", lambda: None)
+    parla.scrivi_pendente("preserva selezionata", origine={"id": "A"})
+    assert parla.scegli_conversazione("A")
+    for i in range(12):
+        parla.scrivi_pendente(str(i), origine={"id": str(i)})
+    stato = parla.elenco_conversazioni()
+    assert len(stato["conversazioni"]) == 8
+    assert stato["preferita"] == "A"
+    assert parla.prendi_pendente() == "preserva selezionata"
 
 
 def test_lettore_legge_in_fila_e_poi_pulisce(tmp_path, monkeypatch):
@@ -337,6 +566,84 @@ def test_lettore_unico_col_lock_del_kernel(tmp_path, monkeypatch):
     parla._rilascia_lock()
 
 
+def test_lettore_in_attesa_del_rilascio_non_parte_in_parallelo(tmp_path, monkeypatch):
+    import fcntl
+    import threading
+    iniziato = threading.Event()
+    acquisito = threading.Event()
+    monkeypatch.setattr(parla, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+    precedente = os.open(parla.LETTORE_LOCK, os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(precedente, fcntl.LOCK_EX)
+
+    def attendi_rilascio():
+        iniziato.set()
+        if parla._prendi_lock(attendi=True):
+            acquisito.set()
+
+    attesa = threading.Thread(target=attendi_rilascio, daemon=True)
+    attesa.start()
+    assert iniziato.wait(1)
+    assert not acquisito.wait(0.02)
+    os.close(precedente)
+    attesa.join(timeout=1)
+    try:
+        assert not attesa.is_alive()
+        assert acquisito.is_set()
+    finally:
+        parla._rilascia_lock()
+
+
+def test_lettore_annuncia_cambio_fonte_senza_id_e_non_interrompe(tmp_path, monkeypatch):
+    lette = []
+    monkeypatch.setattr(parla, "BASE", tmp_path)
+    monkeypatch.setattr(parla, "FLAG_PARLANDO", tmp_path / "PARLANDO")
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+    monkeypatch.setattr(parla, "LETTORE_PID", tmp_path / "LETTORE_PID")
+
+    def lettura(testo):
+        lette.append(testo)
+        if len(lette) == 1:
+            # La selezione cambia mentre A parla: il primo testo arriva intero.
+            assert parla.scegli_conversazione("id-privato-B")
+            parla.scrivi_pendente("A nuova in attesa", origine={"id": "id-privato-A", "nome": "Claude"})
+
+    monkeypatch.setattr(parla, "_leggi_adesso", lettura)
+    parla.scrivi_pendente("Risposta A completa.", origine={"id": "id-privato-A", "nome": "Claude"})
+    parla.scrivi_pendente("Risposta B completa.", origine={"id": "id-privato-B", "nome": "Codex"})
+
+    parla.lettore()
+
+    assert lette == ["Claude.\n\nRisposta A completa.", "Codex.\n\nRisposta B completa."]
+    assert not parla.ha_pendenti()  # A resta salvata, senza un lettore in ciclo
+    assert next(c for c in parla.elenco_conversazioni()["conversazioni"] if c["id"] == "id-privato-A")["in_attesa"]
+    assert "Risposta A completa" not in (tmp_path / "voce.log").read_text()
+
+
+def test_lettore_recupera_arrivo_nel_momento_dell_uscita(tmp_path, monkeypatch):
+    lette = []
+    monkeypatch.setattr(parla, "BASE", tmp_path)
+    monkeypatch.setattr(parla, "FLAG_PARLANDO", tmp_path / "PARLANDO")
+    monkeypatch.setattr(parla, "LETTURA_PENDENTE", tmp_path / "LETTURA_PENDENTE")
+    monkeypatch.setattr(parla, "LETTORE_LOCK", tmp_path / "LETTORE_LOCK")
+    monkeypatch.setattr(parla, "LETTORE_PID", tmp_path / "LETTORE_PID")
+    monkeypatch.setattr(parla, "_leggi_adesso", lette.append)
+    rilascia = parla._rilascia_lock
+
+    def rilascio_con_arrivo():
+        rilascia()
+        if len(lette) == 1:
+            parla.scrivi_pendente("arrivo durante uscita")
+
+    monkeypatch.setattr(parla, "_rilascia_lock", rilascio_con_arrivo)
+    parla.scrivi_pendente("prima")
+
+    parla.lettore()
+
+    assert lette == ["prima", "arrivo durante uscita"]
+    assert not parla.ha_pendenti()
+
+
 def test_lettura_incantata_viene_uccisa_e_si_va_avanti(tmp_path, monkeypatch):
     """Uno `shortcuts run` appeso non deve ammutolire le risposte successive:
     scaduto il tetto (proporzionale al testo) la lettura si uccide."""
@@ -372,7 +679,7 @@ def test_ferma_svuota_attesa_voce_e_stato(tmp_path, monkeypatch):
 
     parla.ferma()
 
-    assert not flag.exists() and not pendente.exists() and not lock.exists()
+    assert not flag.exists() and not parla.ha_pendenti(pendente) and not lock.exists()
     assert ["pkill", "-x", "say"] in comandi
 
 
@@ -382,6 +689,195 @@ def test_voce_attiva_segue_il_flag(tmp_path, monkeypatch):
     assert voce_lib.voce_attiva() is False
     flag.touch()
     assert voce_lib.voce_attiva() is True
+
+
+# --- Menu Voce: comportamento AppKit simulato, senza importare detta.py ---
+
+def _menu_voce_simulato(stato):
+    import ast
+    import types
+
+    class Elemento:
+        @classmethod
+        def alloc(cls):
+            return cls()
+
+        @classmethod
+        def separatorItem(cls):
+            item = cls()
+            item.separatore = True
+            return item
+
+        def initWithTitle_action_keyEquivalent_(self, titolo, azione, tasto):
+            self.titolo, self.azione, self.tasto = titolo, azione, tasto
+            self.separatore = False
+            return self
+
+        def setTarget_(self, gestore):
+            self.gestore = gestore
+
+        def setRepresentedObject_(self, valore):
+            self.valore = valore
+
+        def representedObject(self):
+            return self.valore
+
+        def setEnabled_(self, attivo):
+            self.attivo = attivo
+
+        def setState_(self, stato):
+            self.stato = stato
+
+        def seleziona(self):
+            if not self.separatore and self.attivo:
+                getattr(self.gestore, self.azione.replace(":", "_"))(self)
+
+    class Menu:
+        @classmethod
+        def alloc(cls):
+            return cls()
+
+        def initWithTitle_(self, titolo):
+            self.titolo, self.elementi = titolo, []
+            return self
+
+        def setAutoenablesItems_(self, valore):
+            self.abilitazione_automatica = valore
+
+        def addItem_(self, item):
+            self.elementi.append(item)
+
+    class Indicatore:
+        def __init__(self):
+            self.titoli, self.menu_creati = [], []
+
+        def button(self):
+            return self
+
+        def setTitle_(self, titolo):
+            self.titoli.append(titolo)
+
+        def setMenu_(self, menu):
+            self.menu = menu
+            self.menu_creati.append(menu)
+
+    chiamate, lavori = [], []
+
+    class ThreadSimulato:
+        def __init__(self, target, args=(), daemon=False):
+            self.target, self.args, self.daemon = target, args, daemon
+
+        def start(self):
+            lavori.append(self)
+            self.target(*self.args)  # soltanto le spie, nessuna voce vera
+
+    attivo = {"voce": False, "mani_libere": False}
+    indicatore = Indicatore()
+    spazio = {
+        "AppKit": types.SimpleNamespace(NSMenu=Menu, NSMenuItem=Elemento, NSObject=object),
+        "threading": types.SimpleNamespace(Thread=ThreadSimulato),
+        "json": json,
+        "indicatore_menu": indicatore,
+        "_stato_menu": None,
+        "elenco_conversazioni": lambda: json.loads(json.dumps(stato)),
+        "voce_attiva": lambda: attivo["voce"],
+        "mani_libere_attive": lambda: attivo["mani_libere"],
+        "rileggi_ultima": lambda: chiamate.append(("rileggi",)),
+        "scegli_conversazione": lambda identita: chiamate.append(("scegli", identita)),
+    }
+    sorgente = REPO_ROOT / "mac" / "detta.py"
+    albero = ast.parse(sorgente.read_text(encoding="utf-8"))
+    aggiorna = next(n for n in albero.body
+                    if isinstance(n, ast.FunctionDef) and n.name == "aggiorna_indicatore_menu")
+    gestore = next(n for n in albero.body
+                  if isinstance(n, ast.ClassDef) and n.name == "GestorePannello")
+    gestore.body = [n for n in gestore.body if isinstance(n, ast.FunctionDef)
+                   and n.name in {"rileggiVoce_", "scegliConversazione_"}]
+    exec(compile(ast.Module(body=[aggiorna, gestore], type_ignores=[]), str(sorgente), "exec"), spazio)
+    pannello = spazio["GestorePannello"]()
+    return types.SimpleNamespace(
+        aggiorna=lambda: spazio["aggiorna_indicatore_menu"](pannello),
+        indicatore=indicatore, attivo=attivo, chiamate=chiamate, lavori=lavori,
+    )
+
+
+def test_menu_voce_spenta_resta_accessibile_e_replay_segue_la_disponibilita():
+    stato = {"rileggibile": False, "preferita": None, "conversazioni": []}
+    app = _menu_voce_simulato(stato)
+    app.aggiorna()
+
+    assert app.indicatore.titoli[-1] == "Voce"
+    replay, _, tutte = app.indicatore.menu.elementi
+    assert not replay.attivo and tutte.attivo
+    replay.seleziona()
+    assert app.chiamate == []
+
+    stato["rileggibile"] = True  # una risposta ora e' recuperabile, voce ancora OFF
+    app.aggiorna()
+    replay = app.indicatore.menu.elementi[0]
+    assert replay.attivo
+    replay.seleziona()
+    assert app.chiamate == [("rileggi",)]
+    assert len(app.lavori) == 1 and app.lavori[0].daemon
+
+
+def test_menu_voce_scelta_usa_identita_e_tutte_passano_nessun_filtro():
+    stato = {
+        "rileggibile": True, "preferita": "id-privato-B",
+        "conversazioni": [
+            {"id": "id-privato-A", "nome": "Claude", "anteprima": "Risposta A", "in_attesa": True},
+            {"id": "id-privato-B", "nome": "Claude", "anteprima": "Risposta B", "in_attesa": False},
+        ],
+    }
+    app = _menu_voce_simulato(stato)
+    app.aggiorna()
+    tutte, fonte_a, fonte_b = app.indicatore.menu.elementi[2:]
+    assert (tutte.stato, fonte_a.stato, fonte_b.stato) == (0, 0, 1)
+    fonte_b.titolo = "Nome visibile cambiato"  # il comando non puo' dipendere dall'etichetta
+    fonte_b.seleziona()
+    fonte_a.seleziona()
+    tutte.seleziona()
+
+    assert app.chiamate == [("scegli", "id-privato-B"), ("scegli", "id-privato-A"), ("scegli", None)]
+    assert all(lavoro.daemon for lavoro in app.lavori)
+
+
+def test_menu_voce_etichette_distinguono_fonti_con_anteprima_senza_id():
+    stato = {
+        "rileggibile": True, "preferita": None,
+        "conversazioni": [
+            {"id": "sessione-segreta-A", "nome": "Codex — Proposta", "anteprima": "  Preventivo\n pronto  ", "in_attesa": True},
+            {"id": "sessione-segreta-B", "nome": "Codex — Proposta", "anteprima": "Riepilogo completato", "in_attesa": False},
+            {"id": "sessione-segreta-C", "nome": "", "anteprima": "", "in_attesa": False},
+        ],
+    }
+    app = _menu_voce_simulato(stato)
+    app.aggiorna()
+    prima, seconda, senza_nome = app.indicatore.menu.elementi[3:]
+    assert "Codex — Proposta" in prima.titolo and "Preventivo pronto" in prima.titolo
+    assert "Riepilogo completato" in seconda.titolo and prima.titolo != seconda.titolo
+    assert "in attesa" in prima.titolo and "in attesa" not in seconda.titolo
+    assert senza_nome.titolo.strip()
+    assert all("sessione-segreta" not in item.titolo for item in (prima, seconda, senza_nome))
+
+
+def test_menu_voce_non_ricrea_uguale_e_riflette_cambiamenti_reali():
+    stato = {"rileggibile": True, "preferita": None, "conversazioni": []}
+    app = _menu_voce_simulato(stato)
+    app.aggiorna()
+    primo_menu = app.indicatore.menu
+    app.aggiorna()  # il lettore restituisce un oggetto nuovo con gli stessi valori
+    assert app.indicatore.menu is primo_menu
+    assert len(app.indicatore.menu_creati) == 1 and len(app.indicatore.titoli) == 1
+
+    app.attivo["voce"] = True
+    app.aggiorna()
+    assert app.indicatore.menu is not primo_menu
+    assert app.indicatore.titoli[-1] != app.indicatore.titoli[0]
+    stato["rileggibile"] = False
+    app.aggiorna()
+    assert not app.indicatore.menu.elementi[0].attivo
+    assert len(app.indicatore.menu_creati) == 3
 
 
 def test_pulisci_per_voce_toglie_il_markdown():
@@ -405,6 +901,128 @@ def test_pulisci_per_voce_testo_vuoto():
     assert voce_lib.pulisci_per_voce("") == ""
 
 
+def test_pulisci_per_voce_separa_titoli_elenchi_e_paragrafi():
+    testo = (
+        "## Prossimi passi\n"
+        "- Controlla il preventivo\n"
+        "- Non inviare prima del 07/09/2026\n\n"
+        "Il saldo resta\n"
+        "di €497,50."
+    )
+    assert voce_lib.pulisci_per_voce(testo) == (
+        "Prossimi passi. Controlla il preventivo. "
+        "Non inviare prima del 07/09/2026. Il saldo resta di €497,50."
+    )
+
+
+def test_pulisci_per_voce_tabella_conserva_colonne_e_tutti_i_valori():
+    testo = (
+        "| Attività | Importo | Scadenza |\n"
+        "| :--- | ---: | --- |\n"
+        "| Saldo | €497,50 | 07/09/2026 |\n"
+        "| Verifica | -12,5% | Non prima del 14/09/2026 |\n"
+    )
+    assert voce_lib.pulisci_per_voce(testo) == (
+        "Attività: Saldo; Importo: €497,50; Scadenza: 07/09/2026. "
+        "Attività: Verifica; Importo: -12,5%; Scadenza: Non prima del 14/09/2026."
+    )
+
+
+def test_pulisci_per_voce_tabella_senza_bordi_e_cella_con_barra():
+    testo = (
+        "Nome | Stato\n"
+        "--- | ---\n"
+        "A\\|B | **Non pagato**\n"
+        "C | In attesa | dettaglio aggiuntivo\n"
+    )
+    pulito = voce_lib.pulisci_per_voce(testo)
+    assert "Nome: A|B; Stato: Non pagato." in pulito
+    assert "Nome: C; Stato: In attesa; Colonna 3: dettaglio aggiuntivo." in pulito
+
+
+def test_pulisci_per_voce_writing_legge_solo_il_corpo_integrale():
+    testo = (
+        ':::writing{variant="email" id="59310" subject="Titolo interno"}\n'
+        "Ciao Sal,\n\n"
+        "non ho inviato la fattura da €1.250,00.\n"
+        "La data è 14/09/2026 e restano 3 documenti.\n"
+        ":::\n"
+    )
+    pulito = voce_lib.pulisci_per_voce(testo)
+    assert "writing" not in pulito and "59310" not in pulito
+    assert "Titolo interno" not in pulito and "variant" not in pulito
+    assert "Ciao Sal" in pulito
+    assert "non ho inviato la fattura da €1.250,00." in pulito
+    assert "La data è 14/09/2026 e restano 3 documenti." in pulito
+
+
+def test_pulisci_per_voce_percorsi_conservano_nome_file_e_riga():
+    testo = (
+        "Apri `/Users/sal/Documenti/Report finale.pdf` e "
+        "[controllo](</Users/sal/leaderai/tools/verifica.py:12>). "
+        "Su Windows usa `C:\\Users\\Sal\\Documenti\\Report finale.pdf`. "
+        "L'altro file è /Users/sal/leaderai/docs/STATUS.md."
+    )
+    pulito = voce_lib.pulisci_per_voce(testo)
+    assert "/Users/" not in pulito and "C:\\" not in pulito
+    assert pulito.count("Report finale.pdf") == 2
+    assert "controllo" in pulito and "verifica.py" in pulito and "riga 12" in pulito
+    assert "STATUS.md" in pulito
+
+
+def test_pulisci_per_voce_file_etichettato_non_ripete_il_nome():
+    pulito = voce_lib.pulisci_per_voce(
+        "Apri [verifica.py](/Users/sal/tools/verifica.py:12)."
+    )
+    assert pulito == "Apri verifica.py, riga 12."
+
+
+def test_pulisci_per_voce_percorsi_quotati_con_spazi_e_windows_nudo():
+    pulito = voce_lib.pulisci_per_voce(
+        'Apri "/Users/sal/My Documents/Report finale.pdf". '
+        "Poi C:\\Users\\Sal\\Documenti\\REPORT.md. Non cambiare il rapporto costo/beneficio."
+    )
+    assert pulito == (
+        'Apri "Report finale.pdf". Poi REPORT.md. '
+        "Non cambiare il rapporto costo/beneficio."
+    )
+
+
+def test_pulisci_per_voce_url_nudo_mantiene_pausa_e_link_etichettato():
+    pulito = voce_lib.pulisci_per_voce(
+        "Vai su https://esempio.it/risorsa?a=1. "
+        "Poi leggi [la guida](https://esempio.it/guida). Non pagare €50."
+    )
+    assert pulito == "Vai su collegamento. Poi leggi la guida. Non pagare €50."
+
+
+def test_pulisci_per_voce_fence_completo_o_aperto_omette_solo_codice():
+    testo = (
+        "Prima.\n~~~~python\nprint('segreto')\n```\n~~~~\n"
+        "Dopo: non inviare 2 fatture.\n```python\nprint('altro codice')"
+    )
+    pulito = voce_lib.pulisci_per_voce(testo)
+    assert pulito.count("codice omesso") == 2
+    assert "print" not in pulito and "segreto" not in pulito and "`" not in pulito
+    assert "Prima." in pulito and "Dopo: non inviare 2 fatture." in pulito
+
+
+def test_pulisci_per_voce_idempotente_e_senza_tagli_di_contenuto():
+    testo = (
+        "## Riepilogo\n"
+        "- Non inviare 3 fatture da €1.250,00 prima del 14/09/2026\n"
+        "- Apri `/Users/sal/relazioni/report_2026-09-05.md`\n\n"
+        "| Voce | Valore |\n| --- | --- |\n| Sconto | -12,5% |\n\n"
+        "Ultima parte: " + "verifica completa " * 300 + "fine."
+    )
+    pulito = voce_lib.pulisci_per_voce(testo)
+    assert voce_lib.pulisci_per_voce(pulito) == pulito
+    assert "report_2026-09-05.md" in pulito
+    assert "Non inviare 3 fatture da €1.250,00 prima del 14/09/2026" in pulito
+    assert "Voce: Sconto; Valore: -12,5%" in pulito
+    assert pulito.count("verifica completa") == 300 and pulito.endswith("fine.")
+
+
 def test_estrai_ultima_risposta(tmp_path):
     transcript = tmp_path / "t.jsonl"
     righe = [
@@ -416,6 +1034,45 @@ def test_estrai_ultima_risposta(tmp_path):
     ]
     transcript.write_text("\n".join(righe))
     assert voce_lib.estrai_ultima_risposta(str(transcript)) == "ultima risposta"
+
+
+def test_estrai_ultima_risposta_transcript_antigravity(tmp_path):
+    """Antigravity scrive lo stesso file con altri nomi: source MODEL e testo
+    pronto in `content` (forma vera del 13/09/2026)."""
+    transcript = tmp_path / "transcript.jsonl"
+    righe = [
+        '{"step_index":1,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>ciao</USER_REQUEST>"}',
+        '{"step_index":2,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"prima risposta"}',
+        '{"step_index":3,"source":"MODEL","type":"TOOL_CALL","status":"RUNNING","content":"sto guardando un file"}',
+        '{"step_index":4,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"ultima risposta"}',
+    ]
+    transcript.write_text("\n".join(righe), encoding="utf-8")
+    assert voce_lib.estrai_ultima_risposta(str(transcript)) == "ultima risposta"
+
+
+def test_payload_antigravity_tradotto_nei_nostri_nomi():
+    dati = voce_hook.normalizza_payload({
+        "conversationId": "abc-123",
+        "transcriptPath": "/Users/sal/.gemini/antigravity/brain/abc-123/.system_generated/logs/transcript.jsonl",
+        "modelName": "gemini-3.6-flash-medium",
+        "terminationReason": "model_stop",
+    })
+    assert dati["session_id"] == "abc-123"
+    assert dati["transcript_path"].endswith("transcript.jsonl")
+    assert voce_hook.origine_risposta(dati)["nome"] == "Antigravity"
+
+
+def test_hook_antigravity_scritto_nel_suo_formato(tmp_path):
+    hooks = tmp_path / "hooks.json"
+    hooks.write_text(json.dumps({"altro-gestore": {"enabled": True, "Stop": [
+        {"hooks": [{"type": "command", "command": "./mio.sh"}]}]}}), encoding="utf-8")
+    voce_hook.collega_hook_antigravity(hooks)
+    dati = json.loads(hooks.read_text(encoding="utf-8"))
+    assert dati["altro-gestore"]["Stop"], "gli hook di altri non si toccano"
+    nostro = dati["voce-leaderai"]
+    assert nostro["enabled"] is True
+    assert "voce_hook.py" in nostro["Stop"][0]["hooks"][0]["command"]
+    assert voce_hook.hook_antigravity_collegato(hooks) is True
 
 
 # --- cancello sull'energia: distingue parlato da silenzio/rumore di fondo ---
@@ -651,6 +1308,8 @@ def test_destinazione_agente_riconosce_app_e_schede_web():
     assert voce_lib.destinazione_agente("Claude", "") is True
     assert voce_lib.destinazione_agente("Google Chrome", "https://chatgpt.com/c/123") is True
     assert voce_lib.destinazione_agente("Safari", "https://claude.ai/chat/123") is True
+    assert voce_lib.destinazione_agente("Antigravity", "") is True
+    assert voce_lib.destinazione_agente("Google Chrome", "https://gemini.google.com/app") is True
     assert voce_lib.destinazione_agente("Mail", "") is False
     assert voce_lib.destinazione_agente("Google Chrome", "https://example.com") is False
 
@@ -679,7 +1338,7 @@ def test_ritardo_invio_default_senza_chiavi():
 
 def test_invio_automatico_mac_usa_il_ritardo_di_contesto():
     sorgente = (REPO_ROOT / "mac" / "detta.py").read_text(encoding="utf-8")
-    corpo = sorgente.split("def _trascrivi_e_incolla", 1)[1].split("\ndef ", 1)[0]
+    corpo = sorgente.split("def _incolla_messaggio", 1)[1].split("\ndef ", 1)[0]
     assert "ritardo_invio(cfg, voce_attiva(), chat_agente)" in corpo
     assert "invio automatico ANNULLATO" in corpo  # l'annullamento su tasto resta
 
@@ -879,7 +1538,7 @@ def test_estrai_json_dalla_risposta():
     assert voce_lib.estrai_json("nessun json qui") == {}
 
 
-def test_impara_sostituzioni_aggiorna_il_config(tmp_path):
+def test_impara_sostituzioni_propone_senza_cambiare_il_config(tmp_path, caplog):
     log = tmp_path / "voce.log"
     log.write_text("x INFO grezzo: il giornato di oggi\nx INFO grezzo: apri il giornato\n")
     config = tmp_path / "config.json"
@@ -888,7 +1547,54 @@ def test_impara_sostituzioni_aggiorna_il_config(tmp_path):
     nuove = voce_lib.impara_sostituzioni(log, config, comando, timeout=10)
     assert nuove == {"giornato": "giornale"}
     import json
-    assert json.loads(config.read_text())["sostituzioni"] == {"giornato": "giornale"}
+    assert json.loads(config.read_text())["sostituzioni"] == {}
+
+
+def test_ipotesi_arbitro_non_corrompono_parole_corrette(tmp_path, monkeypatch, caplog):
+    log = tmp_path / "voce.log"
+    frase = "Vi mando il documento al cliente. La call è programmata per domani."
+    log.write_text("x INFO grezzo: " + frase + "\n", encoding="utf-8")
+    config = tmp_path / "config.local.json"
+    prima = '{"sostituzioni": {"cloud code": "Claude Code"}, "glossario": ["Cliente"]}'
+    config.write_text(prima, encoding="utf-8")
+    proposte = {"vi": "mi", "al": "il", "programmata": "programmato"}
+    monkeypatch.setattr(voce_lib, "chiedi_arbitro", lambda *a: (proposte, None))
+    caplog.set_level("INFO", logger="voce")
+
+    assert voce_lib.impara_sostituzioni(log, config, ["arbitro-finto"]) == proposte
+
+    assert config.read_text(encoding="utf-8") == prima
+    attive = json.loads(config.read_text())["sostituzioni"]
+    assert voce_lib.applica_sostituzioni(frase, attive) == frase
+    assert voce_lib.applica_sostituzioni("Apri cloud code", attive) == "Apri Claude Code"
+    assert "non applicate" in caplog.text
+
+
+def test_proposte_json_malformate_non_diventano_testo():
+    assert voce_lib.unisci_sostituzioni({}, {
+        "vi": {"giusto": "mi"}, "al": ["il"], "tre": 3,
+        "niente": None, "vuoto": "  ", "pronotare": "prenotare",
+    }) == {"pronotare": "prenotare"}
+
+
+def test_apprendimento_giornaliero_non_attiva_proposte_in_memoria(tmp_path):
+    import ast
+    import logging
+    import time
+    sorgente = REPO_ROOT / "mac" / "detta.py"
+    funzione = next(n for n in ast.parse(sorgente.read_text()).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "_impara_dagli_errori")
+    cfg = {"debug_dettature": True, "conserva_audio_n": 0,
+           "sostituzioni": {"cloud code": "Claude Code"}}
+    spazio = {"__file__": str(tmp_path / "detta.py"), "os": os, "time": time,
+              "logging": logging, "cfg": cfg, "COMANDO_APPRENDIMENTO": ["finto"],
+              "config_scrivibile": lambda: tmp_path / "config.local.json",
+              "impara_sostituzioni": lambda *a: {"vi": "mi", "al": "il"}}
+    exec(compile(ast.Module(body=[funzione], type_ignores=[]), str(sorgente), "exec"), spazio)
+
+    spazio["_impara_dagli_errori"]()
+
+    assert cfg["sostituzioni"] == {"cloud code": "Claude Code"}
 
 
 def test_impara_sostituzioni_senza_grezzi_non_fa_nulla(tmp_path):
@@ -1003,6 +1709,49 @@ def test_rimuovi_eco_glossario_non_tocca_le_frasi_vere():
     assert voce_lib.rimuovi_eco_glossario("Mi arrendo.", glossario) == "Mi arrendo."
 
 
+def test_origine_distingue_sessioni_nella_stessa_cartella():
+    a = voce_hook.origine_risposta({"session_id": "sessione-a", "cwd": "/lavoro/LeaderAI",
+                                   "transcript_path": "/home/.codex/sessions/a.jsonl"})
+    b = voce_hook.origine_risposta({"session_id": "sessione-b", "cwd": "/lavoro/LeaderAI",
+                                   "transcript_path": "/home/.claude/projects/b.jsonl"})
+    assert a["id"] != b["id"]
+    assert a["nome"] == "ChatGPT"
+    assert b["nome"] == "Claude"
+
+
+def test_origine_usa_transcript_senza_leggerlo_e_non_accorpa_sconosciute():
+    dati = {"transcript_path": r"C:\Users\utente\.claude\projects\uno.jsonl",
+            "cwd": r"C:\Lavoro\Cliente"}
+    a = voce_hook.origine_risposta(dati)
+    assert a == voce_hook.origine_risposta(dati)
+    assert a["nome"] == "Claude"
+    assert voce_hook.origine_risposta({"cwd": "/stessa"})["id"] != voce_hook.origine_risposta({"cwd": "/stessa"})["id"]
+
+
+def test_doppione_e_circoscritto_alla_conversazione(tmp_path, monkeypatch):
+    monkeypatch.setattr(voce_hook, "ULTIMA_LETTURA", tmp_path / "ULTIMA_LETTURA")
+    a, b = {"id": "a", "nome": "Claude"}, {"id": "b", "nome": "Codex"}
+    assert voce_hook.gia_letto_da_poco("Fatto", a) is False
+    assert voce_hook.gia_letto_da_poco("Fatto", b) is False
+    assert voce_hook.gia_letto_da_poco("Fatto", a) is True
+
+
+def test_hook_consegna_testo_e_origine_al_lettore(tmp_path, monkeypatch):
+    import io
+    ricevute = []
+    monkeypatch.setattr(voce_hook, "BASE", tmp_path)
+    monkeypatch.setattr(voce_hook, "ULTIMA_LETTURA", tmp_path / "ULTIMA_LETTURA")
+    monkeypatch.setattr(voce_hook, "voce_attiva", lambda: True)
+    monkeypatch.setattr(voce_hook, "parla", lambda testo, origine=None: ricevute.append((testo, origine)))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({
+        "session_id": "sessione-codex", "cwd": "/lavoro/Cliente",
+        "model": "modello", "turn_id": "turno", "transcript_path": None,
+        "last_assistant_message": "Proposta pronta.",
+    })))
+    voce_hook.main()
+    assert ricevute == [("Proposta pronta.", {"id": "sessione-codex", "nome": "ChatGPT"})]
+
+
 def test_lettura_doppia_ravvicinata_viene_scartata(tmp_path, monkeypatch):
     """Il doppio evento di fine risposta non deve far partire due voci.
 
@@ -1065,9 +1814,9 @@ def test_ripasso_trova_i_disaccordi_veri():
     assert voce_lib.disaccordi_parole("Va bene, ok.", "va bene ok") == []
 
 
-def test_ripasso_impara_solo_le_correzioni_sicure(tmp_path, monkeypatch):
+def test_ripasso_propone_senza_rendere_globale_una_correzione(tmp_path, monkeypatch, caplog):
     """Giro completo con audio finto: secondo riconoscitore in disaccordo,
-    arbitro che conferma, correzione scritta nel config personale."""
+    arbitro che propone: anche un suo assenso non modifica il config."""
     import types
     cartella = tmp_path / "audio_recenti"
     cartella.mkdir()
@@ -1094,7 +1843,7 @@ def test_ripasso_impara_solo_le_correzioni_sicure(tmp_path, monkeypatch):
         cartella, [log], config, ["agente-finto"], "modello-finto")
 
     assert nuove == {"colle": "call"}
-    assert json.loads(config.read_text())["sostituzioni"] == {"colle": "call"}
+    assert json.loads(config.read_text())["sostituzioni"] == {}
 
 
 def test_risposta_arbitro_smaschera_agente_fallito():
@@ -1162,6 +1911,130 @@ def test_casella_ammissibile_accetta_documenti_e_rifiuta_barre():
     # barra degli indirizzi: in alto E bassa di statura -> mai
     assert voce_lib.casella_ammissibile(y_casella=40, altezza_casella=28,
                                         y_finestra=0, altezza_finestra=800) is False
+
+
+# --- il cursore automatico non deve perdersi (misure vere 08/09/2026) ---
+# Casi presi dal Mac di Sal: Chrome dichiara una finestra che non copre i
+# suoi stessi pezzi, Claude espone una striscia da 33 punti, il Finder
+# espone la scrivania. Su tutti e tre la dettatura finiva nel vuoto.
+
+def test_cornice_reale_allarga_la_finestra_bugiarda_di_chrome():
+    # Chrome: finestra dichiarata (-240,-958,1920,958), barra a y=-1028
+    finestra = (-240, -958, 1920, 958)
+    barra = (-82, -1028, 1416, 24)
+    assert voce_lib.cornice_reale(finestra, [barra]) == (-240, -1028, 1920, 1028)
+    # senza pezzi fuori, la finestra resta com'e'
+    dentro = (-100, -500, 400, 40)
+    assert voce_lib.cornice_reale(finestra, [dentro]) == finestra
+    assert voce_lib.cornice_reale(finestra, []) == finestra
+
+
+def test_finestra_credibile_scarta_striscia_e_scrivania():
+    schermo = 1080
+    # finestra vera di Claude
+    assert voce_lib.finestra_credibile((0, 33, 1512, 949), schermo) is True
+    # striscia da 33 punti esposta da Claude come prima finestra
+    assert voce_lib.finestra_credibile((0, 0, 1512, 33), schermo) is False
+    # scrivania del Finder: alta 2062, copre due monitor
+    assert voce_lib.finestra_credibile((-240, -1080, 1920, 2062), schermo) is False
+    # finestra alta esattamente quanto lo schermo: passa
+    assert voce_lib.finestra_credibile((-240, -1080, 1920, 1080), schermo) is True
+    assert voce_lib.finestra_credibile(None, schermo) is False
+
+
+def test_ordina_finestre_il_mouse_sposta_solo_la_precedenza():
+    finestre = [(0, 0, 800, 600), (1000, 0, 800, 600)]
+    # mouse fermo altrove: ordine dell'app, nessuna finestra esclusa
+    assert voce_lib.ordina_finestre(finestre, (5000, 5000)) == [0, 1]
+    assert voce_lib.ordina_finestre(finestre, None) == [0, 1]
+    # mouse dentro la seconda: si prova quella per prima, l'altra resta in coda
+    assert voce_lib.ordina_finestre(finestre, (1400, 300)) == [1, 0]
+    assert voce_lib.ordina_finestre([], (0, 0)) == []
+
+
+# --- l'albero Accessibility delle app Electron si accende DOPO il primo tocco ---
+# Caso reale 17/09/2026 (app Claude 2.110.x): "quando libero il tasto fa un
+# rumore strano". Il cursore automatico leggeva un guscio di 9 gruppi senza
+# caselle, dichiarava "nessuna casella" e l'incolla partiva alla cieca con
+# l'avviso "Basso", anche se il cursore stava gia' nella chat (8 dettature su
+# 8 quel mattino). Misurato: mezzo secondo dopo il primo tocco l'albero e'
+# pieno (449-648 elementi, casella a fuoco).
+
+def _cursore_automatico_mac(passate, focus_dopo_attesa=False):
+    """Esegue metti_cursore_in_casella di mac/detta.py con Accessibility finta.
+    passate = risultato di _cerca_casella a ogni giro (None = nessuna casella).
+    Torna (esito, attese di time.sleep, numero di giri di ricerca)."""
+    import ast
+    import logging
+    from types import SimpleNamespace
+    attese, giri, focus = [], [], {"in_casella": False}
+
+    def cerca(ax_app, finestra, geo, con_pagina):
+        giri.append(con_pagina)
+        return passate[min(len(giri) - 1, len(passate) - 1)]
+
+    def dormi(secondi):
+        attese.append(secondi)
+        if focus_dopo_attesa:  # albero acceso: la casella aveva gia' il focus
+            focus["in_casella"] = True
+
+    ax = SimpleNamespace(
+        AXUIElementCreateApplication=lambda pid: "ax_app",
+        AXUIElementSetAttributeValue=lambda *a: 0, kAXFocusedAttribute="AXFocused",
+    )
+    spazio = dict(
+        logging=logging, cfg={"cursore_automatico": True}, AX=ax,
+        time=SimpleNamespace(sleep=dormi),
+        _focus_in_casella=lambda ax_app: focus["in_casella"],
+        _finestre_bersaglio=lambda ax_app: ([("finestra", (0, 33, 1512, 949))], 0, 1),
+        _cerca_casella=cerca, _click_sintetico=lambda geo: None,
+    )
+    path = REPO_ROOT / "mac" / "detta.py"
+    nodi = [
+        n for n in ast.parse(path.read_text()).body
+        if (isinstance(n, ast.FunctionDef)
+            and n.name in ("metti_cursore_in_casella", "_casella_nelle_finestre"))
+        or (isinstance(n, ast.Assign)
+            and any(getattr(t, "id", "") == "AX_ATTESA_RISVEGLIO_SEC" for t in n.targets))
+    ]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
+    app = SimpleNamespace(processIdentifier=lambda: 41474, localizedName=lambda: "Claude")
+    esito = spazio["metti_cursore_in_casella"](app)
+    return esito, attese, len(giri), spazio["AX_ATTESA_RISVEGLIO_SEC"]
+
+
+def test_cursore_automatico_riprova_quando_l_albero_e_addormentato():
+    # primo giro: guscio vuoto; dopo l'attesa l'albero e' acceso e la casella
+    # della chat ha gia' il focus -> si scrive li', niente avviso "Basso"
+    esito, attese, giri, attesa = _cursore_automatico_mac([None], focus_dopo_attesa=True)
+    assert esito is True
+    assert attesa in attese and attesa <= 0.5  # mezzo secondo, non uno
+    assert giri == 1
+
+
+def test_cursore_automatico_al_secondo_giro_trova_la_casella():
+    casella = ("elemento", (100, 800, 1300, 60))
+    esito, attese, giri, attesa = _cursore_automatico_mac([None, casella])
+    assert esito is True
+    assert attese.count(attesa) == 1
+    assert giri == 2
+
+
+def test_cursore_automatico_dopo_due_giri_vuoti_dice_che_caselle_non_ce_ne_sono():
+    # finestra leggibile e davvero senza caselle (Finder, Anteprima): l'avviso
+    # "Basso" del 30/08 resta, ma solo dopo il secondo giro
+    esito, attese, giri, attesa = _cursore_automatico_mac([None, None])
+    assert esito is False
+    assert attese.count(attesa) == 1
+    assert giri == 2
+
+
+def test_cursore_automatico_non_aspetta_se_la_casella_c_e_subito():
+    casella = ("elemento", (100, 800, 1300, 60))
+    esito, attese, giri, attesa = _cursore_automatico_mac([casella])
+    assert esito is True
+    assert attesa not in attese
+    assert giri == 1
 
 
 # --- trascrizione progressiva (04/09/2026): dove tagliare, come rincollare ---
@@ -1310,3 +2183,286 @@ def test_chiedi_arbitro_dice_chi_ha_fallito(monkeypatch):
     # un comando solo (lista di stringhe) resta accettato
     proposte, errore = voce_lib.chiedi_arbitro(["claude"], "prompt")
     assert proposte == {} and errore.startswith("claude:")
+
+
+# Una ripresa durante Whisper appartiene ancora allo stesso messaggio.
+# Le due implementazioni vengono esercitate senza microfono, clipboard o Invio reali.
+def _coda_dettature(sistema):
+    import ast
+    import threading
+    if sistema == 'mac':
+        return voce_lib.CodaDettature()
+    path = REPO_ROOT / 'windows' / 'voice_dettatura_windows.py'
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, ast.ClassDef) and n.name == 'CodaDettature']
+    spazio = {'threading': threading}
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), 'exec'), spazio)
+    assert 'CodaDettature' in spazio, 'Manca la coda che aspetta tutte le dettature'
+    return spazio['CodaDettature']()
+
+
+import pytest
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_dettature_riprese_aspettano_e_si_uniscono_in_ordine(sistema):
+    coda = _coda_dettature(sistema)
+    consegne, chiusi = [], []
+    consegna = lambda testo, bersaglio, revisione: consegne.append((testo, bersaglio))
+    coda.apri('prima')
+    coda.apri('seconda')
+    # La seconda finisce prima della prima: nemmeno in quel caso puo' partire.
+    coda.completa('seconda', 'Poi questa.', 'chat')
+    coda.consegna_pronte(consegna, chiusi.append)
+    assert consegne == [] and chiusi == []
+    coda.completa('prima', 'Prima questa.', 'chat')
+    coda.consegna_pronte(consegna, chiusi.append)
+    assert consegne == [('Prima questa. Poi questa.', 'chat')]
+    assert chiusi == ['prima', 'seconda']
+    coda.consegna_pronte(consegna, chiusi.append)
+    assert len(consegne) == 1
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_dettatura_aperta_trattiene_testo_anche_se_whisper_ha_finito(sistema):
+    coda = _coda_dettature(sistema)
+    consegne, chiusi = [], []
+    coda.apri('prima')
+    coda.apri('ancora-parlando')
+    coda.completa('prima', 'Una frase.', 'chat')
+    coda.consegna_pronte(lambda *args: consegne.append(args), chiusi.append)
+    assert consegne == [] and chiusi == []
+    # Tocco breve / silenzio: non incastra il testo valido precedente.
+    coda.completa('ancora-parlando')
+    coda.consegna_pronte(lambda testo, *_: consegne.append(testo), chiusi.append)
+    assert consegne == ['Una frase.']
+    assert chiusi == ['prima', 'ancora-parlando']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_ripresa_durante_incolla_invalida_invio_anche_dopo_rilascio(sistema):
+    coda = _coda_dettature(sistema)
+    coda.apri('prima')
+    coda.completa('prima', 'Prima.', 'chat')
+    controlli = []
+    def consegna(testo, bersaglio, revisione):
+        controlli.append(coda.puo_inviare(revisione))
+        coda.interrompi_invio()  # pressione, prima ancora che parta il worker audio
+        controlli.append(coda.puo_inviare(revisione))
+        coda.apri('seconda')
+        coda.completa('seconda', 'Seconda.', 'chat')
+        controlli.append(coda.puo_inviare(revisione))
+    # Prova il primo blocco soltanto; il secondo resta pronto per il prossimo giro.
+    coda.consegna_pronte(consegna, lambda _: None)
+    assert controlli == [True, False, False]
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_dettature_destinazioni_diverse_non_si_mescolano(sistema):
+    coda = _coda_dettature(sistema)
+    consegne = []
+    for token, testo, target in [('a', 'Uno.', 'chat-a'), ('b', 'Due.', 'chat-b')]:
+        coda.apri(token)
+        coda.completa(token, testo, target)
+    coda.consegna_pronte(lambda testo, target, _: consegne.append((testo, target)), lambda _: None)
+    assert consegne == [('Uno.', 'chat-a'), ('Due.', 'chat-b')]
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_click_in_coda_audio_trattiene_il_messaggio(sistema):
+    coda = _coda_dettature(sistema)
+    consegne = []
+    coda.apri('prima')
+    coda.completa('prima', 'Prima.', 'chat')
+    coda.interrompi_invio()  # tasto gia' rilasciato, worker ancora nella coda audio
+    coda.consegna_pronte(lambda *args: consegne.append(args), lambda _: None)
+    assert consegne == []
+    coda.apri('seconda')
+    coda.completa('seconda', 'Seconda.', 'chat')
+    coda.consegna_pronte(lambda testo, *_: consegne.append(testo), lambda _: None)
+    assert consegne == ['Prima. Seconda.']
+
+
+def _percorso_consegna(sistema, tmp_path, seconda_durante_incolla=False, *, casella=True, chat=True):
+    import ast
+    import logging
+    import queue
+    import threading
+    from types import SimpleNamespace
+    coda = _coda_dettature(sistema)
+    app = SimpleNamespace(localizedName=lambda: 'ChatGPT')
+    bersaglio = (app, None) if sistema == 'mac' else 42
+    campo, inviati, chiusi = [], [], []
+    def incolla(testo, **kwargs):
+        campo.append(testo)
+        if seconda_durante_incolla and len(campo) == 1:
+            coda.interrompi_invio()
+            coda.apri('seconda')
+            coda.completa('seconda', 'Seconda.', bersaglio)
+    def premi(tasto):
+        assert tasto == 'enter'
+        inviati.append(''.join(campo).strip())
+        campo.clear()
+    tastiera = SimpleNamespace(press=premi, release=lambda _: None)
+    tempo = SimpleNamespace(monotonic=lambda: 100.0, sleep=lambda _: None)
+    spazio = dict(
+        logging=logging, threading=threading, coda_dettature=coda,
+        time=tempo, eventi=queue.Queue(), cfg={'invio_automatico': True},
+        CFG={}, INVIO_AUTOMATICO=True, registrando=False, recording=False,
+        tasto_premuto=False, key_down=False, ultima_pressione_utente=0,
+        Key=SimpleNamespace(enter='enter'), tastiera=tastiera,
+        keyboard_controller=tastiera, incolla=incolla, paste_text=incolla,
+        esegui_sicuro=lambda f, *a, **kw: f(*a, **kw),
+        riattiva_bersaglio=lambda *a: None, metti_cursore_in_casella=lambda *a: casella,
+        voce_attiva=lambda: False, destinazione_agente=lambda *a: chat,
+        nome_finestra=lambda _: 'ChatGPT', ritardo_invio=lambda *a: 0,
+        chiudi_turno_utente=chiusi.append, _nascondi_o_arma=lambda: None,
+        suono=lambda _: None, winsound=None,  # avviso "incollato alla cieca"
+    )
+    path = REPO_ROOT / ('mac/detta.py' if sistema == 'mac' else 'windows/voice_dettatura_windows.py')
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, ast.FunctionDef) and n.name in ('_incolla_messaggio', '_consegna_dettature')]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), 'exec'), spazio)
+    return coda, bersaglio, spazio['_consegna_dettature'], campo, inviati, chiusi
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_consegna_reale_due_pezzi_un_incolla_un_invio(sistema, tmp_path):
+    coda, target, consegna, campo, inviati, chiusi = _percorso_consegna(sistema, tmp_path)
+    coda.apri('prima')
+    coda.apri('seconda')
+    coda.completa('prima', 'Prima.', target)
+    consegna()
+    assert campo == [] and inviati == [] and chiusi == []
+    coda.completa('seconda', 'Seconda.', target)
+    consegna()
+    assert inviati == ['Prima. Seconda.']
+    assert chiusi == ['prima', 'seconda']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_consegna_reale_ripresa_durante_incolla_un_solo_invio(sistema, tmp_path):
+    coda, target, consegna, campo, inviati, _ = _percorso_consegna(sistema, tmp_path, True)
+    coda.apri('prima')
+    coda.completa('prima', 'Prima.', target)
+    consegna()
+    assert inviati == []
+    consegna()
+    assert inviati == ['Prima. Seconda.']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_ripresa_vuota_dopo_incolla_invia_testo_precedente_una_volta(sistema, tmp_path):
+    coda, target, consegna, campo, inviati, _ = _percorso_consegna(sistema, tmp_path, True)
+    coda.apri('prima')
+    coda.completa('prima', 'Prima.', target)
+    consegna()
+    assert inviati == []
+    coda.completa('seconda')  # nessun nuovo parlato, prima frase gia' nel campo
+    consegna()
+    assert inviati == ['Prima.']
+    consegna()
+    assert inviati == ['Prima.']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_chat_ai_senza_casella_invia_lo_stesso(sistema, tmp_path):
+    """Antigravity (13/09/2026) non espone nessuna casella all'accessibilita':
+    il testo veniva incollato e restava li' finche' Sal non premeva Invio a
+    mano, e una frase mai inviata si e' persa. In una chat AI riconosciuta
+    l'Invio deve partire lo stesso."""
+    coda, target, consegna, campo, inviati, _ = _percorso_consegna(
+        sistema, tmp_path, casella=False, chat=True)
+    coda.apri('sola')
+    coda.completa('sola', 'Frase in una chat cieca.', target)
+    consegna()
+    assert inviati == ['Frase in una chat cieca.']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_fuori_dalle_chat_ai_senza_casella_non_si_invia(sistema, tmp_path):
+    """Fuori dalle chat AI la prudenza resta: senza casella l'Invio finirebbe
+    su un focus ignoto (un bottone qualunque di una pagina)."""
+    coda, target, consegna, campo, inviati, _ = _percorso_consegna(
+        sistema, tmp_path, casella=False, chat=False)
+    coda.apri('sola')
+    coda.completa('sola', 'Frase in un documento.', target)
+    consegna()
+    assert inviati == []
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_errore_stop_non_blocca_dettature_successive(sistema):
+    import ast
+    import logging
+    from types import SimpleNamespace
+    coda = _coda_dettature(sistema)
+    coda.apri('guasta')
+    def guasto(*args):
+        raise RuntimeError('microfono scollegato / finestra non disponibile')
+    spazio = dict(coda_dettature=coda, logging=logging,
+                  registrando=True, recording=True, inizio_registrazione=10,
+                  recording_started_at=10, turno_utente_token='guasta',
+                  sessione_progressiva=None, stream=SimpleNamespace(stop=guasto),
+                  app_frontale=guasto, finestra_frontale=lambda: 42,
+                  _concludi_dettatura=coda.completa,
+                  _nascondi_o_arma=lambda: None)
+    nome = 'ferma_e_trascrivi' if sistema == 'mac' else 'stop_recording'
+    path = REPO_ROOT / ('mac/detta.py' if sistema == 'mac' else 'windows/voice_dettatura_windows.py')
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, ast.FunctionDef) and n.name == nome]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), 'exec'), spazio)
+    try:
+        spazio[nome]()
+    except RuntimeError:
+        pass  # anche il worker runtime cattura l'errore: la coda deve comunque liberarsi
+    coda.apri('successiva')
+    coda.completa('successiva', 'Questa deve arrivare.', 'chat')
+    consegne = []
+    coda.consegna_pronte(lambda testo, *_: consegne.append(testo), lambda _: None)
+    assert consegne == ['Questa deve arrivare.']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_errore_trascrizione_conserva_testo_senza_inviare_parziale(sistema, tmp_path):
+    coda, target, consegna, campo, inviati, chiusi = _percorso_consegna(sistema, tmp_path)
+    coda.apri('prima')
+    coda.apri('guasta')
+    coda.completa('prima', 'Prima.', target)
+    coda.completa('guasta', fallita=True)
+    consegna()
+    assert ''.join(campo).strip() == 'Prima.'
+    assert inviati == []
+    assert chiusi == ['prima', 'guasta']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_pipeline_trascrive_due_pezzi_prima_di_inviare(sistema, tmp_path):
+    import ast
+    from types import SimpleNamespace
+    coda, target, consegna, campo, inviati, chiusi = _percorso_consegna(sistema, tmp_path)
+    spazio = consegna.__globals__
+    spazio.update(np=np, BASE=tmp_path, SAMPLE_RATE=16000,
+                  salva_audio_recente=lambda *a, **kw: None,
+                  _trascrivi_con_sessione=lambda audio, sessione: audio,
+                  e_allucinazione=lambda testo: False,
+                  applica_sostituzioni=lambda testo, _: testo,
+                  converti_punteggiatura_dettata=lambda testo: testo,
+                  mani_libere_attive=lambda: False, SHORTCUT_PULIZIA=None,
+                  _concludi_dettatura=lambda token, testo='', bersaglio=None, fallita=False:
+                      coda.completa(token, testo, bersaglio, fallita))
+    path = REPO_ROOT / ('mac/detta.py' if sistema == 'mac' else 'windows/voice_dettatura_windows.py')
+    nome = '_trascrivi_e_incolla' if sistema == 'mac' else 'transcribe_and_paste'
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, ast.FunctionDef) and n.name == nome]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), 'exec'), spazio)
+    coda.apri('prima')
+    coda.apri('seconda')
+    args = target if sistema == 'mac' else (target,)
+    spazio[nome]('Seconda.', *args, token_turno='seconda')
+    consegna()
+    assert inviati == [] and campo == [] and chiusi == []
+    spazio[nome]('Prima.', *args, token_turno='prima')
+    consegna()
+    assert inviati == ['Prima. Seconda.']
+    assert chiusi == ['prima', 'seconda']

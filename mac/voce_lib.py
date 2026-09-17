@@ -5,13 +5,92 @@ qui solo logica testabile senza hardware.
 """
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
 import sys
 import time
+import threading
 from difflib import SequenceMatcher
 from pathlib import Path
+
+
+class CodaDettature:
+    """Un messaggio resta aperto finche' tutti i suoi pezzi sono pronti.
+
+    L'ordine nasce all'avvio, non alla fine di Whisper. Il lock di consegna
+    serializza clipboard e Invio senza bloccare microfono e tastiera.
+    """
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._consegna = threading.Lock()
+        self._pezzi = {}
+        self._revisione = 0
+        self._avvii_in_attesa = 0
+        self._invio_pendente = []
+        self._fallita = False
+
+    def interrompi_invio(self):
+        with self._lock:
+            self._revisione += 1
+            self._avvii_in_attesa += 1
+
+    def annulla_avvio(self):
+        with self._lock:
+            self._avvii_in_attesa = max(0, self._avvii_in_attesa - 1)
+
+    def apri(self, token):
+        with self._lock:
+            self.annulla_avvio()
+            self._revisione += 1
+            self._pezzi[token] = None
+
+    def completa(self, token, testo="", bersaglio=None, fallita=False):
+        with self._lock:
+            if token in self._pezzi:
+                self._pezzi[token] = (testo.strip(), bersaglio)
+                self._fallita = self._fallita or fallita
+
+    def occupata(self):
+        with self._lock:
+            return bool(self._pezzi) or bool(self._avvii_in_attesa)
+
+    def puo_inviare(self, revisione):
+        with self._lock:
+            return revisione == self._revisione and not self.occupata()
+
+    def consegna_pronte(self, consegna, chiudi):
+        with self._consegna:
+            with self._lock:
+                if (self._avvii_in_attesa or not self._pezzi
+                        or any(p is None for p in self._pezzi.values())):
+                    return
+                pezzi = list(self._pezzi.items())
+                self._pezzi.clear()
+                revisione = -1 if self._fallita else self._revisione
+                self._fallita = False
+            try:
+                gruppi = []
+                for _, (testo, bersaglio) in pezzi:
+                    if not testo:
+                        continue
+                    if gruppi and gruppi[-1][1] == bersaglio:
+                        gruppi[-1][0].append(testo)
+                    else:
+                        gruppi.append(([testo], bersaglio))
+                # Una ripresa senza parole deve completare l'Invio gia' sospeso,
+                # senza reincollare la frase precedente.
+                if not gruppi and self._invio_pendente:
+                    gruppi = [([], self._invio_pendente[0])]
+                self._invio_pendente = []
+                for testi, bersaglio in gruppi:
+                    if consegna(" ".join(testi), bersaglio, revisione):
+                        self._invio_pendente = [bersaglio]
+            finally:
+                for token, _ in pezzi:
+                    chiudi(token)
 
 
 def _base_operativa(module_file=None, argv0=None, cwd=None):
@@ -43,6 +122,29 @@ CONFIG_LOCAL = BASE / "config.local.json"
 FLAG_VOICE_ON = BASE / "VOICE_ON"
 FLAG_PARLANDO = BASE / "PARLANDO"  # esiste mentre l'agente sta leggendo una risposta ad alta voce
 FLAG_MANI_LIBERE_ON = BASE / "MANI_LIBERE_ON"  # esiste quando l'ascolto continuo e' attivo
+FLAG_TURNO_UTENTE = BASE / "TURNO_UTENTE"  # dalla prima parola fino all'Invio automatico
+
+
+def apri_turno_utente():
+    """Segnala agli hook esterni che Sal sta ancora completando il suo turno.
+
+    Il token impedisce a una vecchia trascrizione, finita in ritardo, di
+    cancellare il flag di una dettatura piu' nuova gia' iniziata.
+    """
+    token = f"{os.getpid()}:{time.monotonic_ns()}"
+    FLAG_TURNO_UTENTE.write_text(token, encoding="utf-8")
+    return token
+
+
+def chiudi_turno_utente(token):
+    """Chiude soltanto il turno che aveva creato *token*."""
+    if not token:
+        return
+    try:
+        if FLAG_TURNO_UTENTE.read_text(encoding="utf-8").strip() == token:
+            FLAG_TURNO_UTENTE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def carica_config():
@@ -337,6 +439,58 @@ def casella_ammissibile(y_casella, altezza_casella, y_finestra, altezza_finestra
     return altezza_casella >= altezza_finestra * quota_documento
 
 
+def cornice_reale(geo_finestra, geometrie_pezzi):
+    """Il rettangolo che la finestra occupa DAVVERO: l'unione di quello che
+    dichiara con quelli dei suoi pezzi.
+
+    Chrome dichiara la finestra 122 punti piu' in basso e piu' bassa di
+    com'e' (misurato 08/09/2026: finestra dichiarata y=-958 alta 958, barra
+    degli indirizzi a y=-1028): la fascia di scrittura calcolata su quel
+    rettangolo parte 73 punti troppo in basso e le caselle vere vengono
+    scartate. Le geometrie sono (x, y, larghezza, altezza)."""
+    x, y, larghezza, altezza = geo_finestra
+    su, giu = y, y + altezza
+    sinistra, destra = x, x + larghezza
+    for gx, gy, gl, ga in geometrie_pezzi:
+        su, giu = min(su, gy), max(giu, gy + ga)
+        sinistra, destra = min(sinistra, gx), max(destra, gx + gl)
+    return sinistra, su, destra - sinistra, giu - su
+
+
+def finestra_credibile(geometria, altezza_schermo_max, altezza_minima=200):
+    """False per le finestre dove Sal non sta dettando di sicuro.
+
+    Due trappole viste dal vero (08/09/2026): Claude espone come prima
+    finestra una striscia alta 33 punti (AXUnknown) e il Finder espone la
+    SCRIVANIA, alta 2062 punti perche' copre tutti i monitor. Prese come
+    bersaglio non contengono nessuna casella e la dettatura finisce nel
+    vuoto. Una finestra vera sta fra le due misure."""
+    if geometria is None:
+        return False
+    altezza = geometria[3]
+    if altezza < altezza_minima:
+        return False
+    return altezza <= altezza_schermo_max + 1
+
+
+def ordina_finestre(geometrie, punto_mouse=None):
+    """Indici delle finestre nell'ordine in cui provarle.
+
+    L'ordine di partenza resta quello dell'app (focalizzata, principale,
+    poi le altre). Il mouse serve solo come spareggio: se sta dentro una di
+    queste finestre, quella si prova per prima. Sal deve poter dettare anche
+    con il mouse fermo altrove (08/09/2026), quindi il mouse non e' mai una
+    condizione: sposta soltanto la precedenza."""
+    ordine = list(range(len(geometrie)))
+    if punto_mouse is None:
+        return ordine
+    mx, my = punto_mouse
+    def sotto_il_mouse(i):
+        x, y, larghezza, altezza = geometrie[i]
+        return x <= mx <= x + larghezza and y <= my <= y + altezza
+    return sorted(ordine, key=lambda i: (not sotto_il_mouse(i), i))
+
+
 # --- audio conservato: riascoltare le frasi capite male per tarare Voce ---
 
 def file_audio_da_eliminare(nomi, massimo):
@@ -622,11 +776,11 @@ def destinazione_agente(nome_app="", url=""):
     """
     nome = str(nome_app or "").strip().lower()
     indirizzo = str(url or "").strip().lower()
-    if any(marcatore in nome for marcatore in ("chatgpt", "claude", "codex")):
+    if any(marcatore in nome for marcatore in ("chatgpt", "claude", "codex", "antigravity", "gemini")):
         return True
     return any(
         dominio in indirizzo
-        for dominio in ("chatgpt.com", "chat.openai.com", "claude.ai")
+        for dominio in ("chatgpt.com", "chat.openai.com", "claude.ai", "gemini.google.com")
     )
 
 
@@ -885,11 +1039,13 @@ def estrai_grezzi_dal_log(log_path, massimo=50):
 
 
 def unisci_sostituzioni(attuali, nuove):
-    """Solo coppie nuove e sensate: mai sovrascrivere quelle esistenti (che
-    Sal o il cliente possono aver messo a mano), mai identita' o spazzatura."""
+    """Filtra la forma delle proposte, senza certificarne il significato.
+    Una coppia valida resta da verificare: non e' una correzione attiva."""
     buone = {}
     for sbagliato, giusto in nuove.items():
-        sbagliato, giusto = str(sbagliato).strip(), str(giusto).strip()
+        if not isinstance(sbagliato, str) or not isinstance(giusto, str):
+            continue
+        sbagliato, giusto = sbagliato.strip(), giusto.strip()
         if not sbagliato or not giusto:
             continue
         if sbagliato.lower() == giusto.lower():
@@ -946,9 +1102,9 @@ def prompt_apprendimento(grezzi):
 
 
 def impara_sostituzioni(log_path, config_path, comando, timeout=60):
-    """Legge le ultime dettature grezze, chiede all'agente le correzioni
-    ricorrenti sicure e le aggiunge alle sostituzioni del config.
-    Torna le coppie nuove imparate ({} se niente o se qualcosa va storto)."""
+    """Propone correzioni nel registro esistente, senza modificare il config.
+    Il dettato non mostra le correzioni reali del proprietario: l'arbitro
+    formula ipotesi. Anche le coppie restituite sono solo proposte."""
     grezzi = estrai_grezzi_dal_log(log_path)
     if not grezzi:
         return {}
@@ -958,25 +1114,25 @@ def impara_sostituzioni(log_path, config_path, comando, timeout=60):
             logging.getLogger("voce").warning(
                 "apprendimento sostituzioni: agente fallito (%s)", errore)
             return {}
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             cfg = json.load(f)
         nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
         if nuove:
-            cfg.setdefault("sostituzioni", {}).update(nuove)
-            with open(config_path, "w") as f:
-                json.dump(cfg, f, indent=2, ensure_ascii=False)
-                f.write("\n")
+            logging.getLogger("voce").info(
+                "apprendimento sostituzioni: proposte da verificare, non applicate: %s",
+                json.dumps(nuove, ensure_ascii=False),
+            )
         return nuove
     except Exception:
         logging.getLogger("voce").exception("apprendimento sostituzioni fallito")
         return {}
 
 
-# --- ripasso notturno: riascolta gli audio conservati e impara da solo ---
+# --- ripasso notturno: riascolta gli audio conservati e propone correzioni ---
 # Mandato di Sal 30/08/2026 ("piu' la uso, piu' deve capirmi"): una volta al
 # giorno un secondo riconoscitore ritrascrive con calma le dettature
-# conservate; dove i due non sono d'accordo decide l'agente locale, e le
-# correzioni sicure entrano da sole nelle sostituzioni personali.
+# conservate; dove i due non sono d'accordo l'agente propone. Dal 05/09 le
+# ipotesi restano nel registro: la concordanza non autorizza regole globali.
 
 def estrai_grezzi_con_orario(righe):
     """[(orario, testo)] dalle righe di registro 'INFO grezzo: ...'."""
@@ -1053,8 +1209,8 @@ def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
     """Il ripasso vero: per ogni audio conservato con un grezzo nel registro,
     seconda trascrizione col modello di ripasso (stessa pulizia del vivo,
     cosi' i disaccordi sono dei modelli e non delle nostre correzioni), poi
-    arbitrato dell'agente e unione sicura nelle sostituzioni personali.
-    Torna le coppie nuove imparate ({} se niente o se qualcosa va storto)."""
+    arbitrato dell'agente e proposte nel registro, senza scrivere il config.
+    Torna ipotesi da verificare ({} se niente o se qualcosa va storto)."""
     log = logging.getLogger("voce")
     if not comando:
         return {}
@@ -1101,13 +1257,12 @@ def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
             cfg_locale = json.load(f)
         nuove = unisci_sostituzioni(cfg_locale.get("sostituzioni", {}), proposte)
         if nuove:
-            cfg_locale.setdefault("sostituzioni", {}).update(nuove)
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(cfg_locale, f, indent=2, ensure_ascii=False)
-                f.write("\n")
-            log.info("ripasso audio: imparate %s (da %d disaccordi)", nuove, len(casi))
+            log.info(
+                "ripasso audio: proposte da verificare, non applicate: %s (da %d disaccordi)",
+                json.dumps(nuove, ensure_ascii=False), len(casi),
+            )
         else:
-            log.info("ripasso audio: %d disaccordi, nessuna correzione sicura", len(casi))
+            log.info("ripasso audio: %d disaccordi, nessuna nuova proposta", len(casi))
         return nuove
     except Exception:
         log.exception("ripasso audio fallito")
@@ -1115,22 +1270,158 @@ def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
 
 
 def pulisci_per_voce(testo):
-    """Trasforma il markdown in testo piano leggibile a voce."""
-    testo = re.sub(r"```.*?```", " codice omesso. ", testo, flags=re.DOTALL)
-    testo = re.sub(r"`([^`]*)`", r"\1", testo)                      # codice inline
-    testo = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", testo)              # immagini
-    testo = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", testo)          # link -> testo
-    testo = re.sub(r"https?://\S+", " ", testo)                     # URL nudi
-    testo = re.sub(r"^#{1,6}\s*", "", testo, flags=re.MULTILINE)    # titoli
-    testo = re.sub(r"[*_]{1,3}([^*_\n]+)[*_]{1,3}", r"\1", testo)   # grassetto/corsivo
-    testo = re.sub(r"^\s*[-*•>]\s+", "", testo, flags=re.MULTILINE) # elenchi/citazioni
-    return re.sub(r"\s+", " ", testo).strip()
+    """Prepara l'ascolto integrale: pause, tabelle e riferimenti leggibili.
+
+    Nessun riassunto o modello: si cambia soltanto la presentazione. Il
+    risultato e' idempotente, anche se hook e lettore lo preparano entrambi.
+    Come prima, il contenuto dei blocchi di codice non viene pronunciato.
+    """
+    def nome_file(percorso):
+        percorso = percorso.strip().strip("<>")
+        if percorso.startswith("file://"):
+            percorso = percorso[7:]
+        if not re.match(r"^(?:/|~/|[A-Za-z]:[\\/]|\\\\)", percorso):
+            return percorso
+        riga = re.search(r":(\d+)(?::(\d+))?$", percorso)
+        posizione = ""
+        if riga:
+            posizione = ", riga " + riga[1]
+            if riga[2]:
+                posizione += ", colonna " + riga[2]
+            percorso = percorso[:riga.start()]
+        return re.split(r"[\\/]", percorso.rstrip("/\\"))[-1] + posizione
+
+    def inline(riga):
+        def link(m):
+            etichetta, destinazione = m[1], m[2].strip().strip("<>")
+            etichetta = nome_file(etichetta)
+            file = nome_file(destinazione)
+            if file != destinazione:
+                if file.split(", riga ", 1)[0].casefold() == etichetta.casefold():
+                    return file
+                return etichetta + ", file " + file
+            return etichetta
+
+        riga = re.sub(r"!\[[^\]]*\]\((?:<[^>]*>|[^)\n]*)\)", "", riga)
+        riga = re.sub(r"\[([^\]]+)\]\((<[^>\n]+>|[^)\n]+)\)", link, riga)
+        riga = re.sub(r"(`+)(.*?)\1", lambda m: nome_file(m[2]), riga)
+        # Conserva la punteggiatura dopo un URL: serve a sentire la pausa.
+        riga = re.sub(
+            r"https?://[^\s<>]+",
+            lambda m: "collegamento" + m[0][len(m[0].rstrip(".,;:!?)]}")):],
+            riga,
+        )
+        riga = re.sub(
+            r"([\"'])((?:[A-Za-z]:[\\/]|\\\\|~?/)[A-Za-z_][^\"'\n]+)\1",
+            lambda m: m[1] + nome_file(m[2]) + m[1], riga,
+        )
+        # Percorsi nudi senza spazi; quelli con spazi sono gia' gestiti nei
+        # link e nel codice inline. La radice alfabetica esclude le date.
+        riga = re.sub(
+            r"(?<![\w:/\\])(?:[A-Za-z]:[\\/]|\\\\|~?/)[A-Za-z_][^\s<>\"'`]*",
+            lambda m: nome_file(m[0].rstrip(".,;!?)]}"))
+            + m[0][len(m[0].rstrip(".,;!?)]}")):],
+            riga,
+        )
+        # I delimitatori interni alle parole (report_2026_09.md) sono dati.
+        riga = re.sub(
+            r"(?<!\w)(\*{1,3}|_{1,3})(?=\S)(.+?)(?<=\S)\1(?!\w)",
+            r"\2", riga,
+        )
+        return re.sub(r"\s+", " ", riga).strip()
+
+    def frase(riga):
+        riga = riga.strip()
+        if riga and riga.rstrip("\"'»)]}")[-1:] not in ".!?…,:;":
+            riga += "."
+        return riga
+
+    def celle(riga):
+        riga = riga.strip()
+        if riga.startswith("|"):
+            riga = riga[1:]
+        if riga.endswith("|") and not riga.endswith("\\|"):
+            riga = riga[:-1]
+        return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", riga)]
+
+    # Una fence aperta protegge anche il codice incompleto; una fence di
+    # altro tipo dentro il blocco non puo' chiuderla per errore.
+    righe, fence = [], None
+    for riga in testo.splitlines():
+        if fence:
+            if re.fullmatch(r"\s{0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", riga):
+                fence = None
+            continue
+        apertura = re.match(r"^\s{0,3}(`{3,}|~{3,})(.*)$", riga)
+        if apertura:
+            righe.extend(["", "codice omesso.", ""])
+            if not apertura[2].rstrip().endswith(apertura[1]):
+                fence = apertura[1]
+            continue
+        if re.match(r"^\s*:::writing\b", riga) or re.fullmatch(r"\s*:::\s*", riga):
+            righe.append("")
+            continue
+        righe.append(riga)
+
+    parti, paragrafo = [], []
+
+    def chiudi_paragrafo(pausa=True):
+        if paragrafo:
+            contenuto = " ".join(paragrafo)
+            parti.append(frase(contenuto) if pausa else contenuto)
+            paragrafo.clear()
+
+    i = 0
+    while i < len(righe):
+        riga = righe[i].strip()
+        if i + 1 < len(righe) and "|" in riga:
+            intestazioni, separatori = celle(riga), celle(righe[i + 1])
+            if (len(intestazioni) == len(separatori)
+                    and all(re.fullmatch(r":?-{3,}:?", c) for c in separatori)):
+                chiudi_paragrafo()
+                intestazioni = [inline(c) for c in intestazioni]
+                i += 2
+                inizio_dati = i
+                while i < len(righe) and "|" in righe[i] and righe[i].strip():
+                    valori = celle(righe[i])
+                    lettura = []
+                    for n in range(max(len(intestazioni), len(valori))):
+                        etichetta = intestazioni[n] if n < len(intestazioni) else ""
+                        etichetta = etichetta or f"Colonna {n + 1}"
+                        valore = inline(valori[n]) if n < len(valori) else ""
+                        lettura.append(etichetta + ": " + (valore or "vuoto"))
+                    parti.append(frase("; ".join(lettura)))
+                    i += 1
+                if i == inizio_dati:
+                    parti.append(frase("; ".join(intestazioni)))
+                continue
+        if not riga:
+            chiudi_paragrafo()
+        elif re.match(r"^(?:#{1,6}\s|[-*•>]\s|\d+[.)]\s)", riga):
+            chiudi_paragrafo()
+            riga = re.sub(r"^(?:#{1,6}|[-*•>])\s+", "", riga)
+            riga = re.sub(r"\s+#+$", "", riga)
+            parti.append(frase(inline(riga)))
+        else:
+            paragrafo.append(inline(riga))
+        i += 1
+    chiudi_paragrafo(pausa=False)
+    return " ".join(p for p in parti if p)
 
 
 def estrai_ultima_risposta(transcript_path):
-    """Ultimo messaggio testuale dell'assistente da un transcript JSONL di Claude Code."""
+    """Ultimo messaggio testuale dell'assistente da un transcript JSONL.
+
+    Due dialetti, stesso file di testo riga per riga:
+    - Claude Code e Codex: riga `type: assistant` con i blocchi in
+      `message.content`;
+    - Antigravity (Google): riga `source: MODEL` con il testo gia' pronto in
+      `content` (verificato il 13/09/2026 sul transcript.jsonl reale). Senza
+      questo ramo l'hook trovava il file ma non il parlato, e la voce restava
+      muta con Antigravity pur essendo accesa.
+    """
     ultimo = ""
-    with open(transcript_path) as f:
+    with open(transcript_path, encoding="utf-8") as f:
         for riga in f:
             riga = riga.strip()
             if not riga:
@@ -1138,6 +1429,15 @@ def estrai_ultima_risposta(transcript_path):
             try:
                 voce = json.loads(riga)
             except json.JSONDecodeError:
+                continue
+            if voce.get("source") == "MODEL":
+                # le righe di lavoro (piani, strumenti) non sono parlato: si
+                # legge solo la risposta conclusa destinata alla persona
+                if voce.get("status") not in (None, "DONE"):
+                    continue
+                testo = voce.get("content")
+                if isinstance(testo, str) and testo.strip():
+                    ultimo = testo.strip()
                 continue
             if voce.get("type") != "assistant":
                 continue
@@ -1155,7 +1455,7 @@ def estrai_ultima_risposta(transcript_path):
 if __name__ == "__main__":
     # `voce_lib.py --ripasso`: processo di ripasso notturno, spawnato sganciato
     # da detta.py col gate giornaliero. Vive da solo, carica il secondo modello,
-    # impara e muore: la dettatura in diretta non paga niente.
+    # propone e muore: la dettatura in diretta non paga niente.
     if len(sys.argv) == 2 and sys.argv[1] == "--ripasso":
         logging.basicConfig(
             filename=str(BASE / "voce.log"), level=logging.INFO,

@@ -1,8 +1,8 @@
 """Hook Stop: se la voce è attiva (flag VOICE_ON), legge ad alta voce l'ultima risposta.
 
 Input su stdin (JSON):
-- Claude Code: campo "transcript_path" -> si estrae l'ultimo messaggio dell'assistente.
-- Codex: campo "last_assistant_message" -> si usa direttamente.
+- Claude Code e Codex: "last_assistant_message", con ripiego sul transcript.
+- "session_id" identifica la conversazione anche nella stessa cartella.
 Non deve mai bloccare l'agente: ogni errore esce in silenzio con exit 0.
 """
 import json
@@ -181,6 +181,44 @@ def collega_hook(settings_path: Path) -> None:
     settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+# Antigravity (Google) non usa la forma di Claude e Codex: il file mappa un
+# nome di gestore -> eventi. Schema ufficiale (antigravity.google/docs/hooks,
+# letto il 13/09/2026): {"<gestore>": {"enabled": true, "Stop": [{"hooks": [...]}]}}
+GESTORE_ANTIGRAVITY = "voce-leaderai"
+
+
+def collega_hook_antigravity(hooks_path: Path) -> None:
+    """Aggiunge il nostro Stop hook ad Antigravity lasciando intatti gli altri."""
+    data = _leggi_json(hooks_path)
+    gestore = data.get(GESTORE_ANTIGRAVITY)
+    if not isinstance(gestore, dict):
+        gestore = {}
+    gestore["enabled"] = True
+    gestore["Stop"] = [{"hooks": [{"type": "command", "command": _comando_hook(), "timeout": 10}]}]
+    data[GESTORE_ANTIGRAVITY] = gestore
+    hooks_path.parent.mkdir(parents=True, exist_ok=True)
+    if hooks_path.exists():
+        shutil.copy2(hooks_path, hooks_path.with_name(hooks_path.name + ".pre-voce.bak"))
+    hooks_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def hook_antigravity_collegato(hooks_path: Path) -> bool:
+    try:
+        data = _leggi_json(hooks_path)
+    except Exception:
+        return False
+    for gestore in data.values():
+        if not isinstance(gestore, dict) or gestore.get("enabled") is False:
+            continue
+        for gruppo in gestore.get("Stop", []):
+            if not isinstance(gruppo, dict):
+                continue
+            for hook in gruppo.get("hooks", []):
+                if isinstance(hook, dict) and str(Path(__file__).absolute()) in str(hook.get("command", "")):
+                    return True
+    return False
+
+
 def hook_collegato(settings_path: Path) -> bool:
     try:
         data = _leggi_json(settings_path)
@@ -199,6 +237,16 @@ def _agente_presente(nome: str) -> bool:
     return shutil.which(nome) is not None or (Path.home() / f".{nome}").exists()
 
 
+def _antigravity_presente() -> bool:
+    """Antigravity non si riconosce da una cartella `~/.antigravity` come gli
+    altri: l'IDE vive in `~/.gemini/antigravity` (o nell'app installata)."""
+    return (
+        shutil.which("antigravity") is not None
+        or (Path.home() / ".gemini" / "antigravity").exists()
+        or Path("/Applications/Antigravity.app").exists()
+    )
+
+
 def installa_hook_agenti() -> list[tuple[str, Path]]:
     home = Path.home()
     collegati: list[tuple[str, Path]] = []
@@ -210,12 +258,18 @@ def installa_hook_agenti() -> list[tuple[str, Path]]:
         path = home / ".codex" / "hooks.json"
         collega_hook(path)
         collegati.append(("Codex", path))
+    if _antigravity_presente():
+        path = home / ".gemini" / "config" / "hooks.json"
+        collega_hook_antigravity(path)
+        collegati.append(("Antigravity", path))
     if not collegati:
-        raise RuntimeError("Non trovo Claude Code o Codex da collegare.")
+        raise RuntimeError("Non trovo Claude Code, Codex o Antigravity da collegare.")
     for nome, path in collegati:
         print(f"{nome}: configurazione voce scritta in {path}")
         if nome == "Codex":
             print("Codex: apri /hooks, verifica il comando Voce e concedi fiducia.")
+        if nome == "Antigravity":
+            print("Antigravity: riavvia l'app, gli hook si leggono all'avvio.")
     return collegati
 
 
@@ -225,9 +279,10 @@ def controlla_hook_agenti() -> bool:
     for nome, presente, path in (
         ("Claude Code", _agente_presente("claude"), home / ".claude" / "settings.json"),
         ("Codex", _agente_presente("codex"), home / ".codex" / "hooks.json"),
+        ("Antigravity", _antigravity_presente(), home / ".gemini" / "config" / "hooks.json"),
     ):
         if presente:
-            ok = hook_collegato(path)
+            ok = hook_antigravity_collegato(path) if nome == "Antigravity" else hook_collegato(path)
             stato = "configurato" if ok else "NON configurato"
             print(f"{nome}: {stato}")
             if nome == "Codex" and ok:
@@ -241,28 +296,113 @@ def controlla_hook_agenti() -> bool:
 # millisecondi (misurato il 30/08/2026: 10 letture doppie su 26). Prima della
 # coda in parla() il doppione troncava l'audio appena partito; oggi lo
 # rileggerebbe per intero una seconda volta. In entrambi i casi va scartato.
+def normalizza_payload(dati: dict) -> dict:
+    """Stessi dati, un solo nome per campo.
+
+    Claude Code e Codex mandano `last_assistant_message`, `transcript_path`,
+    `session_id`. Antigravity manda gli stessi fatti in camelCase
+    (`transcriptPath`, `conversationId`) e nessun messaggio pronto: senza
+    questa traduzione l'hook partiva, non trovava niente da leggere e taceva
+    (caso reale 13/09/2026).
+    """
+    if not isinstance(dati, dict):
+        return {}
+    tradotti = dict(dati)
+    for straniero, nostro in (
+        ("transcriptPath", "transcript_path"),
+        ("conversationId", "session_id"),
+        ("lastAssistantMessage", "last_assistant_message"),
+        ("modelName", "model"),
+    ):
+        valore = tradotti.get(straniero)
+        if isinstance(valore, str) and valore.strip() and not tradotti.get(nostro):
+            tradotti[nostro] = valore
+    return tradotti
+
+
 FINESTRA_DOPPIONE_SEC = 8.0
 ULTIMA_LETTURA = BASE / "ULTIMA_LETTURA"
 
 
-def gia_letto_da_poco(testo: str) -> bool:
-    """Vero se questo identico testo e' gia' stato mandato in lettura da poco."""
+def origine_risposta(dati: dict) -> dict:
+    """Identita' Stop documentata: session_id; mai la cartella come task.
+    I nomi sono descrizioni della fonte, non titoli inventati delle chat."""
+    import hashlib
+    import posixpath
+    import uuid
+
+    def stringa(chiave):
+        valore = dati.get(chiave)
+        return valore.strip() if isinstance(valore, str) else ""
+
+    transcript = posixpath.normpath(stringa("transcript_path").replace("\\", "/"))
+    if transcript == ".":
+        transcript = ""
+    identita = stringa("session_id")
+    if not identita:
+        identita = ("transcript:" + hashlib.sha256(transcript.encode()).hexdigest()
+                    if transcript else "senza-origine:" + uuid.uuid4().hex)
+    percorso = transcript.lower()
+    if "/.codex/" in percorso or (stringa("model") and stringa("turn_id")):
+        agente = "ChatGPT"
+    elif "/.claude/" in percorso:
+        agente = "Claude"
+    elif "/antigravity/" in percorso or "/.gemini/" in percorso:
+        agente = "Antigravity"
+    else:
+        agente = "Agente"
+    return {"id": identita, "nome": agente}
+
+
+def gia_letto_da_poco(testo: str, origine=None) -> bool:
+    """Doppioni della stessa conversazione, anche con hook concorrenti."""
     import hashlib
     import time
 
     impronta = hashlib.sha1(testo.encode("utf-8")).hexdigest()
     adesso = time.time()
+    identita = (origine or {}).get("id", "generale")
+    fd = None
     try:
-        precedente, istante = ULTIMA_LETTURA.read_text(encoding="utf-8").split(None, 1)
-        doppione = precedente == impronta and (adesso - float(istante)) < FINESTRA_DOPPIONE_SEC
-    except Exception:
-        doppione = False  # nessuno stato leggibile: si legge, il silenzio e' peggio
-    if not doppione:
+        fd = os.open(str(ULTIMA_LETTURA) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+        if os.name == "nt":
+            import msvcrt
+            if os.fstat(fd).st_size == 0:
+                os.write(fd, b"0")
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX)
         try:
-            ULTIMA_LETTURA.write_text(f"{impronta} {adesso}", encoding="utf-8")
-        except Exception:
-            pass
-    return doppione
+            dati = json.loads(ULTIMA_LETTURA.read_text(encoding="utf-8"))
+            if not isinstance(dati, dict):
+                dati = {}
+        except (OSError, ValueError):
+            dati = {}  # vecchio formato hash/orario: la prima risposta riparte
+        precedente = dati.get(identita, {})
+        if (isinstance(precedente, dict) and precedente.get("hash") == impronta
+                and 0 <= adesso - float(precedente.get("tempo", 0)) < FINESTRA_DOPPIONE_SEC):
+            return True
+        dati = {k: v for k, v in dati.items() if isinstance(v, dict)
+                and isinstance(v.get("tempo"), (int, float))
+                and 0 <= adesso - v["tempo"] < FINESTRA_DOPPIONE_SEC}
+        dati[identita] = {"hash": impronta, "tempo": adesso}
+        dati = dict(sorted(dati.items(), key=lambda x: x[1]["tempo"])[-32:])
+        temporaneo = ULTIMA_LETTURA.with_name(ULTIMA_LETTURA.name + f".{os.getpid()}.tmp")
+        try:
+            with open(os.open(temporaneo, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600),
+                      "w", encoding="utf-8") as f:
+                json.dump(dati, f, ensure_ascii=False)
+            os.replace(temporaneo, ULTIMA_LETTURA)
+        finally:
+            temporaneo.unlink(missing_ok=True)
+    except Exception:
+        return False  # un errore della guardia non deve cancellare la risposta
+    finally:
+        if fd is not None:
+            os.close(fd)
+    return False
 
 
 def main():
@@ -270,7 +410,7 @@ def main():
         traccia("voce spenta, non leggo")
         return
     try:
-        dati = json.load(sys.stdin)
+        dati = normalizza_payload(json.load(sys.stdin))
     except Exception:
         traccia("chiamata senza dati leggibili")
         return
@@ -284,11 +424,12 @@ def main():
             traccia("trascrizione illeggibile")
             return
     if testo:
-        if gia_letto_da_poco(testo):
+        conversazione = origine_risposta(dati)
+        if gia_letto_da_poco(testo, conversazione):
             traccia(f"lettura doppia scartata ({len(testo)} caratteri, {origine})")
             return
         traccia(f"leggo {len(testo)} caratteri ({origine})")
-        parla(testo)  # deposita e torna subito: legge un lettore sganciato
+        parla(testo, origine=conversazione)  # deposita e torna subito
     else:
         traccia(f"nessun testo da leggere ({origine})")
 

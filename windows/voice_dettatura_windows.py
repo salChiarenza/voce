@@ -16,6 +16,7 @@ import ctypes
 import json
 import logging
 import logging.handlers
+import os
 import queue
 import re
 import shutil
@@ -32,6 +33,11 @@ import sounddevice as sd
 from faster_whisper import WhisperModel
 from pynput import keyboard
 from pynput.keyboard import Controller, Key
+
+try:  # nelle vecchie installazioni il modulo voce agenti era opzionale
+    import voce_hook as voce_agenti
+except ImportError:
+    voce_agenti = None
 
 try:  # beep di sistema: solo Windows, mai bloccante
     import winsound
@@ -81,6 +87,7 @@ livelli = collections.deque([0.0] * N_BARRE, maxlen=N_BARRE)
 blocks: list[np.ndarray] = []
 rms_blocks: list[float] = []                   # parallelo a blocks: volume per blocco, per trovare le pause
 sessione_progressiva = None                    # sessione della registrazione in corso (None se spenta)
+turno_utente_token = None                      # resta aperto fino a incolla e Invio
 stream = None
 recording = False
 key_down = False
@@ -90,8 +97,89 @@ model: WhisperModel | None = None
 ultima_pressione_utente = 0.0                  # annulla l'Invio automatico in attesa
 
 
+class CodaDettature:
+    """Un messaggio resta aperto finche' tutti i suoi pezzi sono pronti.
+
+    L'ordine nasce all'avvio, non alla fine di Whisper. Il lock di consegna
+    serializza clipboard e Invio senza bloccare microfono e tastiera.
+    """
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._consegna = threading.Lock()
+        self._pezzi = {}
+        self._revisione = 0
+        self._avvii_in_attesa = 0
+        self._invio_pendente = []
+        self._fallita = False
+
+    def interrompi_invio(self):
+        with self._lock:
+            self._revisione += 1
+            self._avvii_in_attesa += 1
+
+    def annulla_avvio(self):
+        with self._lock:
+            self._avvii_in_attesa = max(0, self._avvii_in_attesa - 1)
+
+    def apri(self, token):
+        with self._lock:
+            self.annulla_avvio()
+            self._revisione += 1
+            self._pezzi[token] = None
+
+    def completa(self, token, testo="", bersaglio=None, fallita=False):
+        with self._lock:
+            if token in self._pezzi:
+                self._pezzi[token] = (testo.strip(), bersaglio)
+                self._fallita = self._fallita or fallita
+
+    def occupata(self):
+        with self._lock:
+            return bool(self._pezzi) or bool(self._avvii_in_attesa)
+
+    def puo_inviare(self, revisione):
+        with self._lock:
+            return revisione == self._revisione and not self.occupata()
+
+    def consegna_pronte(self, consegna, chiudi):
+        with self._consegna:
+            with self._lock:
+                if (self._avvii_in_attesa or not self._pezzi
+                        or any(p is None for p in self._pezzi.values())):
+                    return
+                pezzi = list(self._pezzi.items())
+                self._pezzi.clear()
+                revisione = -1 if self._fallita else self._revisione
+                self._fallita = False
+            try:
+                gruppi = []
+                for _, (testo, bersaglio) in pezzi:
+                    if not testo:
+                        continue
+                    if gruppi and gruppi[-1][1] == bersaglio:
+                        gruppi[-1][0].append(testo)
+                    else:
+                        gruppi.append(([testo], bersaglio))
+                # Una ripresa senza parole deve completare l'Invio gia' sospeso,
+                # senza reincollare la frase precedente.
+                if not gruppi and self._invio_pendente:
+                    gruppi = [([], self._invio_pendente[0])]
+                self._invio_pendente = []
+                for testi, bersaglio in gruppi:
+                    if consegna(" ".join(testi), bersaglio, revisione):
+                        self._invio_pendente = [bersaglio]
+            finally:
+                for token, _ in pezzi:
+                    chiudi(token)
+
+
+coda_dettature = CodaDettature()
+
+
 # --- voce in uscita "agenti": interruttore + TTS di Windows, tutto in questo file ---
 FLAG_VOICE_ON = BASE / "VOICE_ON"          # se esiste, la voce in uscita e' accesa
+FLAG_TURNO_UTENTE = BASE / "TURNO_UTENTE"  # dalla prima parola fino all'Invio automatico
 PID_FILE = BASE / "voce_pid"               # PID dell'ultima lettura: una voce per volta
 VOCE_RATE = int(CFG.get("voce_rate", 0))   # System.Speech: da -10 (lenta) a +10 (veloce)
 VOCE_NOME = str(CFG.get("voce_nome", ""))  # scelta guidata alla prima installazione
@@ -101,6 +189,23 @@ def voce_attiva() -> bool:
     """Voce agenti accesa = conversazione vera con l'agente (botta e risposta,
     niente tempo di rilettura). Usata per scegliere la pausa pre-Invio."""
     return FLAG_VOICE_ON.exists()
+
+
+def apri_turno_utente() -> str:
+    """Apre il turno con token: una trascrizione vecchia non chiude la nuova."""
+    token = f"{os.getpid()}:{time.monotonic_ns()}"
+    FLAG_TURNO_UTENTE.write_text(token, encoding="utf-8")
+    return token
+
+
+def chiudi_turno_utente(token: str | None) -> None:
+    if not token:
+        return
+    try:
+        if FLAG_TURNO_UTENTE.read_text(encoding="utf-8").strip() == token:
+            FLAG_TURNO_UTENTE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 # --- glossario e detta pulito: la trascrizione grezza diventa testo curato ---
@@ -444,11 +549,13 @@ def estrai_grezzi_dal_log(log_path, massimo=50) -> list:
 
 
 def unisci_sostituzioni(attuali: dict, nuove: dict) -> dict:
-    """Solo coppie nuove e sensate: mai sovrascrivere quelle esistenti,
-    mai identita' o spazzatura."""
+    """Filtra la forma delle proposte, senza approvarne la correttezza:
+    solo stringhe nuove, mai identita' o sovrascritture."""
     buone = {}
     for sbagliato, giusto in nuove.items():
-        sbagliato, giusto = str(sbagliato).strip(), str(giusto).strip()
+        if not isinstance(sbagliato, str) or not isinstance(giusto, str):
+            continue
+        sbagliato, giusto = sbagliato.strip(), giusto.strip()
         if not sbagliato or not giusto:
             continue
         if sbagliato.lower() == giusto.lower():
@@ -501,8 +608,8 @@ def prompt_apprendimento(grezzi) -> str:
 
 
 def impara_sostituzioni(log_path, config_path, comando, timeout=60) -> dict:
-    """Legge le ultime dettature grezze, chiede all'agente le correzioni
-    ricorrenti sicure e le aggiunge alle sostituzioni del config."""
+    """Legge le dettature e registra proposte da verificare. Non osserva
+    correzioni umane e non modifica le sostituzioni attive nel config."""
     grezzi = estrai_grezzi_dal_log(log_path)
     if not grezzi:
         return {}
@@ -512,20 +619,20 @@ def impara_sostituzioni(log_path, config_path, comando, timeout=60) -> dict:
             logging.warning("apprendimento sostituzioni: agente fallito (%s)", errore)
             return {}
         cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
-        nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
-        if nuove:
-            cfg.setdefault("sostituzioni", {}).update(nuove)
-            Path(config_path).write_text(
-                json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        proposte = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
+        if proposte:
+            logging.info(
+                "apprendimento sostituzioni: proposte da verificare, non applicate: %s",
+                json.dumps(proposte, ensure_ascii=False),
             )
-        return nuove
+        return proposte
     except Exception:
         logging.exception("apprendimento sostituzioni fallito")
         return {}
 
 
 def impara_dagli_errori_giornaliero() -> None:
-    """Apprendimento automatico, una volta al giorno all'avvio (gemello Mac)."""
+    """Raccolta di proposte, una volta al giorno all'avvio (gemello Mac)."""
     marcatore = BASE / "APPRENDIMENTO_ULTIMO"
     oggi = time.strftime("%Y-%m-%d")
     try:
@@ -538,10 +645,7 @@ def impara_dagli_errori_giornaliero() -> None:
     comando = COMANDO_APPRENDIMENTO or comandi_agente()  # tutti gli agenti presenti, in ordine
     if not comando:
         return
-    nuove = impara_sostituzioni(LOG, BASE / "config.json", comando)
-    if nuove:
-        CFG.setdefault("sostituzioni", {}).update(nuove)  # attive da subito
-        logging.info("imparate sostituzioni: %s", nuove)
+    impara_sostituzioni(LOG, BASE / "config.json", comando)
     # Ripasso degli audio conservati (gemello Mac): processo a parte e
     # sganciato, cosi' il secondo modello non pesa sulla dettatura in diretta.
     if int(CFG.get("conserva_audio_n", 0)) > 0:
@@ -561,8 +665,8 @@ def impara_dagli_errori_giornaliero() -> None:
 
 # --- ripasso degli audio conservati (gemello di mac/voce_lib.py) ---
 # Un secondo riconoscitore ritrascrive con calma le dettature conservate;
-# dove i due non sono d'accordo decide l'agente locale, e le correzioni
-# sicure entrano da sole nelle sostituzioni. Da collaudare su PC reale.
+# dove i due non sono d'accordo l'agente propone coppie nel registro.
+# Nessuna proposta diventa una sostituzione attiva. Da collaudare su PC reale.
 
 def estrai_grezzi_con_orario(righe):
     """[(orario, testo)] dalle righe di registro 'INFO grezzo: ...'."""
@@ -634,7 +738,8 @@ def prompt_arbitro_ripasso(casi):
 def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
                              modello_ripasso, massimo_file=30, timeout=180):
     """Gemella Mac: seconda trascrizione (faster-whisper) con la stessa
-    pulizia del vivo, arbitrato dell'agente, unione sicura nel config."""
+    pulizia del vivo e proposte dell'agente nel registro, senza modificare
+    il config. Due modelli non sostituiscono una verifica della frase."""
     if not comando:
         return {}
     righe = []
@@ -676,16 +781,15 @@ def ripassa_audio_conservati(cartella, log_paths, config_path, comando,
                             len(casi), errore)
             return {}
         cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
-        nuove = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
-        if nuove:
-            cfg.setdefault("sostituzioni", {}).update(nuove)
-            Path(config_path).write_text(
-                json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        proposte = unisci_sostituzioni(cfg.get("sostituzioni", {}), proposte)
+        if proposte:
+            logging.info(
+                "ripasso audio: proposte da verificare, non applicate: %s (da %d disaccordi)",
+                json.dumps(proposte, ensure_ascii=False), len(casi),
             )
-            logging.info("ripasso audio: imparate %s (da %d disaccordi)", nuove, len(casi))
         else:
-            logging.info("ripasso audio: %d disaccordi, nessuna correzione sicura", len(casi))
-        return nuove
+            logging.info("ripasso audio: %d disaccordi, nessuna nuova proposta", len(casi))
+        return proposte
     except Exception:
         logging.exception("ripasso audio fallito")
         return {}
@@ -760,17 +864,144 @@ GLOSSARIO_PROMPT = glossario_iniziale(CFG)  # nomi/brand scritti giusti da Whisp
 COMANDO_APPRENDIMENTO = comandi_agente() if CFG.get("debug_dettature", False) else None
 
 
-def pulisci_per_voce(testo: str) -> str:
-    """Markdown -> testo piano leggibile a voce."""
-    testo = re.sub(r"```.*?```", " codice omesso. ", testo, flags=re.DOTALL)
-    testo = re.sub(r"`([^`]*)`", r"\1", testo)
-    testo = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", testo)
-    testo = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", testo)
-    testo = re.sub(r"https?://\S+", " ", testo)
-    testo = re.sub(r"^#{1,6}\s*", "", testo, flags=re.MULTILINE)
-    testo = re.sub(r"[*_]{1,3}([^*_\n]+)[*_]{1,3}", r"\1", testo)
-    testo = re.sub(r"^\s*[-*•>]\s+", "", testo, flags=re.MULTILINE)
-    return re.sub(r"\s+", " ", testo).strip()
+def pulisci_per_voce(testo):
+    """Prepara l'ascolto integrale: pause, tabelle e riferimenti leggibili.
+
+    Nessun riassunto o modello: si cambia soltanto la presentazione. Il
+    risultato e' idempotente, anche se hook e lettore lo preparano entrambi.
+    Come prima, il contenuto dei blocchi di codice non viene pronunciato.
+    """
+    def nome_file(percorso):
+        percorso = percorso.strip().strip("<>")
+        if percorso.startswith("file://"):
+            percorso = percorso[7:]
+        if not re.match(r"^(?:/|~/|[A-Za-z]:[\\/]|\\\\)", percorso):
+            return percorso
+        riga = re.search(r":(\d+)(?::(\d+))?$", percorso)
+        posizione = ""
+        if riga:
+            posizione = ", riga " + riga[1]
+            if riga[2]:
+                posizione += ", colonna " + riga[2]
+            percorso = percorso[:riga.start()]
+        return re.split(r"[\\/]", percorso.rstrip("/\\"))[-1] + posizione
+
+    def inline(riga):
+        def link(m):
+            etichetta, destinazione = m[1], m[2].strip().strip("<>")
+            etichetta = nome_file(etichetta)
+            file = nome_file(destinazione)
+            if file != destinazione:
+                if file.split(", riga ", 1)[0].casefold() == etichetta.casefold():
+                    return file
+                return etichetta + ", file " + file
+            return etichetta
+
+        riga = re.sub(r"!\[[^\]]*\]\((?:<[^>]*>|[^)\n]*)\)", "", riga)
+        riga = re.sub(r"\[([^\]]+)\]\((<[^>\n]+>|[^)\n]+)\)", link, riga)
+        riga = re.sub(r"(`+)(.*?)\1", lambda m: nome_file(m[2]), riga)
+        # Conserva la punteggiatura dopo un URL: serve a sentire la pausa.
+        riga = re.sub(
+            r"https?://[^\s<>]+",
+            lambda m: "collegamento" + m[0][len(m[0].rstrip(".,;:!?)]}")):],
+            riga,
+        )
+        riga = re.sub(
+            r"([\"'])((?:[A-Za-z]:[\\/]|\\\\|~?/)[A-Za-z_][^\"'\n]+)\1",
+            lambda m: m[1] + nome_file(m[2]) + m[1], riga,
+        )
+        # Percorsi nudi senza spazi; quelli con spazi sono gia' gestiti nei
+        # link e nel codice inline. La radice alfabetica esclude le date.
+        riga = re.sub(
+            r"(?<![\w:/\\])(?:[A-Za-z]:[\\/]|\\\\|~?/)[A-Za-z_][^\s<>\"'`]*",
+            lambda m: nome_file(m[0].rstrip(".,;!?)]}"))
+            + m[0][len(m[0].rstrip(".,;!?)]}")):],
+            riga,
+        )
+        # I delimitatori interni alle parole (report_2026_09.md) sono dati.
+        riga = re.sub(
+            r"(?<!\w)(\*{1,3}|_{1,3})(?=\S)(.+?)(?<=\S)\1(?!\w)",
+            r"\2", riga,
+        )
+        return re.sub(r"\s+", " ", riga).strip()
+
+    def frase(riga):
+        riga = riga.strip()
+        if riga and riga.rstrip("\"'»)]}")[-1:] not in ".!?…,:;":
+            riga += "."
+        return riga
+
+    def celle(riga):
+        riga = riga.strip()
+        if riga.startswith("|"):
+            riga = riga[1:]
+        if riga.endswith("|") and not riga.endswith("\\|"):
+            riga = riga[:-1]
+        return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", riga)]
+
+    # Una fence aperta protegge anche il codice incompleto; una fence di
+    # altro tipo dentro il blocco non puo' chiuderla per errore.
+    righe, fence = [], None
+    for riga in testo.splitlines():
+        if fence:
+            if re.fullmatch(r"\s{0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", riga):
+                fence = None
+            continue
+        apertura = re.match(r"^\s{0,3}(`{3,}|~{3,})(.*)$", riga)
+        if apertura:
+            righe.extend(["", "codice omesso.", ""])
+            if not apertura[2].rstrip().endswith(apertura[1]):
+                fence = apertura[1]
+            continue
+        if re.match(r"^\s*:::writing\b", riga) or re.fullmatch(r"\s*:::\s*", riga):
+            righe.append("")
+            continue
+        righe.append(riga)
+
+    parti, paragrafo = [], []
+
+    def chiudi_paragrafo(pausa=True):
+        if paragrafo:
+            contenuto = " ".join(paragrafo)
+            parti.append(frase(contenuto) if pausa else contenuto)
+            paragrafo.clear()
+
+    i = 0
+    while i < len(righe):
+        riga = righe[i].strip()
+        if i + 1 < len(righe) and "|" in riga:
+            intestazioni, separatori = celle(riga), celle(righe[i + 1])
+            if (len(intestazioni) == len(separatori)
+                    and all(re.fullmatch(r":?-{3,}:?", c) for c in separatori)):
+                chiudi_paragrafo()
+                intestazioni = [inline(c) for c in intestazioni]
+                i += 2
+                inizio_dati = i
+                while i < len(righe) and "|" in righe[i] and righe[i].strip():
+                    valori = celle(righe[i])
+                    lettura = []
+                    for n in range(max(len(intestazioni), len(valori))):
+                        etichetta = intestazioni[n] if n < len(intestazioni) else ""
+                        etichetta = etichetta or f"Colonna {n + 1}"
+                        valore = inline(valori[n]) if n < len(valori) else ""
+                        lettura.append(etichetta + ": " + (valore or "vuoto"))
+                    parti.append(frase("; ".join(lettura)))
+                    i += 1
+                if i == inizio_dati:
+                    parti.append(frase("; ".join(intestazioni)))
+                continue
+        if not riga:
+            chiudi_paragrafo()
+        elif re.match(r"^(?:#{1,6}\s|[-*•>]\s|\d+[.)]\s)", riga):
+            chiudi_paragrafo()
+            riga = re.sub(r"^(?:#{1,6}|[-*•>])\s+", "", riga)
+            riga = re.sub(r"\s+#+$", "", riga)
+            parti.append(frase(inline(riga)))
+        else:
+            paragrafo.append(inline(riga))
+        i += 1
+    chiudi_paragrafo(pausa=False)
+    return " ".join(p for p in parti if p)
 
 
 def _ps_string(valore: str) -> str:
@@ -899,7 +1130,13 @@ def allinea_volume_ingresso() -> None:
 
 
 def ferma_voce() -> None:
-    """Ferma la lettura in corso (uccide il PowerShell precedente)."""
+    """Ferma il PowerShell e svuota l'attesa, conservando l'ultima risposta
+    per Rileggi. Il PID e' condiviso anche dal lettore dell'hook."""
+    try:
+        if voce_agenti is not None:
+            voce_agenti.svuota_pendenti()
+    except Exception:
+        logging.exception("errore svuotamento attesa voce")
     try:
         pid = PID_FILE.read_text().strip()
     except Exception:
@@ -916,11 +1153,15 @@ def ferma_voce() -> None:
 
 
 def pronuncia(testo: str) -> None:
-    """Legge il testo ad alta voce con la voce italiana di Windows. Non blocca."""
+    """Annuncio del toggle: stop esplicito, poi lo stesso lettore delle
+    risposte. PowerShell diretto resta solo nelle installazioni senza hook."""
     testo = pulisci_per_voce(testo)
     if not testo:
         return
     ferma_voce()  # una voce per volta
+    if voce_agenti is not None:
+        voce_agenti.metti_in_lettura(testo, origine={"id": "generale", "nome": ""})
+        return
     p = subprocess.Popen(
         _ps_voce(VOCE_RATE, VOCE_NOME),
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -1096,11 +1337,11 @@ def destinazione_agente(nome_app="", url=""):
     finestra, le app desktop e i terminali il proprio nome."""
     nome = str(nome_app or "").strip().lower()
     indirizzo = str(url or "").strip().lower()
-    if any(marcatore in nome for marcatore in ("chatgpt", "claude", "codex")):
+    if any(marcatore in nome for marcatore in ("chatgpt", "claude", "codex", "antigravity", "gemini")):
         return True
     return any(
         dominio in indirizzo
-        for dominio in ("chatgpt.com", "chat.openai.com", "claude.ai")
+        for dominio in ("chatgpt.com", "chat.openai.com", "claude.ai", "gemini.google.com")
     )
 
 
@@ -1134,28 +1375,37 @@ def audio_callback(indata, frames, current_time, status) -> None:
 
 
 def start_recording() -> None:
-    global blocks, rms_blocks, stream, recording, recording_started_at, sessione_progressiva
+    global blocks, rms_blocks, stream, recording, recording_started_at
+    global sessione_progressiva, turno_utente_token
     if recording:
+        coda_dettature.annulla_avvio()
         return
-    ferma_voce()  # se l'agente sta parlando, ti zittisco: tocca a te
-    blocks = []
-    rms_blocks = []
-    livelli.extend([0.0] * N_BARRE)
-    stream = sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=1,
-        dtype="float32",
-        callback=audio_callback,
-    )
-    stream.start()
-    recording = True
-    recording_started_at = time.monotonic()
-    logging.info("registrazione avviata")
-    eventi.put("ascolto")
-    beep(880, 80)
-    if PROGRESSIVA:
-        sessione_progressiva = SessioneProgressiva(blocks, rms_blocks)
-        sessione_progressiva.avvia()
+    turno_utente_token = apri_turno_utente()
+    coda_dettature.apri(turno_utente_token)
+    try:
+        ferma_voce()  # se l'agente sta parlando, ti zittisco: tocca a te
+        blocks = []
+        rms_blocks = []
+        livelli.extend([0.0] * N_BARRE)
+        stream = sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=1,
+            dtype="float32",
+            callback=audio_callback,
+        )
+        stream.start()
+        recording = True
+        recording_started_at = time.monotonic()
+        logging.info("registrazione avviata")
+        eventi.put("ascolto")
+        beep(880, 80)
+        if PROGRESSIVA:
+            sessione_progressiva = SessioneProgressiva(blocks, rms_blocks)
+            sessione_progressiva.avvia()
+    except Exception:
+        _concludi_dettatura(turno_utente_token)
+        turno_utente_token = None
+        raise
 
 
 def finestra_frontale():
@@ -1221,6 +1471,10 @@ def riattiva_bersaglio(hwnd) -> None:
 _UIA_EDIT, _UIA_DOCUMENT = 50004, 50030  # ControlType: Edit, Document
 _UIA_PROP_CONTROLTYPE = 30003
 _UIA_SCOPE_DISCENDENTI = 4
+# Gemella di AX_ATTESA_RISVEGLIO_SEC del Mac (17/09/2026): le app Chromium/
+# Electron costruiscono l'albero UI Automation solo dopo il primo tocco. Se il
+# primo giro e' vuoto si aspetta questo tempo e si riguarda una volta.
+ATTESA_RISVEGLIO_SEC = 0.5
 
 
 def _client_uia():
@@ -1257,21 +1511,38 @@ def metti_cursore_in_casella(hwnd):
             uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_EDIT),
             uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_DOCUMENT),
         )
-        trovate = radice.FindAll(_UIA_SCOPE_DISCENDENTI, condizione)
-        rett_finestra = radice.CurrentBoundingRectangle
-        altezza_finestra = rett_finestra.bottom - rett_finestra.top
-        candidate = []
-        for i in range(trovate.Length):
-            elemento = trovate.GetElement(i)
-            r = elemento.CurrentBoundingRectangle
-            # parte bassa della finestra (chat) o area alta almeno meta'
-            # finestra (documento): mai le barre in alto, che sono alte poco
-            if not casella_ammissibile(
-                r.top, r.bottom - r.top, rett_finestra.top, altezza_finestra
-            ):
-                continue
-            candidate.append((elemento, (r.top, r.right - r.left)))
+
+        def caselle():
+            trovate = radice.FindAll(_UIA_SCOPE_DISCENDENTI, condizione)
+            rett_finestra = radice.CurrentBoundingRectangle
+            altezza_finestra = rett_finestra.bottom - rett_finestra.top
+            candidate = []
+            for i in range(trovate.Length):
+                elemento = trovate.GetElement(i)
+                r = elemento.CurrentBoundingRectangle
+                # parte bassa della finestra (chat) o area alta almeno meta'
+                # finestra (documento): mai le barre in alto, che sono alte poco
+                if not casella_ammissibile(
+                    r.top, r.bottom - r.top, rett_finestra.top, altezza_finestra
+                ):
+                    continue
+                candidate.append((elemento, (r.top, r.right - r.left)))
+            return candidate
+
+        candidate = caselle()
         scelta = scegli_casella([geometria for _, geometria in candidate])
+        if scelta is None:
+            # guscio vuoto di un'app Chromium/Electron appena toccata? si
+            # aspetta che l'albero si accenda e si riguarda UNA volta
+            time.sleep(ATTESA_RISVEGLIO_SEC)
+            fuoco = uia.GetFocusedElement()
+            if fuoco is not None and fuoco.CurrentControlType in (_UIA_EDIT, _UIA_DOCUMENT):
+                logging.info("cursore automatico: casella gia' a fuoco, vista al secondo giro")
+                return True
+            candidate = caselle()
+            scelta = scegli_casella([geometria for _, geometria in candidate])
+            if scelta is not None:
+                logging.info("cursore automatico: casella trovata al secondo giro")
         if scelta is None:
             logging.info("cursore automatico: nessuna casella di testo nella finestra")
             return False
@@ -1286,48 +1557,65 @@ def metti_cursore_in_casella(hwnd):
 
 def stop_recording() -> None:
     global stream, recording, recording_started_at, sessione_progressiva
-    if not recording:
-        return
-    finestra_bersaglio = finestra_frontale()  # bersaglio: la finestra davanti ORA, non a fine pulizia
-    recording = False
-    sessione, sessione_progressiva = sessione_progressiva, None
-    if sessione is not None:
-        sessione.ferma()  # niente nuovi tagli: la coda la fa il thread di incolla
-    started = recording_started_at
-    recording_started_at = None
-    if stream is not None:
-        stream.stop()
-        stream.close()
-        stream = None
-    logging.info("registrazione fermata")
-    beep(660, 80)
+    global turno_utente_token
+    token_turno, turno_utente_token = turno_utente_token, None
+    try:
+        if not recording:
+            _concludi_dettatura(token_turno)
+            return
+        finestra_bersaglio = finestra_frontale()  # bersaglio: la finestra davanti ORA, non a fine pulizia
+        recording = False
+        sessione, sessione_progressiva = sessione_progressiva, None
+        if sessione is not None:
+            sessione.ferma()  # niente nuovi tagli: la coda la fa il thread di incolla
+        started = recording_started_at
+        recording_started_at = None
+        if stream is not None:
+            stream.stop()
+            stream.close()
+            stream = None
+        logging.info("registrazione fermata")
+        beep(660, 80)
 
-    if not blocks or started is None:
-        eventi.put("nascosto")
-        return
-    duration = time.monotonic() - started
-    if duration < MIN_RECORDING_SEC:
-        eventi.put("nascosto")
-        return
+        if not blocks or started is None:
+            _concludi_dettatura(token_turno)
+            eventi.put("nascosto")
+            return
+        duration = time.monotonic() - started
+        if duration < MIN_RECORDING_SEC:
+            _concludi_dettatura(token_turno)
+            eventi.put("nascosto")
+            return
 
-    audio = np.concatenate(blocks, axis=0)[:, 0]
-    rms = float(np.sqrt(np.mean(audio ** 2)))
-    if audio_fuori_scala(rms):  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
-        logging.warning("scartato: audio fuori scala (rms %.2f > 1), stream corrotto", rms)
-        eventi.put("nascosto")
-        return
-    if not has_voice(audio):
-        # il Mac lo scriveva, qui si scartava in silenzio: senza questa riga
-        # una dettatura persa non lasciava alcuna traccia da diagnosticare.
-        logging.info("scartato: volume sotto soglia (mic muto/occupato?)")
-        eventi.put("nascosto")
-        ripara_guadagno_ingresso(rms)
-        return
+        audio = np.concatenate(blocks, axis=0)[:, 0]
+        rms = float(np.sqrt(np.mean(audio ** 2)))
+        if audio_fuori_scala(rms):  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
+            logging.warning("scartato: audio fuori scala (rms %.2f > 1), stream corrotto", rms)
+            _concludi_dettatura(token_turno)
+            eventi.put("nascosto")
+            return
+        if not has_voice(audio):
+            # il Mac lo scriveva, qui si scartava in silenzio: senza questa riga
+            # una dettatura persa non lasciava alcuna traccia da diagnosticare.
+            logging.info("scartato: volume sotto soglia (mic muto/occupato?)")
+            _concludi_dettatura(token_turno)
+            eventi.put("nascosto")
+            ripara_guadagno_ingresso(rms)
+            return
 
-    eventi.put("trascrivo")
-    threading.Thread(
-        target=transcribe_and_paste, args=(audio, finestra_bersaglio, sessione), daemon=True
-    ).start()
+        eventi.put("trascrivo")
+        threading.Thread(
+            target=transcribe_and_paste,
+            args=(audio, finestra_bersaglio, sessione, token_turno), daemon=True,
+        ).start()
+    except Exception:
+        logging.getLogger("voce").exception("errore chiusura registrazione")
+        recording = False
+        recording_started_at = None
+        if sessione_progressiva is not None:
+            sessione_progressiva.ferma()
+            sessione_progressiva = None
+        _concludi_dettatura(token_turno, fallita=True)
 
 
 class SessioneProgressiva:
@@ -1424,7 +1712,10 @@ def _trascrivi_con_sessione(audio: np.ndarray, sessione) -> str:
     return unisci_segmenti(pezzi, CFG.get("glossario", []))
 
 
-def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio, sessione=None) -> None:
+def transcribe_and_paste(
+    audio: np.ndarray, finestra_bersaglio, sessione=None, token_turno=None,
+) -> None:
+    fallita = False
     try:
         try:
             conservato = salva_audio_recente(
@@ -1438,7 +1729,7 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio, sessione=None) -
         text = _trascrivi_con_sessione(audio, sessione)
         if e_allucinazione(text):
             logging.info("scartato come allucinazione (%d caratteri)", len(text))
-            eventi.put("nascosto")
+            text = ""
             return
         text = applica_sostituzioni(text, CFG.get("sostituzioni", {}))
         text = converti_punteggiatura_dettata(text)
@@ -1453,13 +1744,33 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio, sessione=None) -
         # dettatura per 20s: ora il grezzo viene incollato subito.
         if CFG.get("debug_dettature", False) and text:
             logging.info("grezzo: %s", text)
+    except Exception:
+        logging.exception("errore trascrizione")
+        text = ""
+        fallita = True
+    finally:
+        _concludi_dettatura(token_turno, text, finestra_bersaglio, fallita)
+
+
+def _concludi_dettatura(token, testo="", bersaglio=None, fallita=False):
+    coda_dettature.completa(token, testo, bersaglio, fallita)
+    threading.Thread(target=_consegna_dettature, daemon=True).start()
+
+
+def _consegna_dettature():
+    coda_dettature.consegna_pronte(_incolla_messaggio, chiudi_turno_utente)
+    if not recording and not coda_dettature.occupata():
         eventi.put("nascosto")
-        if not text:
-            return
+
+
+def _incolla_messaggio(text, finestra_bersaglio, revisione):
+    chat_agente = destinazione_agente(nome_finestra(finestra_bersaglio))
+    try:
         riattiva_bersaglio(finestra_bersaglio)
         casella = metti_cursore_in_casella(finestra_bersaglio)
         senza_casella = casella is False  # finestra letta: di caselle non ce n'e'
-        paste_text(text, conserva_appunti=senza_casella)
+        if text:
+            paste_text(text + " ", conserva_appunti=senza_casella)
         if senza_casella:
             # incolla alla cieca: il testo resta negli Appunti (Ctrl+V dove
             # serve) e il beep avvisa che la frase NON e' arrivata
@@ -1472,25 +1783,33 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio, sessione=None) -
         # subito (dati Mac 30/08→04/09: con la pausa dei documenti il 40%
         # degli Invii veniva annullato a mano); nei documenti serve tempo per
         # correggere il testo incollato.
-        if INVIO_AUTOMATICO and not senza_casella:
+        # Gemella del Mac (13/09/2026): in una chat AI riconosciuta l'Invio
+        # parte anche senza casella leggibile. Il Ctrl+V e' gia' andato in
+        # quel punto: o il testo e' nella casella e l'Invio lo manda, o non
+        # c'e' niente da mandare. Fuori dalle chat AI resta la prudenza.
+        if INVIO_AUTOMATICO and (not senza_casella or chat_agente):
             attesa = ritardo_invio(CFG, voce_attiva(), chat_agente)
             time.sleep(0.15)  # il Ctrl+V sintetico non conta come gesto dell'utente
             riferimento = time.monotonic()
             trascorso = 0.0
-            annullato = False
-            while trascorso < attesa:
+            annullato = (key_down or recording
+                         or not coda_dettature.puo_inviare(revisione))
+            while not annullato and trascorso < attesa:
                 time.sleep(min(0.1, attesa - trascorso))
                 trascorso = time.monotonic() - riferimento
                 if invio_da_annullare(
                     ultima_pressione_utente, riferimento, recording
-                ):
+                ) or key_down or not coda_dettature.puo_inviare(revisione):
                     annullato = True
                     break
+            annullato = (annullato or key_down or recording
+                         or not coda_dettature.puo_inviare(revisione))
             if annullato:
                 logging.info(
                     "invio automatico ANNULLATO "
                     "(tasto premuto o nuova dettatura in corso)"
                 )
+                return revisione >= 0 and not coda_dettature.puo_inviare(revisione)
             else:
                 keyboard_controller.press(Key.enter)
                 keyboard_controller.release(Key.enter)
@@ -1499,7 +1818,6 @@ def transcribe_and_paste(audio: np.ndarray, finestra_bersaglio, sessione=None) -
         print("Inserito:", text)
     except Exception:
         logging.exception("errore trascrizione/incolla")
-        eventi.put("nascosto")
         print("Errore durante la trascrizione. Dettagli in voice.log")
 
 
@@ -1634,6 +1952,7 @@ def on_press(key) -> None:
     global key_down, voice_key_down, ultima_pressione_utente
     ultima_pressione_utente = time.monotonic()
     if key == HOTKEY and not key_down:
+        coda_dettature.interrompi_invio()
         key_down = True
         commands.put("start")
     elif TASTO_VOCE is not None and key == TASTO_VOCE and not voice_key_down:
@@ -1681,6 +2000,92 @@ class Pannello:
         self.stato = "nascosto"
         self.root.withdraw()
         self._non_rubare_focus()
+        self._crea_controlli_voce()
+
+    def _crea_controlli_voce(self) -> None:
+        """Comandi accessibili in una finestra normale; la pill resta
+        trasparente ai click e non cambia il cursore della dettatura."""
+        self.controlli_voce = tk.Toplevel(self.root)
+        self.controlli_voce.title("Voce AI")
+        self.controlli_voce.geometry("380x130")
+        self.controlli_voce.resizable(False, False)
+        self.controlli_voce.protocol("WM_DELETE_WINDOW", self._chiudi)
+        barra = tk.Menu(self.controlli_voce)
+        self.menu_voce = tk.Menu(
+            barra, tearoff=False, postcommand=self._aggiorna_menu_voce,
+        )
+        barra.add_cascade(label="Voce", menu=self.menu_voce)
+        self.controlli_voce.config(menu=barra)
+        tk.Label(
+            self.controlli_voce, text="salchiarenza.ai", font=("Segoe UI", 12),
+        ).pack(pady=(12, 4))
+        self.stato_conversazione = tk.StringVar(value="Ascolta tutte le conversazioni")
+        tk.Label(
+            self.controlli_voce, textvariable=self.stato_conversazione,
+            wraplength=355,
+        ).pack()
+        tk.Label(
+            self.controlli_voce,
+            text="Dal menu Voce scegli chi ascoltare o rileggi una risposta.",
+            wraplength=355,
+        ).pack(pady=6)
+        self.conversazione_scelta = tk.StringVar(value="")
+        self._aggiorna_menu_voce()
+
+    def _aggiorna_menu_voce(self) -> None:
+        if voce_agenti is None:
+            self.menu_voce.delete(0, "end")
+            self.menu_voce.add_command(label="Voce agenti non disponibile", state="disabled")
+            self.stato_conversazione.set("Voce agenti da completare con l'agente.")
+            return
+        try:
+            stato = voce_agenti.elenco_conversazioni()
+        except Exception:
+            logging.exception("errore lettura conversazioni voce")
+            return
+        preferita = stato["preferita"]
+        self.conversazione_scelta.set(preferita or "")
+        self.menu_voce.delete(0, "end")
+        self.menu_voce.add_command(
+            label="Rileggi ultima risposta",
+            state="normal" if stato["rileggibile"] else "disabled",
+            command=lambda: self._esegui_comando_voce(voce_agenti.rileggi_ultima),
+        )
+        self.menu_voce.add_separator()
+        self.menu_voce.add_radiobutton(
+            label="Ascolta tutte le conversazioni", variable=self.conversazione_scelta,
+            value="", command=lambda: self._esegui_comando_voce(
+                voce_agenti.scegli_conversazione, None,
+            ),
+        )
+        descrizione = "Ascolta tutte le conversazioni"
+        for conversazione in stato["conversazioni"]:
+            identificativo, nome = conversazione["id"], conversazione["nome"]
+            anteprima = conversazione["anteprima"]
+            fonte_visibile = nome + (" · " + anteprima[:55] if anteprima else "")
+            if identificativo == preferita:
+                descrizione = "Ascolta: " + fonte_visibile
+            etichetta = fonte_visibile + (" · in attesa" if conversazione["in_attesa"] else "")
+            self.menu_voce.add_radiobutton(
+                label=etichetta, variable=self.conversazione_scelta, value=identificativo,
+                command=lambda fonte=identificativo: self._esegui_comando_voce(
+                    voce_agenti.scegli_conversazione, fonte,
+                ),
+            )
+        self.stato_conversazione.set(descrizione)
+
+    def _esegui_comando_voce(self, funzione, *argomenti) -> None:
+        def esegui():
+            try:
+                funzione(*argomenti)
+            except Exception:
+                logging.exception("errore comando voce")
+            self.root.after(0, self._aggiorna_menu_voce)
+        threading.Thread(target=esegui, daemon=True).start()
+
+    def _chiudi(self) -> None:
+        ferma_voce()
+        self.root.destroy()
 
     def _non_rubare_focus(self) -> None:
         """Best-effort: rende la finestra "click-through" e non attivabile, cosi'
@@ -1748,7 +2153,10 @@ class Pannello:
     def tick(self) -> None:
         try:
             while True:
-                self.stato = eventi.get_nowait()
+                nuovo = eventi.get_nowait()
+                if recording and nuovo in ("trascrivo", "sistemo", "nascosto"):
+                    continue
+                self.stato = nuovo
                 if self.stato == "ascolto":
                     self.root.deiconify()
                 elif self.stato == "nascosto":
@@ -1769,6 +2177,7 @@ class Pannello:
 
 
 def main() -> None:
+    FLAG_TURNO_UTENTE.unlink(missing_ok=True)  # residuo di un arresto durante la dettatura
     # Rotazione a 7 giorni (gemello Mac): con debug_dettature=true il log
     # contiene il grezzo di ogni dettatura in chiaro, non deve accumularsi
     # all'infinito.
@@ -1783,6 +2192,7 @@ def main() -> None:
     print("Voice Dettatura Windows v1.3")
     print("Ctrl destro: tieni premuto, parla, rilascia -> il testo viene incollato.")
     print("Tasto Menu: accende/spegne Voce AI (le risposte sono audio sintetico).")
+    print("Finestra Voce AI: dal menu Voce rileggi una risposta o scegli la conversazione.")
     print("Chiudi questa finestra per fermare la dettatura.")
     allinea_volume_ingresso()  # ingresso basso = app muta senza motivo apparente
     threading.Thread(target=worker, daemon=True).start()

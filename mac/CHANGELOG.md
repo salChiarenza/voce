@@ -1,5 +1,62 @@
 # Changelog
 
+## 1.3.0-rc.12 - 17/09/2026 — il cursore aspetta che la finestra si accenda
+
+- Cursore automatico, secondo giro (17/09/2026): l'app Claude 2.110.x
+  costruisce l'albero Accessibility del contenuto solo dopo il primo tocco,
+  circa mezzo secondo dopo. Al primo giro si vedeva un guscio di 9 gruppi
+  senza caselle: l'app diceva "nessuna casella", incollava alla cieca e
+  suonava l'avviso "Basso" anche col cursore gia' nella chat (8 dettature su
+  8 il mattino del 17/09; "quando libero il tasto fa un rumore strano").
+  Ora, se il primo giro e' vuoto, aspetta `AX_ATTESA_RISVEGLIO_SEC` (0,5s) e
+  riguarda una volta: casella a fuoco o trovata -> si scrive li'; ancora
+  niente -> l'avviso del 30/08 resta. Il mezzo secondo si paga solo nel caso
+  vuoto. Casi coperti dalla suite; la prova vera e' il log delle dettature
+  successive nell'app Claude.
+- Antigravity (13/09/2026): la voce degli agenti parla anche dentro
+  Antigravity di Google. L'hook Stop si collega in `~/.gemini/config/hooks.json`
+  (formato suo: gestore -> eventi), il payload in camelCase viene tradotto nei
+  nostri nomi e il lettore riconosce il suo `transcript.jsonl` (`source: MODEL`).
+  La dettatura tratta Antigravity e Gemini come chat AI: grezzo immediato e
+  Invio dopo 1 secondo, come con Claude e ChatGPT. Prima il testo passava dalla
+  pulizia con pausa da documento e nessuna risposta veniva letta. Provato sul
+  transcript reale di Sal; pacchetto Drive invariato.
+- Dettature riprese (12/09): se si ricomincia mentre un pezzo trascrive,
+  si aspetta la fine di tutti i pezzi, si uniscono nell'ordine di registrazione
+  e si preme Invio una sola volta. Una nuova pressione sospende anche l'Invio
+  gia' in attesa; la ripresa senza parole lo completa senza reincollare.
+  Clipboard serializzata, finestre diverse separate, errore di trascrizione
+  conserva il testo valido senza inviare un messaggio parziale. Prove gemelle
+  Mac/Windows; attivazione locale distinta dal prossimo pacchetto Drive.
+- Interazione vocale senza sovrapposizioni: il turno di Sal resta segnalato
+  dalla registrazione fino a trascrizione, incolla e Invio. L'hook scarta una
+  risposta vecchia arrivata in quella finestra e il lettore ricontrolla prima
+  di parlare, chiudendo anche la corsa risposta-accodata/dettatura-iniziata.
+  Token distinti impediscono a una trascrizione lenta di chiudere il turno
+  piu' recente. Il caso reale del 12/09 (lettura partita durante 30 secondi di
+  dettatura) e' coperto da prove automatiche.
+- Apertura delle risposte ridotta al solo nome: `ChatGPT` oppure `Claude`,
+  senza nome del progetto e senza `LeaderAI`.
+- Voce in uscita: pause, elenchi e tabelle leggibili; marcatori della chat
+  omessi, percorsi ridotti al nomefile, numeri e negazioni conservati.
+- Riascolto dall’inizio dopo uno stop e scelta esplicita fra conversazioni,
+  con anteprima nel menu. Ultima risposta per fonte e coda locale protetta
+  dalle scritture simultanee; selezionare una fonte lascia le altre in attesa.
+- Hook con sessione distinta, doppioni circoscritti alla conversazione e
+  conservazione locale dichiarata nella privacy. Voce e profilo preservati.
+
+- Il controllo testuale e il ripasso audio conservano le ipotesi nel registro
+  esistente, con la dicitura `proposte da verificare, non applicate`. Nessuna
+  risposta dell'arbitro scrive piu' il profilo o cambia le sostituzioni della
+  dettatura aperta. Le regole verificate restano utilizzabili e rimovibili
+  singolarmente dal profilo.
+- Le proposte JSON devono contenere coppie di stringhe: oggetti, liste e
+  numeri non diventano piu' parole da sostituire.
+- Prove contro il caso reale di parole corrette trasformate da regole
+  globali (`vi`, `al`, `programmata`), compreso il percorso in memoria e il
+  ripasso. Tasti, coda al rilascio e tempi di invio conservati.
+- Modifica locale da collaudare e distribuire: pacchetto Drive invariato.
+
 ## 1.3.0-rc.11 - 04/09/2026 — quattro migliorie dai registri veri
 
 Quattro interventi nati dai log reali 27/08→04/09 (1.422 dettature), fatti da quattro agenti in parallelo e fusi lo stesso giorno. Da provare a voce vera su Mac; Windows su PC reale.

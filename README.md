@@ -4,6 +4,17 @@ App di dettatura locale di **salchiarenza.ai**: tieni premuto un tasto, parli, i
 
 Mentre parli compare in basso al centro una pill con il marchio **salchiarenza.ai** e una barra di lineette verdi ad arco "a sorriso" che si muove col volume.
 
+Nella copia di lavoro del 05/09/2026 la voce legge meglio elenchi e tabelle,
+permette di rileggere l’ultima risposta e di scegliere una conversazione dal
+menu **Voce** (Mac) o dalla finestra **Voce AI** (Windows). Le istruzioni e i
+limiti di conservazione locale sono nei README e nella privacy del sistema.
+Ogni risposta parte solo con **ChatGPT** per Codex oppure **Claude** per
+Claude Code, senza pronunciare il progetto o `LeaderAI` come parte del nome.
+Il turno di chi parla ha precedenza fino all'Invio: una risposta precedente
+arrivata mentre si sta ancora dettando viene scartata e non parla sopra la
+nuova domanda.
+Queste novita’ locali entreranno nel pacchetto Drive con il prossimo rilascio.
+
 ## Due versioni
 
 | Sistema | Cartella | Dettatura | Voce on/off |

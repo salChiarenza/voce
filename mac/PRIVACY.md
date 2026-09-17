@@ -40,6 +40,16 @@ o Codex con la voce sintetica del sistema. L'accensione lo dichiara a voce e
 l'indicatore visibile mostra `AI`. L'audio viene riprodotto al momento: Voce
 non lo registra, non lo salva e non crea un file da distribuire.
 
+Per il riascolto, il file locale `LETTURA_PENDENTE` conserva il testo preparato
+per la voce dell’ultima risposta di massimo otto conversazioni, l’ultima
+lettura iniziata e la scelta di ascolto. Le conversazioni piu’ vecchie vengono
+rimosse quando arriva il limite. Fermare la voce svuota l’attesa e mantiene
+questi testi per poterli rileggere; spegnere la voce impedisce nuove risposte
+automatiche. I testi restano sul computer e non vengono pubblicati. Per
+azzerare il recupero, l’agente puo’ fermare Voce e rimuovere questo solo file
+su richiesta del proprietario. I registri della lettura contengono conteggi
+e stati, senza copiare il testo delle risposte.
+
 ## Permessi richiesti
 
 macOS puo' chiedere microfono, accessibilita' e monitoraggio input.

@@ -35,6 +35,11 @@ Due versioni, **stessa anima**:
 3. Funziona ovunque: tieni premuto il tasto-detta, parli, il testo si incolla dove sei.
 4. Due tasti: **detta** = tasto destro dedicato; **voce on/off** = secondo tasto.
 5. Voce agenti opzionale: legge ad alta voce le risposte dell'agente (hook `voce_hook.py`).
+   Ogni risposta parte solo con `ChatGPT` per Codex o `Claude` per Claude Code:
+   mai il nome del progetto o `LeaderAI` come parte del nome parlato.
+   Il turno dell'utente ha precedenza dalla registrazione fino all'Invio:
+   risposte precedenti arrivate in quella finestra si scartano, anche se erano
+   gia' state accodate; i turni sovrapposti si chiudono soltanto col loro token.
 6. Audio e trascrizione Whisper locali in italiano; gli eventuali passaggi
    online della pulizia testo opzionale sono dichiarati e disattivabili.
 7. Marchio, colore, forma pill in `config.json` con gli **stessi valori**.

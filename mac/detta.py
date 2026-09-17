@@ -13,6 +13,7 @@ import queue
 import subprocess
 import sys
 import threading
+import json
 import time
 
 import numpy as np
@@ -27,7 +28,8 @@ from pynput.keyboard import Controller, Key
 
 from voce_lib import (
     carica_config, config_scrivibile, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
-    mani_libere_attive, FLAG_MANI_LIBERE_ON, BASE,
+    mani_libere_attive, FLAG_MANI_LIBERE_ON, FLAG_TURNO_UTENTE, BASE,
+    apri_turno_utente, chiudi_turno_utente, CodaDettature,
     c_e_voce, aggiorna_scarti_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     diagnosi_audio_muto, GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
     corsia_utilizzabile, registra_esito_corsia, SOGLIA_GUASTI_CORSIA, RIPOSO_CORSIA_SEC,
@@ -36,12 +38,15 @@ from voce_lib import (
     serve_pulizia, comando_agente, comandi_agente, destinazione_agente, ritardo_invio,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
-    casella_ammissibile,
+    casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
     SOGLIA_SILENZIO_PROGRESSIVA, BLOCCO_PROGRESSIVO_SEC,
 )
-from parla import ferma as ferma_voce, parla as pronuncia
+from parla import (
+    ferma as ferma_voce, parla as pronuncia, elenco_conversazioni,
+    scegli_conversazione, rileggi_ultima,
+)
 
 cfg = carica_config()
 TASTO = getattr(Key, cfg["hotkey"])
@@ -81,6 +86,8 @@ pre_registrazione = collections.deque(maxlen=32)
 # registrazione in corso (None se spenta o fuori registrazione).
 rms_blocchi = []
 sessione_progressiva = None
+turno_utente_token = None  # resta aperto fino a trascrizione, incolla e Invio
+coda_dettature = CodaDettature()
 PROGRESSIVA = bool(cfg.get("trascrizione_progressiva", False))
 PROGRESSIVA_BLOCCO_SEC = float(cfg.get("trascrizione_progressiva_blocco_sec", BLOCCO_PROGRESSIVO_SEC))
 PROGRESSIVA_SOGLIA_SILENZIO = float(cfg.get("trascrizione_progressiva_soglia_silenzio", SOGLIA_SILENZIO_PROGRESSIVA))
@@ -298,18 +305,45 @@ def stop_se_registrazione_troppo_lunga():
 indicatore_menu = AppKit.NSStatusBar.systemStatusBar().statusItemWithLength_(
     AppKit.NSVariableStatusItemLength
 )
-indicatore_menu.setVisible_(False)
+indicatore_menu.setVisible_(True)
+_stato_menu = None
 
 
-def aggiorna_indicatore_menu():
-    """🎙️ = mani libere attiva, 🔊 AI = voce agenti accesa (anche insieme).
-    Niente di attivo = icona nascosta."""
-    titolo = ("🎙️" if mani_libere_attive() else "") + ("🔊 AI" if voce_attiva() else "")
-    if titolo:
-        indicatore_menu.button().setTitle_(titolo)
-        indicatore_menu.setVisible_(True)
-    else:
-        indicatore_menu.setVisible_(False)
+def aggiorna_indicatore_menu(gestore):
+    """Accesso stabile al riascolto e alla scelta esplicita della conversazione."""
+    global _stato_menu
+    stato = elenco_conversazioni()
+    titolo = ("🎙️ " if mani_libere_attive() else "") + ("🔊 AI · Voce" if voce_attiva() else "Voce")
+    firma = (titolo, json.dumps(stato, sort_keys=True, ensure_ascii=False))
+    if firma == _stato_menu:
+        return
+    indicatore_menu.button().setTitle_(titolo)
+    menu = AppKit.NSMenu.alloc().initWithTitle_("Voce")
+    menu.setAutoenablesItems_(False)
+
+    def aggiungi(testo, azione, valore=None, scelto=False, attivo=True):
+        voce = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(testo, azione, "")
+        voce.setTarget_(gestore)
+        voce.setRepresentedObject_(valore)
+        voce.setEnabled_(attivo)
+        voce.setState_(1 if scelto else 0)
+        menu.addItem_(voce)
+
+    aggiungi("Rileggi l’ultima risposta", "rileggiVoce:", attivo=stato["rileggibile"])
+    menu.addItem_(AppKit.NSMenuItem.separatorItem())
+    aggiungi("Ascolta tutte le conversazioni", "scegliConversazione:",
+             scelto=stato["preferita"] is None)
+    for fonte in stato["conversazioni"]:
+        anteprima = " ".join(fonte["anteprima"].split())[:64]
+        etichetta = fonte["nome"] or "Agente"
+        if anteprima:
+            etichetta += " · " + anteprima
+        if fonte["in_attesa"]:
+            etichetta += " (in attesa)"
+        aggiungi(etichetta, "scegliConversazione:", fonte["id"],
+                 scelto=stato["preferita"] == fonte["id"])
+    indicatore_menu.setMenu_(menu)
+    _stato_menu = firma
 
 
 class GestorePannello(AppKit.NSObject):
@@ -318,6 +352,13 @@ class GestorePannello(AppKit.NSObject):
     stato = "nascosto"
     _tick = 0
     _mini_visibile = False
+
+    def rileggiVoce_(self, sender):
+        threading.Thread(target=rileggi_ultima, daemon=True).start()
+
+    def scegliConversazione_(self, sender):
+        identita = sender.representedObject()
+        threading.Thread(target=scegli_conversazione, args=(identita,), daemon=True).start()
 
     def _aggiorna_mini(self):
         """Microfonino mani-libere: visibile finche' la modalita' e' ON,
@@ -338,6 +379,8 @@ class GestorePannello(AppKit.NSObject):
         try:
             while True:
                 nuovo = eventi.get_nowait()
+                if registrando and nuovo in ("trascrivo", "sistemo", "nascosto"):
+                    continue
                 self.stato = nuovo
                 if nuovo == "ascolto":
                     posiziona_pannello()
@@ -377,7 +420,7 @@ class GestorePannello(AppKit.NSObject):
         self._tick += 1
         esegui_sicuro(self._aggiorna_mini)  # microfonino mani-libere: pulsa a ogni tick
         if self._tick % 6 == 0:  # ogni ~0.5s: icona di stato nella barra menu
-            esegui_sicuro(aggiorna_indicatore_menu)
+            esegui_sicuro(lambda: aggiorna_indicatore_menu(self))
         if self._tick % 25 == 0:
             global listener
             if listener is not None and not listener.is_alive():
@@ -556,6 +599,12 @@ AX_BUDGET_SEC = 0.5      # tempo massimo di ricerca nella finestra
 # casella di testo nella finestra"). Misurato ~15.000 elementi/secondo: 4000
 # stanno comodi nel budget di tempo, che resta la vera cintura di sicurezza.
 AX_MAX_ELEMENTI = 4000
+# Le app Electron (Claude 2.110.x, misurato 17/09/2026) costruiscono l'albero
+# Accessibility del contenuto solo DOPO il primo tocco, circa mezzo secondo
+# dopo: al primo giro si vede un guscio di pochi gruppi senza caselle. Prima
+# di dire "caselle non ce ne sono" si aspetta questo tempo e si riguarda una
+# volta. Mezzo secondo, non uno: si paga solo quando il primo giro e' vuoto.
+AX_ATTESA_RISVEGLIO_SEC = 0.5
 
 
 def _ax_valore(elemento, attributo):
@@ -564,24 +613,61 @@ def _ax_valore(elemento, attributo):
     return valore if err == 0 else None
 
 
-def _finestra_bersaglio(ax_app):
-    """La finestra dove mettere il cursore: quella col focus, o in riserva la
-    principale, o la prima della lista. Le app Electron sotto carico a volte
-    non rispondono alla prima lettura (caso reale 29/08 13:42: tre dettature
-    con 'finestra frontale non leggibile' su app con finestre sane): una
-    lettura fallita non deve spegnere la funzione. Torna (finestra, errore)."""
-    err, finestra = AX.AXUIElementCopyAttributeValue(ax_app, AX.kAXFocusedWindowAttribute, None)
-    if err == 0 and finestra is not None:
-        return finestra, 0
-    primo_err = err
+def _altezza_schermo_massima():
+    """L'altezza del monitor piu' alto: oltre quella non c'e' una finestra,
+    c'e' la scrivania (il Finder la espone come finestra)."""
+    schermi = AppKit.NSScreen.screens()
+    return max((s.frame().size.height for s in schermi), default=float("inf"))
+
+
+def _posizione_mouse():
+    """Dove sta il puntatore ORA, in coordinate Accessibility (y verso il
+    basso). Serve solo come spareggio fra finestre, mai come condizione."""
+    punto = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+    return punto.x, punto.y
+
+
+def _finestre_bersaglio(ax_app):
+    """Le finestre dove provare a mettere il cursore, in ordine di tentativo.
+
+    Prima quella col focus, poi la principale, poi le altre. Le app Electron
+    sotto carico a volte non rispondono alla prima lettura (caso reale 29/08
+    13:42: tre dettature con 'finestra frontale non leggibile' su app con
+    finestre sane): una lettura fallita non deve spegnere la funzione.
+
+    Dal 08/09/2026 non ci si ferma alla prima: se li' dentro caselle non ce
+    ne sono, si provano le altre finestre dell'app. Le finte (la striscia da
+    33 punti di Claude, la scrivania del Finder) restano fuori, e il mouse,
+    se sta dentro una di queste finestre, sposta solo la precedenza.
+    Torna (finestre credibili, errore di lettura del focus, finestre lette
+    in tutto): l'ultimo numero distingue "non ho potuto guardare" da "ho
+    guardato e non c'e' posto dove scrivere"."""
+    finestre, primo_err = [], 0
+    err, focalizzata = AX.AXUIElementCopyAttributeValue(ax_app, AX.kAXFocusedWindowAttribute, None)
+    if err == 0 and focalizzata is not None:
+        finestre.append(focalizzata)
+    else:
+        primo_err = err
     for attributo in (AX.kAXMainWindowAttribute, "AXWindows"):
-        err2, valore = AX.AXUIElementCopyAttributeValue(ax_app, attributo, None)
-        if err2 == 0 and valore is not None:
-            if attributo == "AXWindows":
-                valore = valore[0] if len(valore) else None
-            if valore is not None:
-                return valore, primo_err
-    return None, primo_err
+        valore = _ax_valore(ax_app, attributo)
+        if valore is None:
+            continue
+        elenco = list(valore) if attributo == "AXWindows" else [valore]
+        finestre.extend(el for el in elenco if el is not None)
+
+    massima = _altezza_schermo_massima()
+    viste, candidate, geometrie = set(), [], []
+    for finestra in finestre:
+        geometria = _ax_geometria(finestra)
+        if not finestra_credibile(geometria, massima):
+            continue
+        if geometria in viste:  # la stessa finestra torna da piu' attributi
+            continue
+        viste.add(geometria)
+        candidate.append(finestra)
+        geometrie.append(geometria)
+    ordine = ordina_finestre(geometrie, _posizione_mouse())
+    return ([(candidate[i], geometrie[i]) for i in ordine], primo_err, len(finestre))
 
 
 def _ax_geometria(elemento):
@@ -639,16 +725,67 @@ def _click_sintetico(geometria):
     Quartz.CGWarpMouseCursorPosition(posizione_prima)
 
 
+def _cerca_casella(ax_app, finestra, geo_dichiarata, con_pagina):
+    """La casella dove scrivere dentro UNA finestra: (elemento, geometria)
+    oppure None. Nei browser il focus sta spesso sulla pagina (AXWebArea):
+    si cerca prima DENTRO la pagina, saltando la struttura del browser; la
+    finestra intera resta il secondo giro."""
+    radici = []
+    if con_pagina:
+        focalizzato = _ax_valore(ax_app, AX.kAXFocusedUIElementAttribute)
+        if focalizzato is not None and _ax_valore(focalizzato, AX.kAXRoleAttribute) == "AXWebArea":
+            radici.append(focalizzato)
+    radici.append(finestra)
+    for radice in radici:
+        trovate = _caselle_nella_finestra(radice)
+        # la finestra dichiarata da Chrome non copre i suoi stessi pezzi:
+        # la fascia di scrittura si misura sul rettangolo vero
+        cornice = cornice_reale(geo_dichiarata, [g for _, g in trovate])
+        # parte bassa della finestra (chat) o area alta almeno meta' finestra
+        # (documento): mai le barre in alto, che sono alte poco
+        caselle = [
+            (el, g) for el, g in trovate
+            if casella_ammissibile(g[1], g[3], cornice[1], cornice[3])
+        ]
+        scelta = scegli_casella([(g[1], g[2]) for _, g in caselle])
+        if scelta is not None:
+            return caselle[scelta]
+    return None
+
+
+def _casella_nelle_finestre(ax_app, finestre, log):
+    """La prima casella di scrittura provando le finestre nell'ordine dato:
+    (elemento, geometria) oppure None."""
+    for indice, (finestra, geo_finestra) in enumerate(finestre):
+        trovata = _cerca_casella(ax_app, finestra, geo_finestra, con_pagina=(indice == 0))
+        if trovata is not None:
+            if indice:
+                log.info("cursore automatico: casella trovata nella finestra %s di %s",
+                         indice + 1, len(finestre))
+            return trovata
+    return None
+
+
 def metti_cursore_in_casella(app):
     """Se nell'app bersaglio nessuna casella di testo ha il focus, mette il
-    cursore nella casella di scrittura della finestra frontale (nelle chat
-    sta in fondo). Prima per via gentile (focus Accessibility), poi con un
-    click fatto dal programma. Se non trova caselle non tocca niente.
+    cursore nella casella di scrittura (nelle chat sta in fondo). Prima per
+    via gentile (focus Accessibility), poi con un click fatto dal programma.
+    Se non trova caselle non tocca niente.
+
+    Si provano tutte le finestre credibili dell'app, non solo la prima:
+    quella dichiarata col focus a volte e' una striscia vuota o la scrivania
+    (08/09/2026), e li' la dettatura finiva nel vuoto.
+
+    Se al primo giro caselle non se ne vedono si aspetta AX_ATTESA_RISVEGLIO_SEC
+    e si riguarda una volta: le app Electron (Claude 2.110.x, 17/09/2026)
+    espongono il contenuto solo dopo il primo tocco Accessibility, e la
+    dettatura finiva "alla cieca" con l'avviso sonoro anche se il cursore
+    stava gia' nella chat.
 
     Torna True se un posto dove scrivere c'e' (focus gia' giusto, o messo);
-    False SOLO quando la finestra e' leggibile e di caselle non ce n'e'
+    False SOLO quando le finestre sono leggibili e di caselle non ce n'e'
     proprio (li' l'incolla andrebbe nel vuoto); None quando non si sa
-    (cursore automatico spento, finestra AX illeggibile: la casella puo'
+    (cursore automatico spento, finestre AX illeggibili: la casella puo'
     esserci comunque e si incolla come sempre)."""
     if app is None or not cfg.get("cursore_automatico", True):
         return None
@@ -656,37 +793,36 @@ def metti_cursore_in_casella(app):
     ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
     if _focus_in_casella(ax_app):
         return True  # il cursore e' gia' al posto giusto
-    finestra, err_focus = _finestra_bersaglio(ax_app)
-    if finestra is None:
-        log.info("cursore automatico: finestra frontale non leggibile (errore AX %s)", err_focus)
+    finestre, err_focus, lette = _finestre_bersaglio(ax_app)
+    if not finestre:
+        if lette:
+            # finestre ce n'erano, ma solo finte (striscia vuota, scrivania):
+            # un posto dove scrivere qui non c'e', e il testo va tenuto
+            log.info("cursore automatico: %s finestre, nessuna dove si possa scrivere", lette)
+            return False
+        log.info("cursore automatico: nessuna finestra leggibile (errore AX %s)", err_focus)
         return None
-    geo_finestra = _ax_geometria(finestra)
-    if geo_finestra is None:
-        log.info("cursore automatico: geometria della finestra non leggibile")
-        return None
-    # Nei browser il focus sta spesso sulla pagina (AXWebArea): si cerca
-    # prima DENTRO la pagina, saltando la struttura del browser; la finestra
-    # intera resta il secondo giro.
-    radici = []
-    focalizzato = _ax_valore(ax_app, AX.kAXFocusedUIElementAttribute)
-    if focalizzato is not None and _ax_valore(focalizzato, AX.kAXRoleAttribute) == "AXWebArea":
-        radici.append(focalizzato)
-    radici.append(finestra)
-    caselle, scelta = [], None
-    for radice in radici:
-        # parte bassa della finestra (chat) o area alta almeno meta' finestra
-        # (documento): mai le barre in alto, che sono alte poco
-        caselle = [
-            (el, g) for el, g in _caselle_nella_finestra(radice)
-            if casella_ammissibile(g[1], g[3], geo_finestra[1], geo_finestra[3])
-        ]
-        scelta = scegli_casella([(g[1], g[2]) for _, g in caselle])
-        if scelta is not None:
-            break
-    if scelta is None:
-        log.info("cursore automatico: nessuna casella di testo nella finestra")
+    trovata = _casella_nelle_finestre(ax_app, finestre, log)
+    if trovata is None:
+        # guscio vuoto di un'app Electron appena toccata? si aspetta che
+        # l'albero si accenda e si riguarda UNA volta (vedi AX_ATTESA_RISVEGLIO_SEC)
+        time.sleep(AX_ATTESA_RISVEGLIO_SEC)
+        if _focus_in_casella(ax_app):
+            log.info("cursore automatico: casella gia' a fuoco, vista al secondo giro (attesa %.1fs)",
+                     AX_ATTESA_RISVEGLIO_SEC)
+            return True
+        finestre_dopo, _, _ = _finestre_bersaglio(ax_app)
+        if finestre_dopo:
+            finestre = finestre_dopo
+            trovata = _casella_nelle_finestre(ax_app, finestre, log)
+        if trovata is not None:
+            log.info("cursore automatico: casella trovata al secondo giro (attesa %.1fs)",
+                     AX_ATTESA_RISVEGLIO_SEC)
+    if trovata is None:
+        log.info("cursore automatico: nessuna casella di testo nelle %s finestre dell'app",
+                 len(finestre))
         return False
-    elemento, geometria = caselle[scelta]
+    elemento, geometria = trovata
     AX.AXUIElementSetAttributeValue(elemento, AX.kAXFocusedAttribute, True)
     time.sleep(0.1)
     if _focus_in_casella(ax_app):
@@ -843,22 +979,33 @@ def _nascondi_o_arma():
 
 
 def avvia_registrazione():
-    global blocchi, rms_blocchi, registrando, inizio_registrazione, sessione_progressiva
-    ferma_voce()  # ti zittisco se parlo io: tocca a te
-    # si parte dall'anello di pre-registrazione: il VAD scatta quando gia'
-    # stai parlando, senza questi blocchi la prima parola andrebbe persa
-    blocchi = list(pre_registrazione)
-    rms_blocchi = [float(np.sqrt(np.mean(b ** 2))) for b in blocchi]
-    pre_registrazione.clear()
-    livelli.extend([0.0] * BARRE)
-    registrando = True
-    inizio_registrazione = time.monotonic()
-    logging.getLogger("voce").info("registrazione avviata")
-    suono("Pop")
-    eventi.put("ascolto")
-    if PROGRESSIVA:
-        sessione_progressiva = SessioneProgressiva(blocchi, rms_blocchi)
-        sessione_progressiva.avvia()
+    global blocchi, rms_blocchi, registrando, inizio_registrazione
+    global sessione_progressiva, turno_utente_token
+    if registrando:
+        coda_dettature.annulla_avvio()
+        return
+    turno_utente_token = apri_turno_utente()
+    coda_dettature.apri(turno_utente_token)
+    try:
+        ferma_voce()  # ti zittisco se parlo io: tocca a te
+        # si parte dall'anello di pre-registrazione: il VAD scatta quando gia'
+        # stai parlando, senza questi blocchi la prima parola andrebbe persa
+        blocchi = list(pre_registrazione)
+        rms_blocchi = [float(np.sqrt(np.mean(b ** 2))) for b in blocchi]
+        pre_registrazione.clear()
+        livelli.extend([0.0] * BARRE)
+        registrando = True
+        inizio_registrazione = time.monotonic()
+        logging.getLogger("voce").info("registrazione avviata")
+        suono("Pop")
+        eventi.put("ascolto")
+        if PROGRESSIVA:
+            sessione_progressiva = SessioneProgressiva(blocchi, rms_blocchi)
+            sessione_progressiva.avvia()
+    except Exception:
+        _concludi_dettatura(turno_utente_token)
+        turno_utente_token = None
+        raise
 
 
 _lock_trascrizione = threading.Lock()
@@ -962,7 +1109,9 @@ def _trascrivi_con_sessione(audio, sessione):
     return _rifinisci(unisci_segmenti(pezzi, cfg.get("glossario", [])))
 
 
-def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio, sessione=None):
+def _trascrivi_e_incolla(
+    audio, app_bersaglio, scheda_bersaglio, sessione=None, token_turno=None,
+):
     """Parte pesante (Whisper ~2-3s + incolla): gira su un thread a parte e
     blindata. Se girasse sul thread della tastiera, macOS la vedrebbe "appesa"
     e disabiliterebbe l'hotkey; e un suo errore ucciderebbe il listener.
@@ -972,6 +1121,7 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio, sessione=None):
     Sal cambia pagina o scheda, il testo deve arrivare comunque li', non dove
     si trova ora il focus."""
     log = logging.getLogger("voce")
+    fallita = False
     try:
         conservato = esegui_sicuro(
             salva_audio_recente, audio, BASE / "audio_recenti",
@@ -1034,58 +1184,94 @@ def _trascrivi_e_incolla(audio, app_bersaglio, scheda_bersaglio, sessione=None):
             if pulito is None:
                 log.info("pulizia veloce non riuscita: uso subito il grezzo")
             testo = pulito or testo
-        _nascondi_o_arma()
-        if testo:
-            riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
-            casella = esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
-            senza_casella = casella is False  # finestra letta: di caselle non ce n'e'
-            incolla(testo, conserva_appunti=senza_casella)
-            if senza_casella:
-                # l'incolla e' partito alla cieca: il testo resta negli
-                # Appunti (Cmd+V dove serve) e il suono diverso avvisa che
-                # la frase NON e' arrivata (caso 30/08: frase incollata nel
-                # vuoto e persa col ripristino degli Appunti)
-                suono("Basso")
-                log.info("incollato alla cieca: testo conservato negli Appunti")
-            log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
-            # invio automatico: parte sempre (indipendente dal toggle voce
-            # agenti). La PAUSA prima dell'Invio dipende dal contesto: a voce
-            # ON e' botta e risposta (breve); in una chat AI a voce OFF il
-            # testo si vede e parte quasi subito (dati 30/08→04/09: con la
-            # pausa dei documenti il 40% degli Invii veniva annullato da Sal
-            # che premeva Invio a mano); nei documenti serve tempo per
-            # correggere. Durante l'attesa, QUALSIASI tasto premuto da Sal o
-            # una nuova registrazione gia' in corso ANNULLANO l'Invio
-            # (richiesta 06/07: "se clicco un tasto l'invio si deve
-            # bloccare" — stava aggiungendo una seconda frase e la prima e'
-            # partita da sola). La frase resta incollata: partira' con
-            # l'Invio del turno successivo, tutto insieme.
-            if cfg.get("invio_automatico", True) and not senza_casella:
-                # senza una casella vera l'Invio andrebbe su un focus ignoto:
-                # in una pagina puo' essere un bottone qualunque
-                attesa = ritardo_invio(cfg, voce_attiva(), chat_agente)
-                time.sleep(0.15)  # margine: il Cmd+V dell'incolla non deve contare come "tasto di Sal"
-                riferimento = time.monotonic()
-                trascorso = 0.0
-                annullato = False
-                while trascorso < attesa:
-                    time.sleep(min(0.1, attesa - trascorso))
-                    trascorso = time.monotonic() - riferimento
-                    if ultima_pressione_utente > riferimento or registrando:
-                        annullato = True
-                        break
-                if annullato:
-                    log.info("invio automatico ANNULLATO (tasto premuto o nuova dettatura in corso)")
-                else:
-                    tastiera.press(Key.enter)
-                    tastiera.release(Key.enter)
-                    log.info("invio automatico premuto (attesa %.1fs%s)",
-                             attesa, ", chat AI" if chat_agente else "")
-        else:
-            log.info("niente da incollare (testo vuoto dopo trascrizione/pulizia)")
     except Exception:
-        log.exception("errore in trascrizione/incolla")
+        log.exception("errore in trascrizione")
+        testo = ""
+        fallita = True
+    finally:
+        _concludi_dettatura(token_turno, testo, (app_bersaglio, scheda_bersaglio), fallita)
+
+
+def _concludi_dettatura(token, testo="", bersaglio=None, fallita=False):
+    coda_dettature.completa(token, testo, bersaglio, fallita)
+    # Anche scarti e silenzi passano qui: nessun pezzo puo' lasciare la coda appesa.
+    threading.Thread(target=_consegna_dettature, daemon=True).start()
+
+
+def _consegna_dettature():
+    coda_dettature.consegna_pronte(_incolla_messaggio, chiudi_turno_utente)
+    if not registrando and not coda_dettature.occupata():
         _nascondi_o_arma()
+
+
+def _incolla_messaggio(testo, bersaglio, revisione):
+    app_bersaglio, scheda_bersaglio = bersaglio
+    chat_agente = destinazione_agente(
+        app_bersaglio.localizedName() if app_bersaglio else "", scheda_bersaglio,
+    )
+    log = logging.getLogger("voce")
+    try:
+        riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
+        casella = esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
+        senza_casella = casella is False  # finestra letta: di caselle non ce n'e'
+        if testo:
+            incolla(testo + " ", conserva_appunti=senza_casella)
+        if senza_casella:
+            # l'incolla e' partito alla cieca: il testo resta negli
+            # Appunti (Cmd+V dove serve) e il suono diverso avvisa che
+            # la frase NON e' arrivata (caso 30/08: frase incollata nel
+            # vuoto e persa col ripristino degli Appunti)
+            suono("Basso")
+            log.info("incollato alla cieca: testo conservato negli Appunti")
+        log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
+        # invio automatico: parte sempre (indipendente dal toggle voce
+        # agenti). La PAUSA prima dell'Invio dipende dal contesto: a voce
+        # ON e' botta e risposta (breve); in una chat AI a voce OFF il
+        # testo si vede e parte quasi subito (dati 30/08→04/09: con la
+        # pausa dei documenti il 40% degli Invii veniva annullato da Sal
+        # che premeva Invio a mano); nei documenti serve tempo per
+        # correggere. Durante l'attesa, QUALSIASI tasto premuto da Sal o
+        # una nuova registrazione gia' in corso ANNULLANO l'Invio
+        # (richiesta 06/07: "se clicco un tasto l'invio si deve
+        # bloccare" — stava aggiungendo una seconda frase e la prima e'
+        # partita da sola). La frase resta incollata: partira' con
+        # l'Invio del turno successivo, tutto insieme.
+        if cfg.get("invio_automatico", True) and (not senza_casella or chat_agente):
+            # senza una casella vera l'Invio andrebbe su un focus ignoto:
+            # in una pagina puo' essere un bottone qualunque. In una chat AI
+            # riconosciuta no: il Cmd+V e' gia' partito in quel punto, quindi
+            # o il testo e' nella casella e l'Invio lo manda, o non c'e'
+            # niente da mandare. Caso reale 13/09/2026: Antigravity non
+            # espone nessuna casella all'accessibilita' (finestra muta,
+            # zero elementi) e Sal doveva premere Invio a mano dopo ogni
+            # dettatura; una frase incollata e mai inviata si e' persa,
+            # sostituita dalla dettatura successiva.
+            attesa = ritardo_invio(cfg, voce_attiva(), chat_agente)
+            time.sleep(0.15)  # margine: il Cmd+V dell'incolla non deve contare come "tasto di Sal"
+            riferimento = time.monotonic()
+            trascorso = 0.0
+            annullato = (tasto_premuto or registrando
+                         or not coda_dettature.puo_inviare(revisione))
+            while not annullato and trascorso < attesa:
+                time.sleep(min(0.1, attesa - trascorso))
+                trascorso = time.monotonic() - riferimento
+                if (ultima_pressione_utente > riferimento or registrando
+                        or tasto_premuto or not coda_dettature.puo_inviare(revisione)):
+                    annullato = True
+                    break
+            annullato = (annullato or tasto_premuto or registrando
+                         or not coda_dettature.puo_inviare(revisione))
+            if annullato:
+                log.info("invio automatico ANNULLATO (tasto premuto o nuova dettatura in corso)")
+                return revisione >= 0 and not coda_dettature.puo_inviare(revisione)
+            else:
+                tastiera.press(Key.enter)
+                tastiera.release(Key.enter)
+                log.info("invio automatico premuto (attesa %.1fs%s%s)",
+                         attesa, ", chat AI" if chat_agente else "",
+                         ", alla cieca" if senza_casella else "")
+    except Exception:
+        log.exception("errore in consegna dettatura")
 
 
 scarti_fuori_scala = 0  # dettature di fila con sample fuori [-1,1]: al 2° si riavvia lo stream
@@ -1094,51 +1280,68 @@ scarti_fuori_scala = 0  # dettature di fila con sample fuori [-1,1]: al 2° si r
 def ferma_e_trascrivi():
     """Chiude la registrazione (il microfono resta aperto: vedi avvia_stream)
     e lancia la trascrizione su un thread a parte."""
-    global registrando, inizio_registrazione, scarti_fuori_scala, sessione_progressiva
-    if not registrando:
-        _nascondi_o_arma()
-        return
-    app_bersaglio = app_frontale()  # bersaglio del testo: l'app davanti ORA, non a fine pulizia
-    scheda_bersaglio = scheda_browser_frontale(app_bersaglio)  # idem, la scheda se e' un browser noto
-    registrando = False
-    inizio_registrazione = None
-    sessione, sessione_progressiva = sessione_progressiva, None
-    if sessione is not None:
-        sessione.ferma()  # niente nuovi tagli: la coda la fa il thread di incolla
-    logging.getLogger("voce").info("registrazione fermata")
-    suono("Bottle")
-    if not blocchi:
-        _nascondi_o_arma()
-        return
-    audio = np.concatenate(blocchi)[:, 0]
-    if len(audio) < FREQ * 0.4:  # sotto 0,4 s: pressione accidentale
-        _nascondi_o_arma()
-        return
-    rms = float(np.sqrt(np.mean(audio ** 2)))
-    logging.getLogger("voce").info("audio: %.1fs, volume rms %.4f", len(audio) / FREQ, rms)
-    scarti_fuori_scala, scarta, riavvia = aggiorna_scarti_fuori_scala(scarti_fuori_scala, rms)
-    if scarta:  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
-        logging.getLogger("voce").warning(
-            "scartato: audio fuori scala (rms %.2f > 1), stream corrotto — riprova tra qualche secondo", rms
-        )
-        _nascondi_o_arma()
-        if riavvia:
-            riavvia_processo(
-                f"audio fuori scala persistente (rms {rms:.2f}, {scarti_fuori_scala} scarti di fila)"
+    global registrando, inizio_registrazione, scarti_fuori_scala
+    global sessione_progressiva, turno_utente_token
+    token_turno, turno_utente_token = turno_utente_token, None
+    try:
+        if not registrando:
+            _concludi_dettatura(token_turno)
+            _nascondi_o_arma()
+            return
+        app_bersaglio = app_frontale()  # bersaglio del testo: l'app davanti ORA, non a fine pulizia
+        scheda_bersaglio = scheda_browser_frontale(app_bersaglio)  # idem, la scheda se e' un browser noto
+        registrando = False
+        inizio_registrazione = None
+        sessione, sessione_progressiva = sessione_progressiva, None
+        if sessione is not None:
+            sessione.ferma()  # niente nuovi tagli: la coda la fa il thread di incolla
+        logging.getLogger("voce").info("registrazione fermata")
+        suono("Bottle")
+        if not blocchi:
+            _concludi_dettatura(token_turno)
+            _nascondi_o_arma()
+            return
+        audio = np.concatenate(blocchi)[:, 0]
+        if len(audio) < FREQ * 0.4:  # sotto 0,4 s: pressione accidentale
+            _concludi_dettatura(token_turno)
+            _nascondi_o_arma()
+            return
+        rms = float(np.sqrt(np.mean(audio ** 2)))
+        logging.getLogger("voce").info("audio: %.1fs, volume rms %.4f", len(audio) / FREQ, rms)
+        scarti_fuori_scala, scarta, riavvia = aggiorna_scarti_fuori_scala(scarti_fuori_scala, rms)
+        if scarta:  # sample fuori [-1,1]: stream corrotto, Whisper allucinerebbe
+            logging.getLogger("voce").warning(
+                "scartato: audio fuori scala (rms %.2f > 1), stream corrotto — riprova tra qualche secondo", rms
             )
-        return
-    if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
-        logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
-        _nascondi_o_arma()
-        # prima si controlla il guadagno d'ingresso: se e' lui, riavviare il
-        # processo non risolverebbe nulla (vedi ripara_guadagno_ingresso).
-        if not ripara_guadagno_ingresso(rms):
-            airbag_stream_muto(len(audio) / FREQ)
-        return
-    threading.Thread(
-        target=_trascrivi_e_incolla, args=(audio, app_bersaglio, scheda_bersaglio, sessione),
-        daemon=True,
-    ).start()
+            _concludi_dettatura(token_turno)
+            _nascondi_o_arma()
+            if riavvia:
+                riavvia_processo(
+                    f"audio fuori scala persistente (rms {rms:.2f}, {scarti_fuori_scala} scarti di fila)"
+                )
+            return
+        if not c_e_voce(audio, cfg.get("soglia_voce", SOGLIA_VOCE)):  # silenzio/respiro: niente parlato
+            logging.getLogger("voce").info("scartato: volume sotto soglia (mic muto/occupato?)")
+            _concludi_dettatura(token_turno)
+            _nascondi_o_arma()
+            # prima si controlla il guadagno d'ingresso: se e' lui, riavviare il
+            # processo non risolverebbe nulla (vedi ripara_guadagno_ingresso).
+            if not ripara_guadagno_ingresso(rms):
+                airbag_stream_muto(len(audio) / FREQ)
+            return
+        threading.Thread(
+            target=_trascrivi_e_incolla,
+            args=(audio, app_bersaglio, scheda_bersaglio, sessione, token_turno),
+            daemon=True,
+        ).start()
+    except Exception:
+        logging.getLogger("voce").exception("errore chiusura registrazione")
+        registrando = False
+        inizio_registrazione = None
+        if sessione_progressiva is not None:
+            sessione_progressiva.ferma()
+            sessione_progressiva = None
+        _concludi_dettatura(token_turno, fallita=True)
 
 
 def commuta_voce():
@@ -1387,6 +1590,7 @@ def su_pressione(tasto):
         if _option_giu():               # Option gia' giu': e' il combo mani libere
             return                      # (lo scatta il poller) — niente dettatura
         if not tasto_premuto:
+            coda_dettature.interrompi_invio()  # prima del worker audio
             tasto_premuto = True        # stato sul solo thread tastiera: niente race
             comandi_audio.put("start")  # il lavoro audio (bloccante) lo fa il worker
     elif tasto == TASTO_COMBO_VOCE and not combo_voce_scattato and _option_giu():
@@ -1459,9 +1663,8 @@ def unica_istanza():
 
 
 def _impara_dagli_errori():
-    """Apprendimento automatico, una volta al giorno all'avvio: rilegge le
-    ultime dettature grezze dal log, l'agente individua le parole trascritte
-    male in modo ricorrente e le aggiunge da solo alle sostituzioni."""
+    """Una volta al giorno cerca possibili correzioni nei dettati recenti.
+    Le ipotesi restano nel registro; non diventano sostituzioni attive."""
     base = os.path.dirname(os.path.abspath(__file__))
     marcatore = os.path.join(base, "APPRENDIMENTO_ULTIMO")
     oggi = time.strftime("%Y-%m-%d")
@@ -1475,14 +1678,11 @@ def _impara_dagli_errori():
     comando = COMANDO_APPRENDIMENTO or comandi_agente()  # tutti gli agenti presenti, in ordine
     if not comando:
         return
-    nuove = impara_sostituzioni(
+    impara_sostituzioni(
         os.path.join(base, "voce.log"), str(config_scrivibile()), comando
     )
-    if nuove:
-        cfg.setdefault("sostituzioni", {}).update(nuove)  # attive da subito
-        logging.getLogger("voce").info("imparate sostituzioni: %s", nuove)
     # Ripasso notturno degli audio conservati: processo a parte, sganciato e
-    # a bassa priorita' — carica il secondo modello, impara e muore, cosi' la
+    # a bassa priorita' — carica il secondo modello, propone e muore, cosi' la
     # dettatura in diretta non paga ne' memoria ne' lock di trascrizione.
     if int(cfg.get("conserva_audio_n", 0)) > 0:
         subprocess.Popen(
@@ -1537,6 +1737,7 @@ def _avvisa_se_non_autorizzato():
 
 if __name__ == "__main__":
     unica_istanza()
+    FLAG_TURNO_UTENTE.unlink(missing_ok=True)  # residuo di un arresto durante la dettatura
     # Rotazione a 7 giorni: con debug_dettature=true il log contiene il grezzo
     # di ogni dettatura in chiaro (conversazioni, call, sfoghi) — non deve
     # accumularsi all'infinito. impara_sostituzioni() legge solo le ultime

@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.3.0-rc.12 - 17/09/2026 — gemella del Mac
+
+- Cursore automatico, secondo giro (17/09/2026, gemella del Mac): se al
+  primo giro UI Automation non mostra caselle, si aspetta
+  `ATTESA_RISVEGLIO_SEC` (0,5s) e si riguarda una volta prima di dire
+  "nessuna casella": le app Chromium/Electron costruiscono l'albero dopo il
+  primo tocco. Casi coperti dalla suite; da provare su PC reale come il resto
+  della versione Windows.
+- Dettature riprese (12/09): se si ricomincia mentre un pezzo trascrive,
+  si aspetta la fine di tutti i pezzi, si uniscono nell'ordine di registrazione
+  e si preme Invio una sola volta. Una nuova pressione sospende anche l'Invio
+  gia' in attesa; la ripresa senza parole lo completa senza reincollare.
+  Clipboard serializzata, finestre diverse separate, errore di trascrizione
+  conserva il testo valido senza inviare un messaggio parziale. Prove gemelle
+  Mac/Windows; attivazione locale distinta dal prossimo pacchetto Drive.
+- Parita' della precedenza vocale: dalla registrazione fino all'Invio il
+  turno dell'utente blocca e scarta la risposta precedente, con ricontrollo
+  anche nel lettore e token protetti quando due trascrizioni si sovrappongono.
+  Prove portabili verdi; resta da collaudare su un PC Windows reale.
+- Apertura delle risposte ridotta al solo nome: `ChatGPT` oppure `Claude`,
+  senza nome del progetto e senza `LeaderAI`.
+- Voce in uscita: pause, elenchi e tabelle leggibili; marcatori della chat
+  omessi, percorsi ridotti al nomefile, numeri e negazioni conservati.
+- Riascolto dall’inizio dopo uno stop e scelta esplicita fra conversazioni,
+  con anteprima nel menu. Ultima risposta per fonte e coda locale protetta
+  dalle scritture simultanee; selezionare una fonte lascia le altre in attesa.
+- Hook con sessione distinta, doppioni circoscritti alla conversazione e
+  conservazione locale dichiarata nella privacy. Voce e profilo preservati.
+
+- Apprendimento e ripasso audio continuano a proporre correzioni nel registro
+  esistente, con la dicitura `proposte da verificare, non applicate` e coppie
+  JSON leggibili. Non scrivono piu' le sostituzioni nel config e l'avvio
+  giornaliero non attiva le proposte nella memoria dell'app.
+- L'elenco `sostituzioni` contiene le coppie verificate dall'agente su
+  richiesta del proprietario: il README spiega verifica e annullamento.
+  Valori JSON numerici, liste e oggetti sono scartati, senza convertirli in
+  parole. Tasti, tempi e percorso di dettatura restano invariati.
+- Prova automatica su Mac delle funzioni Windows: casi `vi → mi`, `al → il`
+  e `programmata → programmato` lasciano invariati config e memoria.
+  Da collaudare su un PC Windows reale; nessuna nuova distribuzione.
+
 ## 1.3.0-rc.11 - 04/09/2026 — quattro migliorie dai registri veri (gemella Mac)
 
 Quattro interventi nati dai log reali 27/08→04/09 (1.422 dettature), fatti da quattro agenti in parallelo e fusi lo stesso giorno. Da provare a voce vera su Mac; Windows su PC reale.

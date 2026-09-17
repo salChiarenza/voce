@@ -1,5 +1,54 @@
 # Changelog Voce
 
+## 1.3.0-rc.12 - 17/09/2026
+
+Versione consegnabile che raccoglie il cantiere locale dal 05/09 (voci sotto),
+gia' in uso quotidiano sul Mac di Sal dal 13/09. Non ancora attestati: l'ascolto
+reale dentro Antigravity dopo il riavvio dell'app e la prova su PC Windows reale.
+
+- Cursore automatico, secondo giro (17/09/2026): nell'app Claude 2.110.x
+  l'albero Accessibility si accende solo dopo il primo tocco, e la dettatura
+  finiva "alla cieca" con l'avviso sonoro anche col cursore gia' nella chat.
+  Se il primo giro e' vuoto, Mac e Windows aspettano mezzo secondo e
+  riguardano una volta prima di dire "nessuna casella". Casi coperti dalla
+  suite; prova vera sul log delle dettature successive.
+- Antigravity (13/09/2026): la voce degli agenti parla anche dentro
+  Antigravity di Google. L'hook Stop si collega in `~/.gemini/config/hooks.json`
+  (formato suo: gestore -> eventi), il payload in camelCase viene tradotto nei
+  nostri nomi e il lettore riconosce il suo `transcript.jsonl` (`source: MODEL`).
+  La dettatura tratta Antigravity e Gemini come chat AI: grezzo immediato e
+  Invio dopo 1 secondo, come con Claude e ChatGPT. Prima il testo passava dalla
+  pulizia con pausa da documento e nessuna risposta veniva letta. Provato sul
+  transcript reale di Sal; pacchetto Drive invariato.
+- Dettature riprese (12/09): se si ricomincia mentre un pezzo trascrive,
+  si aspetta la fine di tutti i pezzi, si uniscono nell'ordine di registrazione
+  e si preme Invio una sola volta. Una nuova pressione sospende anche l'Invio
+  gia' in attesa; la ripresa senza parole lo completa senza reincollare.
+  Clipboard serializzata, finestre diverse separate, errore di trascrizione
+  conserva il testo valido senza inviare un messaggio parziale. Prove gemelle
+  Mac/Windows; attivazione locale distinta dal prossimo pacchetto Drive.
+- Il turno di chi parla ora ha precedenza fino alla fine dell'Invio
+  automatico. Se una risposta del turno precedente arriva mentre la
+  dettatura e' ancora aperta, viene scartata e non parte sopra la voce; una
+  trascrizione vecchia non puo' riaprire l'audio durante un turno piu' nuovo.
+- La voce apre ogni risposta soltanto con il nome dell'assistente: `ChatGPT`
+  per Codex e `Claude` per Claude Code. Non pronuncia piu' il progetto o
+  `LeaderAI` come parte del nome.
+- Tre migliorie della voce: testo preparato per l’ascolto, riascolto
+  dell’ultima risposta e code distinte con scelta della conversazione.
+  Menu Mac e finestra Windows mostrano nome e anteprima; la cronologia
+  locale e’ limitata a otto conversazioni e dichiarata nella privacy.
+
+- Apprendimento Mac e Windows: le ipotesi degli arbitri restano proposte
+  nel registro esistente. Il controllo giornaliero e il ripasso non possono
+  piu' alterare sostituzioni attive su disco o in memoria.
+- Correzioni verificate conservate nel profilo e annullabili una alla volta;
+  documentato il controllo della frase reale e di frasi corrette prima di
+  rendere globale una coppia. Nessuna nuova dipendenza o archivio.
+- Collaudi di regressione su parole comuni, tipi JSON e parita' dei due
+  percorsi. Tasti, tempi, invio e timbro della voce conservati.
+- Pacchetto Drive e versione distribuita invariati; rilascio separato.
+
 Questo file registra le versioni dell'unico prodotto Voce. I dettagli tecnici
 restano nei changelog [`mac/`](mac/CHANGELOG.md) e
 [`windows/`](windows/CHANGELOG.md).

@@ -1,6 +1,10 @@
 # Email di consegna Voce
 
 Questa e' la fonte unica del testo usato per consegnare Voce a un cliente.
+Le prove di riascolto e scelta conversazione aggiunte il 05/09/2026 riguardano
+la copia di lavoro: usarle nella consegna dopo aver verificato che il pacchetto
+Drive distribuito includa questo aggiornamento.
+
 L'installer e l'email evolvono insieme: ogni cambiamento che tocca il modo di
 arrivare sul computer del cliente, il launcher, i permessi, la cartella locale
 o il collaudo aggiorna anche questo file nello stesso commit.
@@ -91,7 +95,8 @@ correzione locale sicura, ripeti la prova e prosegui.
 La prova finale comprende tutto: l'icona apre Voce; Ctrl destro scrive il
 parlato; il pannello salchiarenza.ai si vede; il suono di avvio e fine
 dettatura si sente; il tasto Menu attiva la voce; una risposta completa
-dell'agente viene letta ad alta voce.
+dell'agente viene letta ad alta voce. Nella finestra Voce AI, dal menu Voce, prova il riascolto
+dopo uno stop e la scelta fra due conversazioni con risposte riconoscibili.
 
 Con una prova ancora aperta, continua nella stessa missione. Chiedimi soltanto
 il gesto fisico o la conferma di Windows che serve, poi riprendi subito. Chiudi
@@ -133,7 +138,8 @@ La prova finale comprende tutto: i pulsanti sulla Scrivania aprono Voce; Cmd
 destro scrive il parlato; il pannello salchiarenza.ai si vede; il suono di
 avvio e fine dettatura si sente; Option + freccia sinistra attiva la voce; Cmd
 destro + Option attiva le mani libere; una risposta completa dell'agente viene
-letta ad alta voce.
+letta ad alta voce. Nel menu Voce in alto prova il riascolto dopo uno stop
+e la scelta fra due conversazioni con risposte riconoscibili.
 
 Con una prova ancora aperta, continua nella stessa missione. Chiedimi soltanto
 il gesto fisico o l'autorizzazione del Mac che serve, poi riprendi subito.

@@ -19,6 +19,9 @@ case "$1" in
   off) rm -f "$DIR/VOICE_ON"
        "$PY" "$DIR/parla.py" --stop
        echo "Voce: SPENTA" ;;
+  rileggi) "$PY" "$DIR/parla.py" --rileggi ;;
+  conversazioni) "$PY" "$DIR/parla.py" --conversazioni ;;
+  segui) "$PY" "$DIR/parla.py" --segui "${2:-tutte}" ;;
   mani)
     case "$2" in
       on)  touch "$DIR/MANI_LIBERE_ON"; echo "Mani libere: ATTIVE" ;;

@@ -7,6 +7,21 @@ Risorsa gratuita per la community **AI con Sal**.
 La versione esatta è nel file `../VERSION` e viene copiata nella cartella
 installata.
 
+
+## Riprendere mentre trascrive
+
+Puoi rilasciare il tasto e ripremerlo mentre compare «Trascrivo…»: i pezzi
+restano nello stesso messaggio, nell'ordine in cui li hai dettati. L'Invio
+aspetta tutte le registrazioni e tutte le trascrizioni, anche se l'ultimo
+pezzo finisce prima del primo. Se riprendi quando il testo e' gia' incollato,
+si sospende l'Invio e la nuova frase si aggiunge con lo spazio necessario.
+Un tocco senza parole non duplica il testo e non lascia sospeso il messaggio.
+Le destinazioni diverse restano separate. Un errore lascia disponibile il
+testo valido e sospende l'Invio automatico per evitare una frase incompleta.
+Contratto provato in `tests/test_mac.py` su entrambi i motori; la voce in
+uscita resta bloccata fino alla conclusione del messaggio. Cantiere locale
+12/09/2026: queste modifiche entrano in Drive col prossimo rilascio.
+
 ## Cosa fa
 
 - Detti testo in email, documenti, browser, ChatGPT, Claude, Codex e app simili.
@@ -78,6 +93,27 @@ e aggiunge due launcher sulla Scrivania:
 
 ## Uso rapido
 
+### Correzioni delle parole
+
+Il glossario aiuta il riconoscitore a scrivere i nomi. Le `sostituzioni`
+sono invece regole globali: una coppia si applica a ogni dettatura. Il
+controllo giornaliero e il ripasso audio propongono correzioni nel registro
+esistente (`voce.log`, righe `proposte da verificare, non applicate`), senza
+attivarle o riscrivere il profilo. Sono diagnosi recenti, soggette alla normale
+rotazione del registro; non osservano le correzioni manuali del proprietario.
+
+Per aggiungere una correzione, il proprietario indica all'agente la frase
+dettata e quella desiderata. L'agente verifica la coppia nel contesto e su
+frasi corrette: articoli, pronomi, genere dei verbi e parole valide in altri
+contesti non diventano regole globali. Solo la coppia verificata e confermata
+va in `sostituzioni`, nel profilo esistente; gli altri valori si conservano.
+Per annullarla si elimina quella sola coppia. Prima di renderla attiva si
+ricontrolla il testo con la mappa aggiornata; poi si riavvia dal launcher o
+da Terminal con i permessi gia' concessi. La verifica del ripasso, anche
+quando due modelli concordano, non sostituisce questa prova.
+
+### Dettare
+
 1. Apri `Voce Dettatura.command`.
 2. Tieni premuto `Cmd destro`.
 3. Parla.
@@ -99,6 +135,27 @@ macOS puo' chiedere:
 - Monitoraggio input
 
 Sono permessi necessari per ascoltare la voce, leggere la scorciatoia da tastiera e incollare il testo.
+
+### Ascoltare e rileggere le risposte
+
+La lettura separa titoli, elenchi e righe di tabella con pause; nei percorsi
+pronuncia il nome del file e conserva numeri, importi e negazioni. I marcatori
+della chat e i blocchi di codice non vengono pronunciati.
+
+Quando inizi un nuovo turno, la voce in corso si ferma. Fino alla fine della
+trascrizione e dell'Invio, una risposta precedente arrivata in ritardo viene
+scartata: non puo' partire sopra la tua domanda ne' restare in coda dopo.
+
+Nel menu **Voce** nella barra in alto trovi **Rileggi l’ultima risposta**, che riparte dall’inizio anche
+dopo un’interruzione. Puoi ascoltare **tutte le conversazioni** oppure sceglierne
+una dal nome e dall’anteprima. La scelta vale dalla lettura successiva e lascia
+finire quella in corso. Le altre risposte restano in attesa; ogni conversazione
+conserva soltanto la sua risposta piu’ recente ancora da ascoltare.
+
+La coda conserva sul computer fino a otto conversazioni recenti. Quando le
+ascolti tutte, il riascolto recupera l’ultima risposta iniziata; quando ne scegli
+una, recupera l’ultima di quella conversazione. Gli annunci degli interruttori
+non sostituiscono l’ultima risposta dell’agente.
 
 ## Privacy
 
