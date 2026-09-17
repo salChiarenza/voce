@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0-rc.16 - 17/09/2026 — gemella del Mac
+
+- Invio automatico nelle chat AI dopo 2 secondi invece di 1
+  (`invio_automatico_ritardo_chat_ai_sec` e valore di riserva), come sul Mac.
+
 ## 1.3.0-rc.15 - 17/09/2026 — gemella del Mac
 
 - Sveglia al tasto premuto: un thread a parte (con COM inizializzato) tocca

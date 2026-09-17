@@ -853,16 +853,18 @@ def ritardo_invio(cfg, voce_accesa, chat_ai):
     - voce agenti accesa: botta e risposta con l'agente
       (`invio_automatico_ritardo_conversazione_sec`);
     - chat AI a voce spenta: il testo si vede e non c'e' nulla da rileggere
-      (`invio_automatico_ritardo_chat_ai_sec`, default 1.0). Dati reali
+      (`invio_automatico_ritardo_chat_ai_sec`, default 2.0). Dati reali
       30/08→04/09: con la pausa dei documenti il 40% degli Invii automatici
-      veniva annullato da Sal che premeva Invio a mano prima dell'app;
+      veniva annullato da Sal che premeva Invio a mano prima dell'app; con
+      un secondo solo (04/09→17/09) Sal non faceva in tempo a bloccare
+      l'Invio con uno spazio per correggere (caso 17/09 14:18): due secondi;
     - documenti, email, social: serve tempo per correggere
       (`invio_automatico_ritardo_sec`, default 2.5).
     """
     if voce_accesa:
         return float(cfg.get("invio_automatico_ritardo_conversazione_sec", 0.3))
     if chat_ai:
-        return float(cfg.get("invio_automatico_ritardo_chat_ai_sec", 1.0))
+        return float(cfg.get("invio_automatico_ritardo_chat_ai_sec", 2.0))
     return float(cfg.get("invio_automatico_ritardo_sec", 2.5))
 
 

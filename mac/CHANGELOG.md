@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0-rc.16 - 17/09/2026 — due secondi per bloccare l'Invio con uno spazio
+
+- Nelle chat AI l'Invio automatico parte dopo 2 secondi invece di 1
+  (`invio_automatico_ritardo_chat_ai_sec`, anche il valore di riserva nel
+  codice). Il blocco con un tasto qualsiasi funzionava (14:19: annullato),
+  ma un secondo non bastava per vedere il testo e premere spazio (14:18 in
+  Antigravity: spazio arrivato dopo l'Invio). Regola di Sal: "uno spazio nel
+  testo significa che non deve partire, devo correggere".
+
 ## 1.3.0-rc.15 - 17/09/2026 — la finestra si sveglia mentre parli
 
 - Sveglia al tasto premuto: appena parte la registrazione, un thread a parte

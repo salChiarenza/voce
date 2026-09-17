@@ -1331,7 +1331,7 @@ def test_ritardo_invio_segue_il_contesto():
 
 def test_ritardo_invio_default_senza_chiavi():
     assert voce_lib.ritardo_invio({}, True, False) == 0.3
-    assert voce_lib.ritardo_invio({}, False, True) == 1.0
+    assert voce_lib.ritardo_invio({}, False, True) == 2.0  # 17/09/2026: due secondi per bloccare con uno spazio
     assert voce_lib.ritardo_invio({}, False, False) == 2.5
     assert voce_lib.ritardo_invio({"invio_automatico_ritardo_chat_ai_sec": "0.8"}, False, True) == 0.8
 

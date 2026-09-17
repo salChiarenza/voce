@@ -1335,8 +1335,9 @@ def _incolla_messaggio(testo, bersaglio, revisione):
         # ON e' botta e risposta (breve); in una chat AI a voce OFF il
         # testo si vede e parte quasi subito (dati 30/08→04/09: con la
         # pausa dei documenti il 40% degli Invii veniva annullato da Sal
-        # che premeva Invio a mano); nei documenti serve tempo per
-        # correggere. Durante l'attesa, QUALSIASI tasto premuto da Sal o
+        # che premeva Invio a mano; con un secondo solo, 17/09, non faceva
+        # in tempo a bloccarlo con uno spazio: ora due); nei documenti
+        # serve tempo per correggere. Durante l'attesa, QUALSIASI tasto premuto da Sal o
         # una nuova registrazione gia' in corso ANNULLANO l'Invio
         # (richiesta 06/07: "se clicco un tasto l'invio si deve
         # bloccare" — stava aggiungendo una seconda frase e la prima e'

@@ -1416,7 +1416,7 @@ def ritardo_invio(cfg, voce_accesa, chat_ai):
     if voce_accesa:
         return float(cfg.get("invio_automatico_ritardo_conversazione_sec", 0.3))
     if chat_ai:
-        return float(cfg.get("invio_automatico_ritardo_chat_ai_sec", 1.0))
+        return float(cfg.get("invio_automatico_ritardo_chat_ai_sec", 2.0))
     return float(cfg.get("invio_automatico_ritardo_sec", 2.5))
 
 

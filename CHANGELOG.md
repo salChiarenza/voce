@@ -1,5 +1,11 @@
 # Changelog Voce
 
+## 1.3.0-rc.16 - 17/09/2026
+
+- Nelle chat AI l'Invio automatico parte dopo 2 secondi invece di 1: il
+  tempo di vedere il testo e premere uno spazio per correggerlo. Mac e
+  Windows.
+
 ## 1.3.0-rc.15 - 17/09/2026
 
 - La finestra si sveglia mentre parli: al tasto premuto Voce tocca l'app

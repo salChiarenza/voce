@@ -176,7 +176,7 @@ def test_profilo_mac_pubblico_e_la_fotocopia_funzionale_di_sal():
     assert cfg["invio_automatico"] is True
     assert cfg["invio_automatico_ritardo_sec"] == 2.5
     assert cfg["invio_automatico_ritardo_conversazione_sec"] == 2.5
-    assert cfg["invio_automatico_ritardo_chat_ai_sec"] == 1.0
+    assert cfg["invio_automatico_ritardo_chat_ai_sec"] == 2.0  # 17/09/2026: un secondo non bastava per bloccare con uno spazio
     assert cfg["mani_libere_soglia_voce"] == 0.018
     assert cfg["mani_libere_soglia_stop"] == 0.013
     codice = (ROOT / "mac/detta.py").read_text(encoding="utf-8")

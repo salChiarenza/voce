@@ -216,7 +216,7 @@ def test_ritardo_invio_windows_gemello_del_mac():
     assert funzione(cfg, False, True) == 1.0
     assert funzione(cfg, False, False) == 2.5
     assert funzione({}, True, False) == 0.3
-    assert funzione({}, False, True) == 1.0
+    assert funzione({}, False, True) == 2.0
     assert funzione({}, False, False) == 2.5
 
 
