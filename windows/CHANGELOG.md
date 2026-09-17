@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0-rc.15 - 17/09/2026 — gemella del Mac
+
+- Sveglia al tasto premuto: un thread a parte (con COM inizializzato) tocca
+  l'albero UI Automation della finestra davanti mentre si parla; attesa di
+  riserva all'incolla da 3 a 5 giri (`GIRI_RISVEGLIO`). Da provare su PC
+  reale.
+
 ## 1.3.0-rc.14 - 17/09/2026 — gemella del Mac
 
 - Memoria delle caselle anche su file (`caselle_ricordate.json` nella

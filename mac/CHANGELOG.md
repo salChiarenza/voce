@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0-rc.15 - 17/09/2026 — la finestra si sveglia mentre parli
+
+- Sveglia al tasto premuto: appena parte la registrazione, un thread a parte
+  tocca l'albero Accessibility dell'app davanti e, se e' un'app Electron,
+  gli chiede di accenderlo (`AXManualAccessibility`, documentato da
+  Electron). Caso reale 14:14: in Antigravity l'albero si accendeva da 1,5 a
+  3,5 secondi dopo la richiesta, oltre l'attesa dell'incolla, e la dettatura
+  finiva alla cieca con il "tum" dell'avviso anche dopo tre dettature. Ora
+  l'accensione avviene mentre si parla e al rilascio la casella e' gia'
+  visibile; la memoria delle caselle nasce alla prima dettatura riuscita.
+- Attesa di riserva all'incolla da 3 a 5 giri (`AX_GIRI_RISVEGLIO`, due
+  secondi al massimo), con una seconda richiesta Electron al primo giro
+  vuoto. Si paga solo quando la finestra e' ancora addormentata.
+- 2 prove nuove, 286 verdi.
+
 ## 1.3.0-rc.14 - 17/09/2026 — la memoria delle caselle sopravvive ai riavvii
 
 - La memoria delle caselle vive anche nel file `caselle_ricordate.json`

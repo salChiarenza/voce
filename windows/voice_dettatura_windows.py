@@ -1459,6 +1459,8 @@ def start_recording() -> None:
         recording = True
         recording_started_at = time.monotonic()
         logging.info("registrazione avviata")
+        # mentre si parla, la finestra davanti accende il suo albero UI Automation
+        threading.Thread(target=_sveglia_accessibilita, args=(finestra_frontale(),), daemon=True).start()
         eventi.put("ascolto")
         beep(880, 80)
         if PROGRESSIVA:
@@ -1537,7 +1539,7 @@ _UIA_SCOPE_DISCENDENTI = 4
 # Electron costruiscono l'albero UI Automation solo dopo il primo tocco. Se il
 # primo giro e' vuoto si aspetta questo tempo e si riguarda una volta.
 ATTESA_RISVEGLIO_SEC = 0.5
-GIRI_RISVEGLIO = 3    # giri di ricerca in tutto: al massimo un secondo in piu'
+GIRI_RISVEGLIO = 5    # giri di ricerca in tutto: al massimo due secondi in piu'
 # Dove stava la casella l'ultima volta, per finestra e taglia: se l'albero resta
 # addormentato dopo tutti i giri si clicca li' (gemella del Mac, 17/09/2026).
 # Vive anche su file accanto all'app: a ogni riavvio l'app riparte gia' istruita.
@@ -1610,6 +1612,35 @@ def _client_uia():
         return comtypes.client.CreateObject(CUIAutomation, interface=IUIAutomation)
     except Exception:
         return None
+
+
+def _sveglia_accessibilita(hwnd):
+    """Gemella del Mac: al tasto premuto tocca l'albero UI Automation della
+    finestra davanti in un thread a parte, cosi' le app Chromium/Electron lo
+    costruiscono mentre si parla e al rilascio la casella e' gia' visibile.
+    Non tocca niente sullo schermo; qualsiasi intoppo viene ignorato."""
+    if not hwnd or not CFG.get("cursore_automatico", True):
+        return
+    try:
+        try:
+            import comtypes
+            comtypes.CoInitialize()  # COM va inizializzato nel thread che lo usa
+        except Exception:
+            pass
+        uia = _client_uia()
+        if uia is None:
+            return
+        fuoco = uia.GetFocusedElement()
+        if fuoco is not None and fuoco.CurrentControlType in (_UIA_EDIT, _UIA_DOCUMENT):
+            return
+        radice = uia.ElementFromHandle(hwnd)
+        condizione = uia.CreateOrCondition(
+            uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_EDIT),
+            uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_DOCUMENT),
+        )
+        radice.FindAll(_UIA_SCOPE_DISCENDENTI, condizione)
+    except Exception:
+        logging.debug("sveglia accessibilita' fallita", exc_info=True)
 
 
 def metti_cursore_in_casella(hwnd):

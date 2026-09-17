@@ -2003,7 +2003,7 @@ def _cursore_automatico_mac():
         n for n in ast.parse(path.read_text()).body
         if (isinstance(n, ast.FunctionDef)
             and n.name in ("metti_cursore_in_casella", "_casella_nelle_finestre",
-                           "_ricorda_casella", "_punto_ricordato"))
+                           "_ricorda_casella", "_punto_ricordato", "_chiedi_albero_electron"))
         or (isinstance(n, ast.Assign)
             and any(getattr(t, "id", "") in ("AX_ATTESA_RISVEGLIO_SEC", "AX_GIRI_RISVEGLIO", "_caselle_ricordate")
                     for t in n.targets))
@@ -2045,7 +2045,7 @@ def test_cursore_automatico_dopo_tutti_i_giri_senza_memoria_dice_che_caselle_non
     # l'avviso "Basso" del 30/08 resta, ma solo dopo tutti i giri
     s = _cursore_automatico_mac()
     assert s.chiama([None]) is False
-    assert s.giri_massimi == 3 and len(s.giri) == s.giri_massimi
+    assert s.giri_massimi == 5 and len(s.giri) == s.giri_massimi
     assert s.attese.count(s.attesa) == s.giri_massimi - 1
     assert s.click == []
 
@@ -2080,6 +2080,47 @@ def test_cursore_automatico_la_memoria_vale_solo_per_la_stessa_finestra():
     s.finestra = (0, 33, 1000, 700)     # altra taglia: nessuna memoria, niente click, avviso
     assert s.chiama([None]) is False
     assert s.click == []
+
+
+def test_sveglia_accessibilita_tocca_l_albero_e_chiede_l_accensione_electron():
+    # Antigravity 17/09/2026 14:14: albero acceso da 1,5 a 3,5 s dopo la richiesta,
+    # oltre l'attesa dell'incolla. Al tasto premuto si chiede e si tocca, mentre si parla.
+    import ast
+    import logging
+    from types import SimpleNamespace
+    set_attr, toccate, cercate = [], [], []
+    ax = SimpleNamespace(AXUIElementCreateApplication=lambda pid: "ax_app",
+                         AXUIElementSetAttributeValue=lambda el, attr, val: set_attr.append((attr, val)) or 0)
+    spazio = dict(
+        logging=logging, cfg={"cursore_automatico": True}, AX=ax,
+        _ax_valore=lambda el, attr: False,  # app Electron con l'albero spento
+        _focus_in_casella=lambda ax_app: toccate.append("focus") or False,
+        _finestre_bersaglio=lambda ax_app: ([("finestra", (0, 33, 1512, 949))], 0, 1),
+        _cerca_casella=lambda *a, **k: cercate.append(k) or None,
+    )
+    path = REPO_ROOT / "mac" / "detta.py"
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, ast.FunctionDef) and n.name in ("_sveglia_accessibilita", "_chiedi_albero_electron")]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
+    app = SimpleNamespace(processIdentifier=lambda: 1, localizedName=lambda: "Antigravity")
+    spazio["_sveglia_accessibilita"](app)
+    assert set_attr == [("AXManualAccessibility", True)]
+    assert toccate == ["focus"] and len(cercate) == 1
+    # app non Electron (attributo assente): nessuna richiesta, solo il tocco
+    set_attr.clear(); toccate.clear(); cercate.clear()
+    spazio["_ax_valore"] = lambda el, attr: None
+    spazio["_sveglia_accessibilita"](app)
+    assert set_attr == [] and toccate == ["focus"]
+    # senza app davanti: niente
+    spazio["_sveglia_accessibilita"](None)
+    assert toccate == ["focus"]
+
+
+def test_la_sveglia_parte_al_tasto_premuto_in_un_thread_a_parte():
+    sorgente = (REPO_ROOT / "mac" / "detta.py").read_text()
+    corpo = sorgente.split("def avvia_registrazione", 1)[1].split("\ndef ", 1)[0]
+    assert "registrazione avviata" in corpo
+    assert "threading.Thread(target=_sveglia_accessibilita" in corpo and "daemon=True" in corpo
 
 
 def test_memoria_caselle_mac_salvata_a_ogni_novita():

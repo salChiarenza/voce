@@ -501,7 +501,7 @@ def test_cursore_automatico_windows_al_secondo_giro_trova_la_casella():
 def test_cursore_automatico_windows_dopo_tutti_i_giri_senza_memoria_dice_che_caselle_non_ce_ne_sono():
     s = _cursore_automatico_windows()
     assert s.chiama([None]) is False
-    assert s.giri_massimi == 3 and len(s.giri) == s.giri_massimi
+    assert s.giri_massimi == 5 and len(s.giri) == s.giri_massimi
     assert s.attese.count(s.attesa) == s.giri_massimi - 1 and s.click == []
 
 
@@ -527,6 +527,36 @@ def test_cursore_automatico_windows_la_memoria_vale_solo_per_la_stessa_finestra(
     assert s.chiama([(100, 800, 1400, 860)]) is True
     s.finestra = (0, 33, 1000, 733)
     assert s.chiama([None]) is False and s.click == []
+
+
+def test_sveglia_accessibilita_windows_gemella_del_mac():
+    sorgente = (REPO_ROOT / "windows" / "voice_dettatura_windows.py").read_text(encoding="utf-8")
+    corpo = sorgente.split("def start_recording", 1)[1].split("\ndef ", 1)[0]
+    assert "threading.Thread(target=_sveglia_accessibilita" in corpo and "daemon=True" in corpo
+    corpo = sorgente.split("def _sveglia_accessibilita", 1)[1].split("\ndef ", 1)[0]
+    assert "CoInitialize" in corpo and "FindAll" in corpo and "except Exception:" in corpo
+    # comportamento con UI Automation finta: tocca l'albero solo se il focus non e' gia' in una casella
+    cercate = []
+    radice = SimpleNamespace(FindAll=lambda scope, cond: cercate.append(scope) or SimpleNamespace(Length=0))
+    focus = {"casella": False}
+    uia = SimpleNamespace(
+        GetFocusedElement=lambda: SimpleNamespace(CurrentControlType=50004) if focus["casella"] else None,
+        ElementFromHandle=lambda hwnd: radice,
+        CreateOrCondition=lambda a, b: "oppure", CreatePropertyCondition=lambda p, v: "condizione",
+    )
+    spazio = dict(CFG={"cursore_automatico": True}, _client_uia=lambda: uia, logging=logging,
+                  _UIA_EDIT=50004, _UIA_DOCUMENT=50030, _UIA_PROP_CONTROLTYPE=30003, _UIA_SCOPE_DISCENDENTI=4)
+    path = REPO_ROOT / "windows" / "voice_dettatura_windows.py"
+    nodi = [n for n in ast.parse(path.read_text(encoding="utf-8")).body
+            if isinstance(n, ast.FunctionDef) and n.name == "_sveglia_accessibilita"]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
+    spazio["_sveglia_accessibilita"](12345)
+    assert cercate == [4]
+    focus["casella"] = True
+    spazio["_sveglia_accessibilita"](12345)
+    assert cercate == [4]
+    spazio["_sveglia_accessibilita"](0)
+    assert cercate == [4]
 
 
 def test_memoria_caselle_windows_salvata_a_ogni_novita():

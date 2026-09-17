@@ -606,7 +606,7 @@ AX_MAX_ELEMENTI = 4000
 # di dire "caselle non ce ne sono" si aspetta questo tempo e si riguarda una
 # volta. Mezzo secondo, non uno: si paga solo quando il primo giro e' vuoto.
 AX_ATTESA_RISVEGLIO_SEC = 0.5
-AX_GIRI_RISVEGLIO = 3    # giri di ricerca in tutto: al massimo un secondo in piu'
+AX_GIRI_RISVEGLIO = 5    # giri di ricerca in tutto: al massimo due secondi in piu'
 # Dove stava la casella l'ultima volta, per app e taglia di finestra: se
 # l'albero resta addormentato dopo tutti i giri si clicca li' (Sal, 17/09/2026:
 # "deve trovare da solo dove scrivere e deve scrivere"). Vive anche su file
@@ -777,6 +777,36 @@ def _cerca_casella(ax_app, finestra, geo_dichiarata, con_pagina):
     return None
 
 
+def _chiedi_albero_electron(ax_app):
+    """Le app Electron accendono l'albero Accessibility del contenuto quando un
+    programma glielo chiede con AXManualAccessibility (documentato da Electron).
+    Nessun effetto sulle altre app, che non hanno l'attributo."""
+    valore = _ax_valore(ax_app, "AXManualAccessibility")
+    if valore is not None and not valore:
+        AX.AXUIElementSetAttributeValue(ax_app, "AXManualAccessibility", True)
+
+
+def _sveglia_accessibilita(app):
+    """Al tasto premuto: tocca l'albero Accessibility dell'app davanti e, se e'
+    un'app Electron, chiede di accenderlo. Le app Electron lo costruiscono solo
+    dopo il primo tocco e ci mettono da mezzo secondo a tre secondi e mezzo
+    (Antigravity, misurato 17/09/2026 alle 14:14): fatto qui, mentre si parla,
+    al rilascio la casella e' gia' visibile. Gira in un thread a parte e non
+    tocca niente sullo schermo."""
+    if app is None or not cfg.get("cursore_automatico", True):
+        return
+    try:
+        ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
+        _chiedi_albero_electron(ax_app)
+        if _focus_in_casella(ax_app):
+            return
+        finestre, _, _ = _finestre_bersaglio(ax_app)
+        if finestre:
+            _cerca_casella(ax_app, finestre[0][0], finestre[0][1], con_pagina=True)
+    except Exception:
+        logging.getLogger("voce").debug("sveglia accessibilita' fallita", exc_info=True)
+
+
 def _geometria_finestra_a_fuoco(ax_app):
     finestra = _ax_valore(ax_app, AX.kAXFocusedWindowAttribute)
     return _ax_geometria(finestra) if finestra is not None else None
@@ -864,6 +894,8 @@ def metti_cursore_in_casella(app):
         return None
     trovata = _casella_nelle_finestre(ax_app, finestre, log)
     giri = 1
+    if trovata is None:
+        _chiedi_albero_electron(ax_app)  # seconda richiesta: la prima era al tasto premuto
     while trovata is None and giri < AX_GIRI_RISVEGLIO:
         # guscio vuoto di un'app Electron appena toccata? si aspetta che
         # l'albero si accenda e si riguarda (vedi AX_ATTESA_RISVEGLIO_SEC)
@@ -1068,6 +1100,9 @@ def avvia_registrazione():
         registrando = True
         inizio_registrazione = time.monotonic()
         logging.getLogger("voce").info("registrazione avviata")
+        # mentre si parla, l'app davanti accende il suo albero Accessibility:
+        # al rilascio la casella di scrittura e' gia' visibile (vedi _sveglia_accessibilita)
+        threading.Thread(target=_sveglia_accessibilita, args=(app_frontale(),), daemon=True).start()
         suono("Pop")
         eventi.put("ascolto")
         if PROGRESSIVA:

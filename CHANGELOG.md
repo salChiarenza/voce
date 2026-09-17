@@ -1,5 +1,12 @@
 # Changelog Voce
 
+## 1.3.0-rc.15 - 17/09/2026
+
+- La finestra si sveglia mentre parli: al tasto premuto Voce tocca l'app
+  davanti e le chiede di accendere l'albero Accessibility, cosi' al rilascio
+  la casella e' gia' visibile (Antigravity ci metteva fino a 3,5 secondi).
+  Attesa di riserva fino a due secondi. Mac e Windows, 286 prove verdi.
+
 ## 1.3.0-rc.14 - 17/09/2026
 
 - La memoria delle caselle sopravvive ai riavvii: file accanto all'app, Mac
