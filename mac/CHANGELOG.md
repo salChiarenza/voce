@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0-rc.14 - 17/09/2026 — la memoria delle caselle sopravvive ai riavvii
+
+- La memoria delle caselle vive anche nel file `caselle_ricordate.json`
+  accanto all'app (stessa cartella degli interruttori): a ogni riavvio Voce
+  riparte gia' istruita. Caso reale 13:56-13:57: appena riavviata, due
+  dettature in Antigravity alla cieca perche' la memoria era vuota. Si salva
+  solo quando una posizione e' nuova o cambia; file rotto o assente = memoria
+  vuota, senza errori. `caselle_in_json` / `caselle_da_json` in `voce_lib`.
+  3 prove nuove, 282 verdi.
+
 ## 1.3.0-rc.13 - 17/09/2026 — se la finestra dorme, clicca dove stava la casella
 
 - Memoria delle caselle: a ogni dettatura riuscita l'app segna dove sta la

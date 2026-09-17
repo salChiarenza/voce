@@ -411,7 +411,7 @@ def _cursore_automatico_windows():
     sys.path.insert(0, str(REPO_ROOT / "mac"))
     import voce_lib
 
-    stato = SimpleNamespace(attese=[], giri=[], click=[], focus=False, focus_dopo_attesa=False,
+    stato = SimpleNamespace(attese=[], giri=[], click=[], salvataggi=[], focus=False, focus_dopo_attesa=False,
                             passate=[None], finestra=(0, 33, 1512, 982), casella_a_fuoco=(100, 900, 1400, 960))
 
     def rett(left, top, right, bottom):
@@ -455,6 +455,7 @@ def _cursore_automatico_windows():
     spazio = dict(
         CFG={"cursore_automatico": True}, _client_uia=lambda: uia, logging=logging,
         nome_finestra=lambda hwnd: "Claude", _click_sintetico=lambda x, y: stato.click.append((x, y)),
+        _salva_caselle_ricordate=lambda: stato.salvataggi.append(dict(spazio["_caselle_ricordate"])),
         _UIA_EDIT=50004, _UIA_DOCUMENT=50030, _UIA_PROP_CONTROLTYPE=30003, _UIA_SCOPE_DISCENDENTI=4,
         casella_ammissibile=voce_lib.casella_ammissibile, scegli_casella=voce_lib.scegli_casella,
         time=SimpleNamespace(sleep=dormi),
@@ -526,6 +527,32 @@ def test_cursore_automatico_windows_la_memoria_vale_solo_per_la_stessa_finestra(
     assert s.chiama([(100, 800, 1400, 860)]) is True
     s.finestra = (0, 33, 1000, 733)
     assert s.chiama([None]) is False and s.click == []
+
+
+def test_memoria_caselle_windows_salvata_a_ogni_novita():
+    s = _cursore_automatico_windows()
+    assert s.chiama([(100, 800, 1400, 860)]) is True
+    assert len(s.salvataggi) == 1 and ("Claude", 1512, 949) in s.salvataggi[0]
+    assert s.chiama([(100, 800, 1400, 860)]) is True  # stessa posizione: niente riscrittura
+    assert len(s.salvataggi) == 1
+
+
+def test_memoria_caselle_json_windows_gemella_del_mac():
+    import json
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+
+    path = REPO_ROOT / "windows" / "voice_dettatura_windows.py"
+    nodi = [n for n in ast.parse(path.read_text(encoding="utf-8")).body
+            if isinstance(n, ast.FunctionDef) and n.name in ("caselle_in_json", "caselle_da_json")]
+    spazio = {"json": json}
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
+    memoria = {("Claude", 1512, 949): (0.09, 42.0)}
+    testo = spazio["caselle_in_json"](memoria)
+    assert testo == voce_lib.caselle_in_json(memoria)
+    assert spazio["caselle_da_json"](testo) == voce_lib.caselle_da_json(testo) == memoria
+    assert spazio["caselle_da_json"]("{rotto") == {}
 
 
 def test_memoria_caselle_windows_gemella_del_mac():

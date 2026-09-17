@@ -39,6 +39,7 @@ from voce_lib import (
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
     casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre, chiave_casella, posizione_relativa, punto_da_relativa,
+    FILE_CASELLE_RICORDATE, caselle_in_json, caselle_da_json,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
     SOGLIA_SILENZIO_PROGRESSIVA, BLOCCO_PROGRESSIVO_SEC,
@@ -608,8 +609,26 @@ AX_ATTESA_RISVEGLIO_SEC = 0.5
 AX_GIRI_RISVEGLIO = 3    # giri di ricerca in tutto: al massimo un secondo in piu'
 # Dove stava la casella l'ultima volta, per app e taglia di finestra: se
 # l'albero resta addormentato dopo tutti i giri si clicca li' (Sal, 17/09/2026:
-# "deve trovare da solo dove scrivere e deve scrivere").
+# "deve trovare da solo dove scrivere e deve scrivere"). Vive anche su file
+# accanto all'app (FILE_CASELLE_RICORDATE): a ogni riavvio riparte gia' istruita.
 _caselle_ricordate = {}
+
+
+def _carica_caselle_ricordate():
+    try:
+        _caselle_ricordate.update(caselle_da_json(FILE_CASELLE_RICORDATE.read_text(encoding="utf-8")))
+    except OSError:
+        pass  # prima volta: nessuna memoria
+
+
+def _salva_caselle_ricordate():
+    try:
+        FILE_CASELLE_RICORDATE.write_text(caselle_in_json(_caselle_ricordate), encoding="utf-8")
+    except OSError:
+        logging.getLogger("voce").warning("memoria delle caselle non salvata: %s", FILE_CASELLE_RICORDATE)
+
+
+_carica_caselle_ricordate()
 
 
 def _ax_valore(elemento, attributo):
@@ -777,9 +796,12 @@ def _ricorda_casella(app, ax_app, geometria=None, geo_finestra=None):
     relativa = posizione_relativa(geo_finestra, geometria) if geo_finestra and geometria else None
     if chiave is None or relativa is None:
         return
-    if chiave not in _caselle_ricordate:
+    nuova = chiave not in _caselle_ricordate
+    if nuova:
         logging.getLogger("voce").info("cursore automatico: casella ricordata per %s (finestra %sx%s)", *chiave)
-    _caselle_ricordate[chiave] = relativa
+    if nuova or _caselle_ricordate[chiave] != relativa:
+        _caselle_ricordate[chiave] = relativa
+        _salva_caselle_ricordate()
 
 
 def _punto_ricordato(app, geo_finestra):

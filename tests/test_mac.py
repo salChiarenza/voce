@@ -1969,7 +1969,7 @@ def _cursore_automatico_mac():
     import logging
     from types import SimpleNamespace
 
-    stato = SimpleNamespace(attese=[], giri=[], click=[], focus=False, focus_dopo_attesa=False,
+    stato = SimpleNamespace(attese=[], giri=[], click=[], salvataggi=[], focus=False, focus_dopo_attesa=False,
                             passate=[None], finestra=(0, 33, 1512, 949), casella_a_fuoco=(100, 900, 1300, 60))
 
     def cerca(ax_app, finestra, geo, con_pagina):
@@ -1993,6 +1993,7 @@ def _cursore_automatico_mac():
         _finestre_bersaglio=lambda ax_app: ([("finestra", stato.finestra)], 0, 1),
         _cerca_casella=cerca, _click_sintetico=lambda geo: stato.click.append(geo),
         _geometria_finestra_a_fuoco=lambda ax_app: stato.finestra,
+        _salva_caselle_ricordate=lambda: stato.salvataggi.append(dict(spazio["_caselle_ricordate"])),
         _ax_valore=lambda el, attr: "casella", _ax_geometria=lambda el: stato.casella_a_fuoco,
         chiave_casella=voce_lib.chiave_casella, posizione_relativa=voce_lib.posizione_relativa,
         punto_da_relativa=voce_lib.punto_da_relativa,
@@ -2081,6 +2082,16 @@ def test_cursore_automatico_la_memoria_vale_solo_per_la_stessa_finestra():
     assert s.click == []
 
 
+def test_memoria_caselle_mac_salvata_a_ogni_novita():
+    # la memoria vive su file accanto all'app: ripartendo, Voce e' gia' istruita
+    s = _cursore_automatico_mac()
+    casella = ("elemento", (100, 800, 1300, 60))
+    assert s.chiama([casella]) is True
+    assert len(s.salvataggi) == 1 and ("Claude", 1512, 949) in s.salvataggi[0]
+    assert s.chiama([casella]) is True  # stessa posizione: niente riscrittura
+    assert len(s.salvataggi) == 1
+
+
 def test_posizione_relativa_e_punto_da_relativa_si_rispecchiano():
     finestra = (0, 33, 1512, 949)
     casella = (100, 900, 1300, 60)
@@ -2093,6 +2104,16 @@ def test_posizione_relativa_e_punto_da_relativa_si_rispecchiano():
     assert voce_lib.chiave_casella("Claude", finestra) == ("Claude", 1512, 949)
     assert voce_lib.chiave_casella("", finestra) is None
     assert voce_lib.posizione_relativa((0, 0, 0, 0), casella) is None
+
+
+def test_memoria_caselle_va_e_torna_dal_json():
+    memoria = {("Claude", 1512, 949): (0.0926, 42.0), ("ChatGPT", 1000, 700): (0.2, 30.5)}
+    testo = voce_lib.caselle_in_json(memoria)
+    assert voce_lib.caselle_da_json(testo) == memoria
+    # file rotto, vuoto o con righe strane: memoria vuota o solo le righe buone
+    assert voce_lib.caselle_da_json("{rotto") == {}
+    assert voce_lib.caselle_da_json("") == {}
+    assert voce_lib.caselle_da_json('{"Claude|1512|949": [0.1, 40], "boh": 3, "X|a|b": [1, 2]}') == {("Claude", 1512, 949): (0.1, 40.0)}
 
 
 # --- trascrizione progressiva (04/09/2026): dove tagliare, come rincollare ---

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.14 - 17/09/2026 — gemella del Mac
+
+- Memoria delle caselle anche su file (`caselle_ricordate.json` nella
+  cartella dell'app), caricata all'avvio e salvata a ogni novita'; stesse
+  funzioni pure del Mac con prova di parita'. Da provare su PC reale.
+
 ## 1.3.0-rc.13 - 17/09/2026 — gemella del Mac
 
 - Memoria delle caselle e click di sistema (`SetCursorPos` + `mouse_event`,

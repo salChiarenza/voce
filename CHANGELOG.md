@@ -1,5 +1,10 @@
 # Changelog Voce
 
+## 1.3.0-rc.14 - 17/09/2026
+
+- La memoria delle caselle sopravvive ai riavvii: file accanto all'app, Mac
+  e Windows. 282 prove verdi.
+
 ## 1.3.0-rc.13 - 17/09/2026
 
 - Se la finestra dell'app resta "addormentata" per Accessibility anche dopo

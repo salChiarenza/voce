@@ -122,6 +122,7 @@ CONFIG_LOCAL = BASE / "config.local.json"
 FLAG_VOICE_ON = BASE / "VOICE_ON"
 FLAG_PARLANDO = BASE / "PARLANDO"  # esiste mentre l'agente sta leggendo una risposta ad alta voce
 FLAG_MANI_LIBERE_ON = BASE / "MANI_LIBERE_ON"  # esiste quando l'ascolto continuo e' attivo
+FILE_CASELLE_RICORDATE = BASE / "caselle_ricordate.json"  # dove stava la casella, per app e finestra
 FLAG_TURNO_UTENTE = BASE / "TURNO_UTENTE"  # dalla prima parola fino all'Invio automatico
 
 
@@ -524,6 +525,33 @@ def punto_da_relativa(geo_finestra, relativa):
     if not (fx <= x <= fx + fl and fy <= y <= fy + fa):
         return None
     return (x, y)
+
+
+def caselle_in_json(caselle):
+    """La memoria delle caselle in testo JSON: chiavi "app|larghezza|altezza",
+    valori [frazione, distanza dal fondo]. Sopravvive ai riavvii dell'app."""
+    return json.dumps(
+        {"|".join(str(p) for p in chiave): list(relativa) for chiave, relativa in caselle.items()},
+        ensure_ascii=False, sort_keys=True,
+    )
+
+
+def caselle_da_json(testo):
+    """La memoria delle caselle da testo JSON; testo rotto o vuoto = memoria vuota."""
+    try:
+        grezzo = json.loads(testo or "{}")
+    except (ValueError, TypeError):
+        return {}
+    caselle = {}
+    for chiave, relativa in (grezzo.items() if isinstance(grezzo, dict) else []):
+        parti = str(chiave).rsplit("|", 2)
+        if len(parti) != 3 or not isinstance(relativa, (list, tuple)) or len(relativa) != 2:
+            continue
+        try:
+            caselle[(parti[0], int(parti[1]), int(parti[2]))] = (float(relativa[0]), float(relativa[1]))
+        except (TypeError, ValueError):
+            continue
+    return caselle
 
 
 # --- audio conservato: riascoltare le frasi capite male per tarare Voce ---

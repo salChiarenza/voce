@@ -447,6 +447,33 @@ def punto_da_relativa(geo_finestra, relativa):
     return (x, y)
 
 
+def caselle_in_json(caselle):
+    """La memoria delle caselle in testo JSON: chiavi "app|larghezza|altezza",
+    valori [frazione, distanza dal fondo]. Sopravvive ai riavvii dell'app."""
+    return json.dumps(
+        {"|".join(str(p) for p in chiave): list(relativa) for chiave, relativa in caselle.items()},
+        ensure_ascii=False, sort_keys=True,
+    )
+
+
+def caselle_da_json(testo):
+    """La memoria delle caselle da testo JSON; testo rotto o vuoto = memoria vuota."""
+    try:
+        grezzo = json.loads(testo or "{}")
+    except (ValueError, TypeError):
+        return {}
+    caselle = {}
+    for chiave, relativa in (grezzo.items() if isinstance(grezzo, dict) else []):
+        parti = str(chiave).rsplit("|", 2)
+        if len(parti) != 3 or not isinstance(relativa, (list, tuple)) or len(relativa) != 2:
+            continue
+        try:
+            caselle[(parti[0], int(parti[1]), int(parti[2]))] = (float(relativa[0]), float(relativa[1]))
+        except (TypeError, ValueError):
+            continue
+    return caselle
+
+
 def file_audio_da_eliminare(nomi, massimo):
     """Quali file audio conservati vanno eliminati per restare entro `massimo`:
     i nomi contengono il timestamp, quindi l'ordine alfabetico e' l'ordine
@@ -1513,7 +1540,26 @@ ATTESA_RISVEGLIO_SEC = 0.5
 GIRI_RISVEGLIO = 3    # giri di ricerca in tutto: al massimo un secondo in piu'
 # Dove stava la casella l'ultima volta, per finestra e taglia: se l'albero resta
 # addormentato dopo tutti i giri si clicca li' (gemella del Mac, 17/09/2026).
+# Vive anche su file accanto all'app: a ogni riavvio l'app riparte gia' istruita.
 _caselle_ricordate = {}
+FILE_CASELLE_RICORDATE = BASE / "caselle_ricordate.json"
+
+
+def _carica_caselle_ricordate():
+    try:
+        _caselle_ricordate.update(caselle_da_json(FILE_CASELLE_RICORDATE.read_text(encoding="utf-8")))
+    except OSError:
+        pass  # prima volta: nessuna memoria
+
+
+def _salva_caselle_ricordate():
+    try:
+        FILE_CASELLE_RICORDATE.write_text(caselle_in_json(_caselle_ricordate), encoding="utf-8")
+    except OSError:
+        logging.warning("memoria delle caselle non salvata: %s", FILE_CASELLE_RICORDATE)
+
+
+_carica_caselle_ricordate()
 
 
 def _geo_rett(r):
@@ -1526,9 +1572,12 @@ def _ricorda_casella(nome, geo_finestra, geo_casella):
     relativa = posizione_relativa(geo_finestra, geo_casella) if geo_finestra and geo_casella else None
     if chiave is None or relativa is None:
         return
-    if chiave not in _caselle_ricordate:
+    nuova = chiave not in _caselle_ricordate
+    if nuova:
         logging.info("cursore automatico: casella ricordata per %s (finestra %sx%s)", *chiave)
-    _caselle_ricordate[chiave] = relativa
+    if nuova or _caselle_ricordate[chiave] != relativa:
+        _caselle_ricordate[chiave] = relativa
+        _salva_caselle_ricordate()
 
 
 def _punto_ricordato(nome, geo_finestra):
