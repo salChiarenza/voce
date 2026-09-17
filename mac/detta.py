@@ -38,7 +38,7 @@ from voce_lib import (
     serve_pulizia, comando_agente, comandi_agente, destinazione_agente, ritardo_invio,
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
-    casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre,
+    casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre, chiave_casella, posizione_relativa, punto_da_relativa,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
     SOGLIA_SILENZIO_PROGRESSIVA, BLOCCO_PROGRESSIVO_SEC,
@@ -605,6 +605,11 @@ AX_MAX_ELEMENTI = 4000
 # di dire "caselle non ce ne sono" si aspetta questo tempo e si riguarda una
 # volta. Mezzo secondo, non uno: si paga solo quando il primo giro e' vuoto.
 AX_ATTESA_RISVEGLIO_SEC = 0.5
+AX_GIRI_RISVEGLIO = 3    # giri di ricerca in tutto: al massimo un secondo in piu'
+# Dove stava la casella l'ultima volta, per app e taglia di finestra: se
+# l'albero resta addormentato dopo tutti i giri si clicca li' (Sal, 17/09/2026:
+# "deve trovare da solo dove scrivere e deve scrivere").
+_caselle_ricordate = {}
 
 
 def _ax_valore(elemento, attributo):
@@ -753,16 +758,46 @@ def _cerca_casella(ax_app, finestra, geo_dichiarata, con_pagina):
     return None
 
 
+def _geometria_finestra_a_fuoco(ax_app):
+    finestra = _ax_valore(ax_app, AX.kAXFocusedWindowAttribute)
+    return _ax_geometria(finestra) if finestra is not None else None
+
+
+def _ricorda_casella(app, ax_app, geometria=None, geo_finestra=None):
+    """Segna dove sta la casella di scrittura in questa finestra (app e
+    taglia): se l'albero Accessibility dell'app si addormenta (Claude
+    2.110.x, 17/09/2026) la volta dopo si clicca li' invece di incollare alla
+    cieca. Senza geometria si legge quella dell'elemento col focus."""
+    if geo_finestra is None:
+        geo_finestra = _geometria_finestra_a_fuoco(ax_app)
+    if geometria is None:
+        focalizzato = _ax_valore(ax_app, AX.kAXFocusedUIElementAttribute)
+        geometria = _ax_geometria(focalizzato) if focalizzato is not None else None
+    chiave = chiave_casella(app.localizedName(), geo_finestra)
+    relativa = posizione_relativa(geo_finestra, geometria) if geo_finestra and geometria else None
+    if chiave is None or relativa is None:
+        return
+    if chiave not in _caselle_ricordate:
+        logging.getLogger("voce").info("cursore automatico: casella ricordata per %s (finestra %sx%s)", *chiave)
+    _caselle_ricordate[chiave] = relativa
+
+
+def _punto_ricordato(app, geo_finestra):
+    """Dove cliccare per la casella di questa finestra, se la si e' gia' vista."""
+    relativa = _caselle_ricordate.get(chiave_casella(app.localizedName(), geo_finestra))
+    return punto_da_relativa(geo_finestra, relativa) if relativa else None
+
+
 def _casella_nelle_finestre(ax_app, finestre, log):
     """La prima casella di scrittura provando le finestre nell'ordine dato:
-    (elemento, geometria) oppure None."""
+    (elemento, geometria, geometria della sua finestra) oppure None."""
     for indice, (finestra, geo_finestra) in enumerate(finestre):
         trovata = _cerca_casella(ax_app, finestra, geo_finestra, con_pagina=(indice == 0))
         if trovata is not None:
             if indice:
                 log.info("cursore automatico: casella trovata nella finestra %s di %s",
                          indice + 1, len(finestre))
-            return trovata
+            return trovata[0], trovata[1], geo_finestra
     return None
 
 
@@ -777,10 +812,12 @@ def metti_cursore_in_casella(app):
     (08/09/2026), e li' la dettatura finiva nel vuoto.
 
     Se al primo giro caselle non se ne vedono si aspetta AX_ATTESA_RISVEGLIO_SEC
-    e si riguarda una volta: le app Electron (Claude 2.110.x, 17/09/2026)
-    espongono il contenuto solo dopo il primo tocco Accessibility, e la
-    dettatura finiva "alla cieca" con l'avviso sonoro anche se il cursore
-    stava gia' nella chat.
+    e si riguarda, fino a AX_GIRI_RISVEGLIO giri: le app Electron (Claude
+    2.110.x, 17/09/2026) espongono il contenuto solo dopo il primo tocco
+    Accessibility, e la dettatura finiva "alla cieca" con l'avviso sonoro
+    anche se il cursore stava gia' nella chat. Se la finestra resta
+    addormentata si clicca dove stava la casella l'ultima volta in una
+    finestra di questa taglia (memoria aggiornata a ogni dettatura riuscita).
 
     Torna True se un posto dove scrivere c'e' (focus gia' giusto, o messo);
     False SOLO quando le finestre sono leggibili e di caselle non ce n'e'
@@ -792,6 +829,7 @@ def metti_cursore_in_casella(app):
     log = logging.getLogger("voce")
     ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
     if _focus_in_casella(ax_app):
+        _ricorda_casella(app, ax_app)
         return True  # il cursore e' gia' al posto giusto
     finestre, err_focus, lette = _finestre_bersaglio(ax_app)
     if not finestre:
@@ -803,26 +841,37 @@ def metti_cursore_in_casella(app):
         log.info("cursore automatico: nessuna finestra leggibile (errore AX %s)", err_focus)
         return None
     trovata = _casella_nelle_finestre(ax_app, finestre, log)
-    if trovata is None:
+    giri = 1
+    while trovata is None and giri < AX_GIRI_RISVEGLIO:
         # guscio vuoto di un'app Electron appena toccata? si aspetta che
-        # l'albero si accenda e si riguarda UNA volta (vedi AX_ATTESA_RISVEGLIO_SEC)
+        # l'albero si accenda e si riguarda (vedi AX_ATTESA_RISVEGLIO_SEC)
         time.sleep(AX_ATTESA_RISVEGLIO_SEC)
+        giri += 1
         if _focus_in_casella(ax_app):
-            log.info("cursore automatico: casella gia' a fuoco, vista al secondo giro (attesa %.1fs)",
-                     AX_ATTESA_RISVEGLIO_SEC)
+            log.info("cursore automatico: casella gia' a fuoco, vista al giro %s", giri)
+            _ricorda_casella(app, ax_app)
             return True
         finestre_dopo, _, _ = _finestre_bersaglio(ax_app)
         if finestre_dopo:
             finestre = finestre_dopo
             trovata = _casella_nelle_finestre(ax_app, finestre, log)
         if trovata is not None:
-            log.info("cursore automatico: casella trovata al secondo giro (attesa %.1fs)",
-                     AX_ATTESA_RISVEGLIO_SEC)
+            log.info("cursore automatico: casella trovata al giro %s", giri)
     if trovata is None:
-        log.info("cursore automatico: nessuna casella di testo nelle %s finestre dell'app",
-                 len(finestre))
+        # finestra ancora addormentata: si clicca dove stava la casella
+        # l'ultima volta in una finestra di questa taglia, se la si e' vista
+        punto = _punto_ricordato(app, finestre[0][1])
+        if punto is not None:
+            log.info("cursore automatico: finestra addormentata dopo %s giri, "
+                     "click dove stava la casella l'ultima volta", giri)
+            _click_sintetico((punto[0], punto[1], 0, 0))
+            time.sleep(0.15)
+            return True
+        log.info("cursore automatico: nessuna casella di testo nelle %s finestre dell'app (%s giri)",
+                 len(finestre), giri)
         return False
-    elemento, geometria = trovata
+    elemento, geometria, geo_finestra = trovata
+    _ricorda_casella(app, ax_app, geometria, geo_finestra)
     AX.AXUIElementSetAttributeValue(elemento, AX.kAXFocusedAttribute, True)
     time.sleep(0.1)
     if _focus_in_casella(ax_app):

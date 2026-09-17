@@ -1960,81 +1960,139 @@ def test_ordina_finestre_il_mouse_sposta_solo_la_precedenza():
 # 8 quel mattino). Misurato: mezzo secondo dopo il primo tocco l'albero e'
 # pieno (449-648 elementi, casella a fuoco).
 
-def _cursore_automatico_mac(passate, focus_dopo_attesa=False):
-    """Esegue metti_cursore_in_casella di mac/detta.py con Accessibility finta.
+def _cursore_automatico_mac():
+    """Carica metti_cursore_in_casella di mac/detta.py con Accessibility finta.
+    Torna uno stato con chiama(passate, focus_dopo_attesa=False, focus=False):
     passate = risultato di _cerca_casella a ogni giro (None = nessuna casella).
-    Torna (esito, attese di time.sleep, numero di giri di ricerca)."""
+    La memoria delle caselle vive nello stesso spazio: piu' chiamate la condividono."""
     import ast
     import logging
     from types import SimpleNamespace
-    attese, giri, focus = [], [], {"in_casella": False}
+
+    stato = SimpleNamespace(attese=[], giri=[], click=[], focus=False, focus_dopo_attesa=False,
+                            passate=[None], finestra=(0, 33, 1512, 949), casella_a_fuoco=(100, 900, 1300, 60))
 
     def cerca(ax_app, finestra, geo, con_pagina):
-        giri.append(con_pagina)
-        return passate[min(len(giri) - 1, len(passate) - 1)]
+        stato.giri.append(con_pagina)
+        return stato.passate[min(len(stato.giri) - 1, len(stato.passate) - 1)]
 
     def dormi(secondi):
-        attese.append(secondi)
-        if focus_dopo_attesa:  # albero acceso: la casella aveva gia' il focus
-            focus["in_casella"] = True
+        stato.attese.append(secondi)
+        if stato.focus_dopo_attesa:  # albero acceso: la casella aveva gia' il focus
+            stato.focus = True
 
     ax = SimpleNamespace(
         AXUIElementCreateApplication=lambda pid: "ax_app",
         AXUIElementSetAttributeValue=lambda *a: 0, kAXFocusedAttribute="AXFocused",
+        kAXFocusedUIElementAttribute="AXFocusedUIElement",
     )
     spazio = dict(
         logging=logging, cfg={"cursore_automatico": True}, AX=ax,
         time=SimpleNamespace(sleep=dormi),
-        _focus_in_casella=lambda ax_app: focus["in_casella"],
-        _finestre_bersaglio=lambda ax_app: ([("finestra", (0, 33, 1512, 949))], 0, 1),
-        _cerca_casella=cerca, _click_sintetico=lambda geo: None,
+        _focus_in_casella=lambda ax_app: stato.focus,
+        _finestre_bersaglio=lambda ax_app: ([("finestra", stato.finestra)], 0, 1),
+        _cerca_casella=cerca, _click_sintetico=lambda geo: stato.click.append(geo),
+        _geometria_finestra_a_fuoco=lambda ax_app: stato.finestra,
+        _ax_valore=lambda el, attr: "casella", _ax_geometria=lambda el: stato.casella_a_fuoco,
+        chiave_casella=voce_lib.chiave_casella, posizione_relativa=voce_lib.posizione_relativa,
+        punto_da_relativa=voce_lib.punto_da_relativa,
     )
     path = REPO_ROOT / "mac" / "detta.py"
     nodi = [
         n for n in ast.parse(path.read_text()).body
         if (isinstance(n, ast.FunctionDef)
-            and n.name in ("metti_cursore_in_casella", "_casella_nelle_finestre"))
+            and n.name in ("metti_cursore_in_casella", "_casella_nelle_finestre",
+                           "_ricorda_casella", "_punto_ricordato"))
         or (isinstance(n, ast.Assign)
-            and any(getattr(t, "id", "") == "AX_ATTESA_RISVEGLIO_SEC" for t in n.targets))
+            and any(getattr(t, "id", "") in ("AX_ATTESA_RISVEGLIO_SEC", "AX_GIRI_RISVEGLIO", "_caselle_ricordate")
+                    for t in n.targets))
     ]
     exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
     app = SimpleNamespace(processIdentifier=lambda: 41474, localizedName=lambda: "Claude")
-    esito = spazio["metti_cursore_in_casella"](app)
-    return esito, attese, len(giri), spazio["AX_ATTESA_RISVEGLIO_SEC"]
+
+    def chiama(passate, focus_dopo_attesa=False, focus=False):
+        stato.passate, stato.focus_dopo_attesa, stato.focus = passate, focus_dopo_attesa, focus
+        stato.attese, stato.giri, stato.click = [], [], []
+        return spazio["metti_cursore_in_casella"](app)
+
+    stato.chiama = chiama
+    stato.attesa = spazio["AX_ATTESA_RISVEGLIO_SEC"]
+    stato.giri_massimi = spazio["AX_GIRI_RISVEGLIO"]
+    stato.memoria = spazio["_caselle_ricordate"]
+    return stato
 
 
 def test_cursore_automatico_riprova_quando_l_albero_e_addormentato():
     # primo giro: guscio vuoto; dopo l'attesa l'albero e' acceso e la casella
     # della chat ha gia' il focus -> si scrive li', niente avviso "Basso"
-    esito, attese, giri, attesa = _cursore_automatico_mac([None], focus_dopo_attesa=True)
-    assert esito is True
-    assert attesa in attese and attesa <= 0.5  # mezzo secondo, non uno
-    assert giri == 1
+    s = _cursore_automatico_mac()
+    assert s.chiama([None], focus_dopo_attesa=True) is True
+    assert s.attesa in s.attese and s.attesa <= 0.5  # mezzo secondo, non uno
+    assert len(s.giri) == 1 and s.click == []
 
 
 def test_cursore_automatico_al_secondo_giro_trova_la_casella():
+    s = _cursore_automatico_mac()
     casella = ("elemento", (100, 800, 1300, 60))
-    esito, attese, giri, attesa = _cursore_automatico_mac([None, casella])
-    assert esito is True
-    assert attese.count(attesa) == 1
-    assert giri == 2
+    assert s.chiama([None, casella]) is True
+    assert s.attese.count(s.attesa) == 1
+    assert len(s.giri) == 2
 
 
-def test_cursore_automatico_dopo_due_giri_vuoti_dice_che_caselle_non_ce_ne_sono():
-    # finestra leggibile e davvero senza caselle (Finder, Anteprima): l'avviso
-    # "Basso" del 30/08 resta, ma solo dopo il secondo giro
-    esito, attese, giri, attesa = _cursore_automatico_mac([None, None])
-    assert esito is False
-    assert attese.count(attesa) == 1
-    assert giri == 2
+def test_cursore_automatico_dopo_tutti_i_giri_senza_memoria_dice_che_caselle_non_ce_ne_sono():
+    # finestra leggibile, mai vista con una casella (Finder, Anteprima):
+    # l'avviso "Basso" del 30/08 resta, ma solo dopo tutti i giri
+    s = _cursore_automatico_mac()
+    assert s.chiama([None]) is False
+    assert s.giri_massimi == 3 and len(s.giri) == s.giri_massimi
+    assert s.attese.count(s.attesa) == s.giri_massimi - 1
+    assert s.click == []
 
 
 def test_cursore_automatico_non_aspetta_se_la_casella_c_e_subito():
+    s = _cursore_automatico_mac()
     casella = ("elemento", (100, 800, 1300, 60))
-    esito, attese, giri, attesa = _cursore_automatico_mac([casella])
-    assert esito is True
-    assert attesa not in attese
-    assert giri == 1
+    assert s.chiama([casella]) is True
+    assert s.attesa not in s.attese and len(s.giri) == 1
+
+
+def test_cursore_automatico_ricorda_la_casella_e_ci_clicca_quando_la_finestra_dorme():
+    # Sal 17/09/2026, due dettature alla cieca alle 12:47 anche col secondo giro:
+    # "deve trovare da solo dove scrivere e deve scrivere". Prima dettatura:
+    # casella a fuoco (albero acceso) -> posizione ricordata per app e taglia.
+    s = _cursore_automatico_mac()
+    assert s.chiama([None], focus=True) is True
+    assert ("Claude", 1512, 949) in s.memoria
+    # seconda: albero addormentato per tutti i giri -> click dove stava la casella
+    assert s.chiama([None]) is True
+    assert len(s.giri) == s.giri_massimi
+    assert len(s.click) == 1
+    x, y, _, _ = s.click[0]
+    # dentro la casella vista prima (100, 900, 1300, 60): vicino al bordo sinistro e al fondo
+    assert 100 <= x <= 200 and 900 <= y <= 960
+
+
+def test_cursore_automatico_la_memoria_vale_solo_per_la_stessa_finestra():
+    s = _cursore_automatico_mac()
+    casella = ("elemento", (100, 800, 1300, 60))
+    assert s.chiama([casella]) is True  # ricordata dalla ricerca, finestra 1512x949
+    s.finestra = (0, 33, 1000, 700)     # altra taglia: nessuna memoria, niente click, avviso
+    assert s.chiama([None]) is False
+    assert s.click == []
+
+
+def test_posizione_relativa_e_punto_da_relativa_si_rispecchiano():
+    finestra = (0, 33, 1512, 949)
+    casella = (100, 900, 1300, 60)
+    relativa = voce_lib.posizione_relativa(finestra, casella)
+    assert voce_lib.punto_da_relativa(finestra, relativa) == pytest.approx((140, 940))
+    # finestra piu' alta: il punto resta ancorato al fondo
+    assert voce_lib.punto_da_relativa((0, 33, 1512, 1149), relativa) == pytest.approx((140, 1140))
+    # fuori dalla finestra: niente click
+    assert voce_lib.punto_da_relativa((0, 33, 1512, 30), relativa) is None
+    assert voce_lib.chiave_casella("Claude", finestra) == ("Claude", 1512, 949)
+    assert voce_lib.chiave_casella("", finestra) is None
+    assert voce_lib.posizione_relativa((0, 0, 0, 0), casella) is None
 
 
 # --- trascrizione progressiva (04/09/2026): dove tagliare, come rincollare ---

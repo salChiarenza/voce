@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.0-rc.13 - 17/09/2026 — se la finestra dorme, clicca dove stava la casella
+
+- Memoria delle caselle: a ogni dettatura riuscita l'app segna dove sta la
+  casella di scrittura (app + taglia della finestra; punto vicino al bordo
+  sinistro e al fondo della casella, cosi' resta dentro anche se si apre un
+  pannello a fianco o il testo cresce su piu' righe). Se l'albero
+  Accessibility resta addormentato dopo tutti i giri (Claude 2.110.x: due
+  dettature alla cieca alle 12:47 anche col secondo giro, testo perso),
+  clicca li' e scrive, invece di incollare alla cieca con l'avviso "Basso".
+  Senza memoria per quella finestra l'avviso del 30/08 resta. Richiesta di
+  Sal: "deve trovare da solo dove scrivere e deve scrivere". Voce nel log
+  la prima volta che una finestra viene ricordata e a ogni click di memoria.
+- Giri di risveglio da 2 a 3 (`AX_GIRI_RISVEGLIO`), mezzo secondo l'uno: al
+  massimo un secondo in piu', solo quando il primo giro e' vuoto.
+- Funzioni pure condivise in `voce_lib`: `chiave_casella`,
+  `posizione_relativa`, `punto_da_relativa`. 7 prove nuove, 279 verdi.
+
 ## 1.3.0-rc.12 - 17/09/2026 — il cursore aspetta che la finestra si accenda
 
 - Cursore automatico, secondo giro (17/09/2026): l'app Claude 2.110.x

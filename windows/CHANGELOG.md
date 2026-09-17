@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0-rc.13 - 17/09/2026 — gemella del Mac
+
+- Memoria delle caselle e click di sistema (`SetCursorPos` + `mouse_event`,
+  puntatore riportato dov'era) quando l'albero UI Automation resta
+  addormentato dopo tutti i giri; giri di risveglio da 2 a 3
+  (`GIRI_RISVEGLIO`). Stesse funzioni pure del Mac (`chiave_casella`,
+  `posizione_relativa`, `punto_da_relativa`) con prova di parita'. 7 prove
+  nuove; da provare su PC reale come il resto della versione Windows.
+
 ## 1.3.0-rc.12 - 17/09/2026 — gemella del Mac
 
 - Cursore automatico, secondo giro (17/09/2026, gemella del Mac): se al

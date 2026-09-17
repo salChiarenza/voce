@@ -491,6 +491,41 @@ def ordina_finestre(geometrie, punto_mouse=None):
     return sorted(ordine, key=lambda i: (not sotto_il_mouse(i), i))
 
 
+def chiave_casella(nome_app, geo_finestra):
+    """Chiave della memoria delle caselle: stessa app e stessa taglia di
+    finestra. Un'altra taglia (altra vista, altro monitor) ha la sua memoria."""
+    if not nome_app or not geo_finestra:
+        return None
+    return (str(nome_app), int(round(geo_finestra[2])), int(round(geo_finestra[3])))
+
+
+def posizione_relativa(geo_finestra, geo_casella):
+    """Il punto di click dentro la casella, riferito alla finestra: frazione
+    della larghezza e distanza dal bordo in basso. Il punto sta vicino al
+    bordo sinistro e al fondo della casella: la casella delle chat e'
+    ancorata in basso e, se si apre un pannello a fianco o il testo cresce su
+    piu' righe, quel punto resta dentro. Geometrie (x, y, larghezza, altezza)
+    con y verso il basso. None se finestra o casella non hanno taglia."""
+    fx, fy, fl, fa = geo_finestra
+    cx, cy, cl, ca = geo_casella
+    if fl <= 0 or fa <= 0 or cl <= 0 or ca <= 0:
+        return None
+    x = cx + min(40, cl / 4)
+    y = cy + ca - min(20, ca / 2)
+    return ((x - fx) / fl, (fy + fa) - y)
+
+
+def punto_da_relativa(geo_finestra, relativa):
+    """Il punto assoluto dove cliccare, o None se cade fuori dalla finestra."""
+    fx, fy, fl, fa = geo_finestra
+    frazione, dal_fondo = relativa
+    x = fx + frazione * fl
+    y = fy + fa - dal_fondo
+    if not (fx <= x <= fx + fl and fy <= y <= fy + fa):
+        return None
+    return (x, y)
+
+
 # --- audio conservato: riascoltare le frasi capite male per tarare Voce ---
 
 def file_audio_da_eliminare(nomi, massimo):

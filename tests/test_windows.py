@@ -403,18 +403,19 @@ def test_cursore_automatico_windows_non_blocca_mai_l_incolla():
     assert "except Exception:" in corpo
 
 
-def _cursore_automatico_windows(passate, focus_dopo_attesa=False):
-    """Esegue metti_cursore_in_casella di Windows con UI Automation finta
-    (gemella di _cursore_automatico_mac). passate = caselle trovate da FindAll a
-    ogni giro (None = nessuna). Torna (esito, attese, giri, attesa prevista)."""
+def _cursore_automatico_windows():
+    """Carica metti_cursore_in_casella di Windows con UI Automation finta
+    (gemella di _cursore_automatico_mac). chiama(passate, focus_dopo_attesa, focus):
+    passate = caselle trovate da FindAll a ogni giro (None = nessuna)."""
     import sys
     sys.path.insert(0, str(REPO_ROOT / "mac"))
     import voce_lib
 
-    attese, giri, focus = [], [], {"in_casella": False}
+    stato = SimpleNamespace(attese=[], giri=[], click=[], focus=False, focus_dopo_attesa=False,
+                            passate=[None], finestra=(0, 33, 1512, 982), casella_a_fuoco=(100, 900, 1400, 960))
 
-    def rett(top, bottom, left, right):
-        return SimpleNamespace(top=top, bottom=bottom, left=left, right=right)
+    def rett(left, top, right, bottom):
+        return SimpleNamespace(left=left, top=top, right=right, bottom=bottom)
 
     class Trovate:
         def __init__(self, elementi):
@@ -424,26 +425,36 @@ def _cursore_automatico_windows(passate, focus_dopo_attesa=False):
             return self.elementi[i]
 
     def find_all(scope, condizione):
-        giri.append(scope)
-        esito = passate[min(len(giri) - 1, len(passate) - 1)]
+        stato.giri.append(scope)
+        esito = stato.passate[min(len(stato.giri) - 1, len(stato.passate) - 1)]
         if esito is None:
             return Trovate([])
-        return Trovate([SimpleNamespace(CurrentBoundingRectangle=rett(*esito), SetFocus=lambda: None)])
+        left, top, right, bottom = esito
+        return Trovate([SimpleNamespace(CurrentBoundingRectangle=rett(left, top, right, bottom), SetFocus=lambda: None)])
 
-    radice = SimpleNamespace(FindAll=find_all, CurrentBoundingRectangle=rett(33, 982, 0, 1512))
+    def radice():
+        left, top, right, bottom = stato.finestra
+        return SimpleNamespace(FindAll=find_all, CurrentBoundingRectangle=rett(left, top, right, bottom))
+
+    def a_fuoco():
+        if not stato.focus:
+            return None
+        left, top, right, bottom = stato.casella_a_fuoco
+        return SimpleNamespace(CurrentControlType=50004, CurrentBoundingRectangle=rett(left, top, right, bottom))
+
     uia = SimpleNamespace(
-        GetFocusedElement=lambda: SimpleNamespace(CurrentControlType=50004) if focus["in_casella"] else None,
-        ElementFromHandle=lambda hwnd: radice,
+        GetFocusedElement=a_fuoco, ElementFromHandle=lambda hwnd: radice(),
         CreateOrCondition=lambda a, b: "oppure", CreatePropertyCondition=lambda p, v: "condizione",
     )
 
     def dormi(secondi):
-        attese.append(secondi)
-        if focus_dopo_attesa:  # albero acceso: la casella aveva gia' il focus
-            focus["in_casella"] = True
+        stato.attese.append(secondi)
+        if stato.focus_dopo_attesa:
+            stato.focus = True
 
     spazio = dict(
         CFG={"cursore_automatico": True}, _client_uia=lambda: uia, logging=logging,
+        nome_finestra=lambda hwnd: "Claude", _click_sintetico=lambda x, y: stato.click.append((x, y)),
         _UIA_EDIT=50004, _UIA_DOCUMENT=50030, _UIA_PROP_CONTROLTYPE=30003, _UIA_SCOPE_DISCENDENTI=4,
         casella_ammissibile=voce_lib.casella_ammissibile, scegli_casella=voce_lib.scegli_casella,
         time=SimpleNamespace(sleep=dormi),
@@ -451,45 +462,83 @@ def _cursore_automatico_windows(passate, focus_dopo_attesa=False):
     path = REPO_ROOT / "windows" / "voice_dettatura_windows.py"
     nodi = [
         n for n in ast.parse(path.read_text(encoding="utf-8")).body
-        if (isinstance(n, ast.FunctionDef) and n.name == "metti_cursore_in_casella")
+        if (isinstance(n, ast.FunctionDef)
+            and n.name in ("metti_cursore_in_casella", "_geo_rett", "_ricorda_casella", "_punto_ricordato",
+                           "chiave_casella", "posizione_relativa", "punto_da_relativa"))
         or (isinstance(n, ast.Assign)
-            and any(getattr(t, "id", "") == "ATTESA_RISVEGLIO_SEC" for t in n.targets))
+            and any(getattr(t, "id", "") in ("ATTESA_RISVEGLIO_SEC", "GIRI_RISVEGLIO", "_caselle_ricordate")
+                    for t in n.targets))
     ]
     exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
-    esito = spazio["metti_cursore_in_casella"](12345)
-    return esito, attese, len(giri), spazio["ATTESA_RISVEGLIO_SEC"]
+
+    def chiama(passate, focus_dopo_attesa=False, focus=False):
+        stato.passate, stato.focus_dopo_attesa, stato.focus = passate, focus_dopo_attesa, focus
+        stato.attese, stato.giri, stato.click = [], [], []
+        return spazio["metti_cursore_in_casella"](12345)
+
+    stato.chiama = chiama
+    stato.attesa = spazio["ATTESA_RISVEGLIO_SEC"]
+    stato.giri_massimi = spazio["GIRI_RISVEGLIO"]
+    stato.memoria = spazio["_caselle_ricordate"]
+    return stato
 
 
 def test_cursore_automatico_windows_riprova_quando_l_albero_e_addormentato():
-    # gemella del Mac (17/09/2026): primo giro vuoto, dopo l'attesa la
-    # casella della chat ha gia' il focus -> si scrive li', niente avviso
-    esito, attese, giri, attesa = _cursore_automatico_windows([None], focus_dopo_attesa=True)
-    assert esito is True
-    assert attesa in attese and attesa <= 0.5
-    assert giri == 1
+    s = _cursore_automatico_windows()
+    assert s.chiama([None], focus_dopo_attesa=True) is True
+    assert s.attesa in s.attese and s.attesa <= 0.5
+    assert len(s.giri) == 1 and s.click == []
 
 
 def test_cursore_automatico_windows_al_secondo_giro_trova_la_casella():
-    casella = (800, 860, 100, 1400)  # top, bottom, left, right: in fondo alla finestra
-    esito, attese, giri, attesa = _cursore_automatico_windows([None, casella])
-    assert esito is True
-    assert attese.count(attesa) == 1
-    assert giri == 2
+    s = _cursore_automatico_windows()
+    casella = (100, 800, 1400, 860)  # left, top, right, bottom: in fondo alla finestra
+    assert s.chiama([None, casella]) is True
+    assert s.attese.count(s.attesa) == 1 and len(s.giri) == 2
 
 
-def test_cursore_automatico_windows_dopo_due_giri_vuoti_dice_che_caselle_non_ce_ne_sono():
-    esito, attese, giri, attesa = _cursore_automatico_windows([None, None])
-    assert esito is False
-    assert attese.count(attesa) == 1
-    assert giri == 2
+def test_cursore_automatico_windows_dopo_tutti_i_giri_senza_memoria_dice_che_caselle_non_ce_ne_sono():
+    s = _cursore_automatico_windows()
+    assert s.chiama([None]) is False
+    assert s.giri_massimi == 3 and len(s.giri) == s.giri_massimi
+    assert s.attese.count(s.attesa) == s.giri_massimi - 1 and s.click == []
 
 
 def test_cursore_automatico_windows_non_aspetta_se_la_casella_c_e_subito():
-    casella = (800, 860, 100, 1400)
-    esito, attese, giri, attesa = _cursore_automatico_windows([casella])
-    assert esito is True
-    assert attesa not in attese
-    assert giri == 1
+    s = _cursore_automatico_windows()
+    casella = (100, 800, 1400, 860)
+    assert s.chiama([casella]) is True
+    assert s.attesa not in s.attese and len(s.giri) == 1
+
+
+def test_cursore_automatico_windows_ricorda_la_casella_e_ci_clicca_quando_la_finestra_dorme():
+    s = _cursore_automatico_windows()
+    assert s.chiama([None], focus=True) is True
+    assert ("Claude", 1512, 949) in s.memoria
+    assert s.chiama([None]) is True
+    assert len(s.giri) == s.giri_massimi and len(s.click) == 1
+    x, y = s.click[0]
+    assert 100 <= x <= 200 and 900 <= y <= 960
+
+
+def test_cursore_automatico_windows_la_memoria_vale_solo_per_la_stessa_finestra():
+    s = _cursore_automatico_windows()
+    assert s.chiama([(100, 800, 1400, 860)]) is True
+    s.finestra = (0, 33, 1000, 733)
+    assert s.chiama([None]) is False and s.click == []
+
+
+def test_memoria_caselle_windows_gemella_del_mac():
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "mac"))
+    import voce_lib
+
+    spazio = _funzioni_pure_app("chiave_casella", "posizione_relativa", "punto_da_relativa")
+    finestra, casella = (0, 33, 1512, 949), (100, 900, 1300, 60)
+    relativa = spazio["posizione_relativa"](finestra, casella)
+    assert relativa == voce_lib.posizione_relativa(finestra, casella)
+    assert spazio["punto_da_relativa"](finestra, relativa) == voce_lib.punto_da_relativa(finestra, relativa)
+    assert spazio["chiave_casella"]("Claude", finestra) == voce_lib.chiave_casella("Claude", finestra)
 
 
 def test_rimuovi_eco_glossario_gemella_del_mac():

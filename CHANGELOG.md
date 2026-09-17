@@ -1,5 +1,13 @@
 # Changelog Voce
 
+## 1.3.0-rc.13 - 17/09/2026
+
+- Se la finestra dell'app resta "addormentata" per Accessibility anche dopo
+  i giri di attesa, Voce clicca da sola dove stava la casella di scrittura
+  l'ultima volta in quella finestra e scrive, invece di incollare alla cieca
+  con l'avviso sonoro. Mac e Windows; memoria aggiornata a ogni dettatura
+  riuscita. 279 prove verdi.
+
 ## 1.3.0-rc.12 - 17/09/2026
 
 Versione consegnabile che raccoglie il cantiere locale dal 05/09 (voci sotto),

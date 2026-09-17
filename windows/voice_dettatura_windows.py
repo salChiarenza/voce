@@ -412,6 +412,41 @@ def casella_ammissibile(y_casella, altezza_casella, y_finestra, altezza_finestra
     return altezza_casella >= altezza_finestra * quota_documento
 
 
+def chiave_casella(nome_app, geo_finestra):
+    """Chiave della memoria delle caselle: stessa app e stessa taglia di
+    finestra. Un'altra taglia (altra vista, altro monitor) ha la sua memoria."""
+    if not nome_app or not geo_finestra:
+        return None
+    return (str(nome_app), int(round(geo_finestra[2])), int(round(geo_finestra[3])))
+
+
+def posizione_relativa(geo_finestra, geo_casella):
+    """Il punto di click dentro la casella, riferito alla finestra: frazione
+    della larghezza e distanza dal bordo in basso. Il punto sta vicino al
+    bordo sinistro e al fondo della casella: la casella delle chat e'
+    ancorata in basso e, se si apre un pannello a fianco o il testo cresce su
+    piu' righe, quel punto resta dentro. Geometrie (x, y, larghezza, altezza)
+    con y verso il basso. None se finestra o casella non hanno taglia."""
+    fx, fy, fl, fa = geo_finestra
+    cx, cy, cl, ca = geo_casella
+    if fl <= 0 or fa <= 0 or cl <= 0 or ca <= 0:
+        return None
+    x = cx + min(40, cl / 4)
+    y = cy + ca - min(20, ca / 2)
+    return ((x - fx) / fl, (fy + fa) - y)
+
+
+def punto_da_relativa(geo_finestra, relativa):
+    """Il punto assoluto dove cliccare, o None se cade fuori dalla finestra."""
+    fx, fy, fl, fa = geo_finestra
+    frazione, dal_fondo = relativa
+    x = fx + frazione * fl
+    y = fy + fa - dal_fondo
+    if not (fx <= x <= fx + fl and fy <= y <= fy + fa):
+        return None
+    return (x, y)
+
+
 def file_audio_da_eliminare(nomi, massimo):
     """Quali file audio conservati vanno eliminati per restare entro `massimo`:
     i nomi contengono il timestamp, quindi l'ordine alfabetico e' l'ordine
@@ -1475,6 +1510,45 @@ _UIA_SCOPE_DISCENDENTI = 4
 # Electron costruiscono l'albero UI Automation solo dopo il primo tocco. Se il
 # primo giro e' vuoto si aspetta questo tempo e si riguarda una volta.
 ATTESA_RISVEGLIO_SEC = 0.5
+GIRI_RISVEGLIO = 3    # giri di ricerca in tutto: al massimo un secondo in piu'
+# Dove stava la casella l'ultima volta, per finestra e taglia: se l'albero resta
+# addormentato dopo tutti i giri si clicca li' (gemella del Mac, 17/09/2026).
+_caselle_ricordate = {}
+
+
+def _geo_rett(r):
+    """(x, y, larghezza, altezza) da un rettangolo UI Automation."""
+    return (r.left, r.top, r.right - r.left, r.bottom - r.top)
+
+
+def _ricorda_casella(nome, geo_finestra, geo_casella):
+    chiave = chiave_casella(nome, geo_finestra)
+    relativa = posizione_relativa(geo_finestra, geo_casella) if geo_finestra and geo_casella else None
+    if chiave is None or relativa is None:
+        return
+    if chiave not in _caselle_ricordate:
+        logging.info("cursore automatico: casella ricordata per %s (finestra %sx%s)", *chiave)
+    _caselle_ricordate[chiave] = relativa
+
+
+def _punto_ricordato(nome, geo_finestra):
+    relativa = _caselle_ricordate.get(chiave_casella(nome, geo_finestra))
+    return punto_da_relativa(geo_finestra, relativa) if relativa else None
+
+
+def _click_sintetico(x, y):
+    """Click del programma nel punto (coordinate schermo); poi il puntatore
+    torna dov'era, cosi' chi detta non se ne accorge (gemello del Mac)."""
+    class _Punto(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+    user32 = ctypes.windll.user32
+    prima = _Punto()
+    user32.GetCursorPos(ctypes.byref(prima))
+    user32.SetCursorPos(int(x), int(y))
+    user32.mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
+    user32.mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
+    user32.SetCursorPos(prima.x, prima.y)
 
 
 def _client_uia():
@@ -1503,10 +1577,21 @@ def metti_cursore_in_casella(hwnd):
         uia = _client_uia()
         if uia is None:
             return None
-        fuoco = uia.GetFocusedElement()
-        if fuoco is not None and fuoco.CurrentControlType in (_UIA_EDIT, _UIA_DOCUMENT):
-            return True  # il cursore e' gia' in una casella
+        nome = nome_finestra(hwnd)
         radice = uia.ElementFromHandle(hwnd)
+        rett_finestra = radice.CurrentBoundingRectangle
+        geo_finestra = _geo_rett(rett_finestra)
+        altezza_finestra = geo_finestra[3]
+
+        def a_fuoco():
+            fuoco = uia.GetFocusedElement()
+            if fuoco is not None and fuoco.CurrentControlType in (_UIA_EDIT, _UIA_DOCUMENT):
+                _ricorda_casella(nome, geo_finestra, _geo_rett(fuoco.CurrentBoundingRectangle))
+                return True
+            return False
+
+        if a_fuoco():
+            return True  # il cursore e' gia' in una casella
         condizione = uia.CreateOrCondition(
             uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_EDIT),
             uia.CreatePropertyCondition(_UIA_PROP_CONTROLTYPE, _UIA_DOCUMENT),
@@ -1514,8 +1599,6 @@ def metti_cursore_in_casella(hwnd):
 
         def caselle():
             trovate = radice.FindAll(_UIA_SCOPE_DISCENDENTI, condizione)
-            rett_finestra = radice.CurrentBoundingRectangle
-            altezza_finestra = rett_finestra.bottom - rett_finestra.top
             candidate = []
             for i in range(trovate.Length):
                 elemento = trovate.GetElement(i)
@@ -1526,27 +1609,39 @@ def metti_cursore_in_casella(hwnd):
                     r.top, r.bottom - r.top, rett_finestra.top, altezza_finestra
                 ):
                     continue
-                candidate.append((elemento, (r.top, r.right - r.left)))
+                candidate.append((elemento, (r.top, r.right - r.left), _geo_rett(r)))
             return candidate
 
         candidate = caselle()
-        scelta = scegli_casella([geometria for _, geometria in candidate])
-        if scelta is None:
+        scelta = scegli_casella([c[1] for c in candidate])
+        giri = 1
+        while scelta is None and giri < GIRI_RISVEGLIO:
             # guscio vuoto di un'app Chromium/Electron appena toccata? si
-            # aspetta che l'albero si accenda e si riguarda UNA volta
+            # aspetta che l'albero si accenda e si riguarda
             time.sleep(ATTESA_RISVEGLIO_SEC)
-            fuoco = uia.GetFocusedElement()
-            if fuoco is not None and fuoco.CurrentControlType in (_UIA_EDIT, _UIA_DOCUMENT):
-                logging.info("cursore automatico: casella gia' a fuoco, vista al secondo giro")
+            giri += 1
+            if a_fuoco():
+                logging.info("cursore automatico: casella gia' a fuoco, vista al giro %s", giri)
                 return True
             candidate = caselle()
-            scelta = scegli_casella([geometria for _, geometria in candidate])
+            scelta = scegli_casella([c[1] for c in candidate])
             if scelta is not None:
-                logging.info("cursore automatico: casella trovata al secondo giro")
+                logging.info("cursore automatico: casella trovata al giro %s", giri)
         if scelta is None:
-            logging.info("cursore automatico: nessuna casella di testo nella finestra")
+            # finestra ancora addormentata: si clicca dove stava la casella
+            # l'ultima volta in una finestra di questa taglia, se la si e' vista
+            punto = _punto_ricordato(nome, geo_finestra)
+            if punto is not None:
+                logging.info("cursore automatico: finestra addormentata dopo %s giri, "
+                             "click dove stava la casella l'ultima volta", giri)
+                _click_sintetico(*punto)
+                time.sleep(0.15)
+                return True
+            logging.info("cursore automatico: nessuna casella di testo nella finestra (%s giri)", giri)
             return False
-        candidate[scelta][0].SetFocus()
+        elemento = candidate[scelta][0]
+        _ricorda_casella(nome, geo_finestra, candidate[scelta][2])
+        elemento.SetFocus()
         time.sleep(0.1)
         logging.info("cursore automatico: messo nella casella di scrittura")
         return True
