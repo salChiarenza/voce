@@ -587,6 +587,33 @@ def riattiva_bersaglio(app, scheda_url=None):
         riattiva_scheda_browser(app, scheda_url)
 
 
+# --- se davanti non c'e' dove scrivere, il testo torna nell'ultima chat AI ---
+# Sal, 18/09/2026 11:36: due dettature per Claude fatte con Gmail davanti
+# (Chrome, nessuna casella) sono finite alla cieca e perse. «Io non devo
+# mettere per forza il cursore all'interno della chat in modo tale che la
+# voce capisca dove devo andare. Perché passo da una pagina all'altra.»
+# L'ultima chat AI dove una dettatura e' arrivata e' la base di chi parla con
+# un agente: se l'app davanti e' leggibile e non ha nessuna casella, si torna
+# li' invece di incollare nel vuoto.
+_ultima_chat_ai = None  # (app, scheda) dell'ultima chat AI dove il testo e' arrivato
+
+
+def _bersaglio_di_riserva(bersaglio, chat_agente):
+    """L'ultima chat AI usata, se e' un altro posto da `bersaglio` ed e' ancora
+    aperta; None se non c'e' o se il bersaglio e' gia' una chat AI (li' il
+    testo arriva comunque, anche senza casella leggibile: Antigravity 13/09)."""
+    if chat_agente or _ultima_chat_ai is None:
+        return None
+    app, scheda = _ultima_chat_ai
+    app_ora, scheda_ora = bersaglio
+    if app is None or app.isTerminated():
+        return None
+    if (app_ora is not None and app_ora.processIdentifier() == app.processIdentifier()
+            and scheda_ora == scheda):
+        return None
+    return _ultima_chat_ai
+
+
 # --- cursore automatico nella casella (richiesta 29/08/2026) ---
 # Sal passa di finestra in finestra e detta al volo: riattivare l'app non
 # basta se dentro la finestra nessuna casella di testo ha il focus, perche'
@@ -1311,6 +1338,7 @@ def _consegna_dettature():
 
 
 def _incolla_messaggio(testo, bersaglio, revisione):
+    global _ultima_chat_ai
     app_bersaglio, scheda_bersaglio = bersaglio
     chat_agente = destinazione_agente(
         app_bersaglio.localizedName() if app_bersaglio else "", scheda_bersaglio,
@@ -1319,6 +1347,16 @@ def _incolla_messaggio(testo, bersaglio, revisione):
     try:
         riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
         casella = esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
+        riserva = _bersaglio_di_riserva(bersaglio, chat_agente) if casella is False else None
+        if riserva is not None:
+            # davanti non c'e' dove scrivere (Gmail in Chrome, Finder, Anteprima):
+            # il testo torna nell'ultima chat AI, dove Sal stava parlando
+            app_bersaglio, scheda_bersaglio = riserva
+            chat_agente = True  # e' una chat AI per costruzione (vedi _ultima_chat_ai)
+            log.info("cursore automatico: davanti non c'e' dove scrivere, torno alla chat %s",
+                     app_bersaglio.localizedName())
+            riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
+            casella = esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
         senza_casella = casella is False  # finestra letta: di caselle non ce n'e'
         if testo:
             incolla(testo + " ", conserva_appunti=senza_casella)
@@ -1329,6 +1367,8 @@ def _incolla_messaggio(testo, bersaglio, revisione):
             # vuoto e persa col ripristino degli Appunti)
             suono("Basso")
             log.info("incollato alla cieca: testo conservato negli Appunti")
+        if chat_agente:
+            _ultima_chat_ai = (app_bersaglio, scheda_bersaglio)
         log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
         # invio automatico: parte sempre (indipendente dal toggle voce
         # agenti). La PAUSA prima dell'Invio dipende dal contesto: a voce

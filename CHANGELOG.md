@@ -1,5 +1,11 @@
 # Changelog Voce
 
+## 1.3.0-rc.17 - 18/09/2026
+
+- Se davanti non c'e' dove scrivere (Gmail, Finder, una pagina qualunque), il
+  testo torna nell'ultima chat AI dove stavi dettando, invece di finire nel
+  vuoto. Mac e Windows, 292 prove verdi.
+
 ## 1.3.0-rc.16 - 17/09/2026
 
 - Nelle chat AI l'Invio automatico parte dopo 2 secondi invece di 1: il

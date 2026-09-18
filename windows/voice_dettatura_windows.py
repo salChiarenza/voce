@@ -1526,6 +1526,31 @@ def riattiva_bersaglio(hwnd) -> None:
         logging.exception("impossibile riattivare la finestra bersaglio")
 
 
+# --- se davanti non c'e' dove scrivere, il testo torna nell'ultima chat AI ---
+# Gemella del Mac (18/09/2026): due dettature per Claude fatte con Gmail
+# davanti (nessuna casella) erano finite alla cieca e perse. L'ultima chat AI
+# dove una dettatura e' arrivata e' la base di chi parla con un agente: se la
+# finestra davanti e' leggibile e non ha caselle, si torna li'.
+_ultima_chat_ai = None  # handle dell'ultima chat AI dove il testo e' arrivato
+
+
+def finestra_viva(hwnd) -> bool:
+    """True se la finestra esiste ancora: una chat chiusa non e' una riserva."""
+    try:
+        return bool(hwnd) and bool(ctypes.windll.user32.IsWindow(hwnd))
+    except Exception:
+        return False
+
+
+def _bersaglio_di_riserva(hwnd, chat_agente):
+    """L'ultima chat AI usata, se e' un'altra finestra da `hwnd` ed e' ancora
+    aperta; None se non c'e' o se il bersaglio e' gia' una chat AI (li' il
+    testo arriva comunque, anche senza casella leggibile)."""
+    if chat_agente or not _ultima_chat_ai or _ultima_chat_ai == hwnd:
+        return None
+    return _ultima_chat_ai if finestra_viva(_ultima_chat_ai) else None
+
+
 # --- cursore automatico nella casella (gemello Mac, richiesta 29/08/2026) ---
 # Riattivare la finestra non basta se dentro nessuna casella di testo ha il
 # focus: il Ctrl+V cadrebbe nel vuoto e il proprietario dovrebbe prendere il
@@ -1939,10 +1964,21 @@ def _consegna_dettature():
 
 
 def _incolla_messaggio(text, finestra_bersaglio, revisione):
+    global _ultima_chat_ai
     chat_agente = destinazione_agente(nome_finestra(finestra_bersaglio))
     try:
         riattiva_bersaglio(finestra_bersaglio)
         casella = metti_cursore_in_casella(finestra_bersaglio)
+        riserva = _bersaglio_di_riserva(finestra_bersaglio, chat_agente) if casella is False else None
+        if riserva is not None:
+            # davanti non c'e' dove scrivere: il testo torna nell'ultima chat
+            # AI, dove si stava parlando (gemella del Mac, 18/09/2026)
+            finestra_bersaglio = riserva
+            chat_agente = True  # e' una chat AI per costruzione (vedi _ultima_chat_ai)
+            logging.info("cursore automatico: davanti non c'e' dove scrivere, torno alla chat %s",
+                         nome_finestra(finestra_bersaglio))
+            riattiva_bersaglio(finestra_bersaglio)
+            casella = metti_cursore_in_casella(finestra_bersaglio)
         senza_casella = casella is False  # finestra letta: di caselle non ce n'e'
         if text:
             paste_text(text + " ", conserva_appunti=senza_casella)
@@ -1952,6 +1988,8 @@ def _incolla_messaggio(text, finestra_bersaglio, revisione):
             if winsound is not None:
                 winsound.MessageBeep(winsound.MB_ICONHAND)
             logging.info("incollato alla cieca: testo conservato negli Appunti")
+        if chat_agente:
+            _ultima_chat_ai = finestra_bersaglio
         # invio automatico: parte sempre. La pausa prima dell'Invio dipende
         # dal contesto: a voce ON e' conversazione vera con l'agente (botta e
         # risposta); in una chat AI a voce OFF il testo si vede e parte quasi

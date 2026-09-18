@@ -2403,16 +2403,29 @@ def test_click_in_coda_audio_trattiene_il_messaggio(sistema):
     assert consegne == ['Prima. Seconda.']
 
 
-def _percorso_consegna(sistema, tmp_path, seconda_durante_incolla=False, *, casella=True, chat=True):
+def _percorso_consegna_completo(sistema, tmp_path, seconda_durante_incolla=False, *,
+                                casella=True, chat=True, vive=None):
+    """Il percorso reale dell'incolla (funzioni prese dal sorgente) con
+    tastiera, finestre e Accessibility finti. `casella` e `chat` possono
+    essere un valore fisso o una funzione del NOME del bersaglio; `vive` e'
+    l'elenco dei nomi delle app/finestre ancora aperte (tutte, se None)."""
     import ast
     import logging
     import queue
     import threading
     from types import SimpleNamespace
     coda = _coda_dettature(sistema)
-    app = SimpleNamespace(localizedName=lambda: 'ChatGPT')
-    bersaglio = (app, None) if sistema == 'mac' else 42
-    campo, inviati, chiusi = [], [], []
+    nomi = {42: 'ChatGPT', 43: 'Claude', 44: 'Google Chrome', 45: 'Antigravity'}
+    def app_finta(hwnd):
+        nome = nomi[hwnd]
+        return SimpleNamespace(localizedName=lambda: nome, processIdentifier=lambda: hwnd,
+                               isTerminated=lambda: vive is not None and nome not in vive)
+    def bersaglio_di(hwnd):
+        return (app_finta(hwnd), None) if sistema == 'mac' else hwnd
+    def nome_di(bersaglio):
+        return bersaglio[0].localizedName() if sistema == 'mac' else nomi[bersaglio]
+    bersaglio = bersaglio_di(42)
+    campo, inviati, chiusi, riattivati, suoni = [], [], [], [], []
     def incolla(testo, **kwargs):
         campo.append(testo)
         if seconda_durante_incolla and len(campo) == 1:
@@ -2423,6 +2436,11 @@ def _percorso_consegna(sistema, tmp_path, seconda_durante_incolla=False, *, case
         assert tasto == 'enter'
         inviati.append(''.join(campo).strip())
         campo.clear()
+    def esito_casella(target):
+        nome = target.localizedName() if sistema == 'mac' else nomi[target]
+        return casella(nome) if callable(casella) else casella
+    def chat_ai(nome, *a):
+        return chat(nome) if callable(chat) else chat
     tastiera = SimpleNamespace(press=premi, release=lambda _: None)
     tempo = SimpleNamespace(monotonic=lambda: 100.0, sleep=lambda _: None)
     spazio = dict(
@@ -2433,17 +2451,31 @@ def _percorso_consegna(sistema, tmp_path, seconda_durante_incolla=False, *, case
         Key=SimpleNamespace(enter='enter'), tastiera=tastiera,
         keyboard_controller=tastiera, incolla=incolla, paste_text=incolla,
         esegui_sicuro=lambda f, *a, **kw: f(*a, **kw),
-        riattiva_bersaglio=lambda *a: None, metti_cursore_in_casella=lambda *a: casella,
-        voce_attiva=lambda: False, destinazione_agente=lambda *a: chat,
-        nome_finestra=lambda _: 'ChatGPT', ritardo_invio=lambda *a: 0,
+        riattiva_bersaglio=lambda target, *a: riattivati.append(
+            target.localizedName() if sistema == 'mac' else nomi[target]),
+        metti_cursore_in_casella=esito_casella,
+        voce_attiva=lambda: False, destinazione_agente=chat_ai,
+        nome_finestra=lambda hwnd: nomi[hwnd], ritardo_invio=lambda *a: 0,
+        finestra_viva=lambda hwnd: vive is None or nomi[hwnd] in vive,
+        _ultima_chat_ai=None,
         chiudi_turno_utente=chiusi.append, _nascondi_o_arma=lambda: None,
-        suono=lambda _: None, winsound=None,  # avviso "incollato alla cieca"
+        suono=suoni.append, winsound=None,  # avviso "incollato alla cieca"
     )
     path = REPO_ROOT / ('mac/detta.py' if sistema == 'mac' else 'windows/voice_dettatura_windows.py')
     nodi = [n for n in ast.parse(path.read_text()).body
-            if isinstance(n, ast.FunctionDef) and n.name in ('_incolla_messaggio', '_consegna_dettature')]
+            if isinstance(n, ast.FunctionDef)
+            and n.name in ('_incolla_messaggio', '_consegna_dettature', '_bersaglio_di_riserva')]
     exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), 'exec'), spazio)
-    return coda, bersaglio, spazio['_consegna_dettature'], campo, inviati, chiusi
+    return SimpleNamespace(
+        coda=coda, bersaglio=bersaglio, bersaglio_di=bersaglio_di, nome_di=nome_di,
+        consegna=spazio['_consegna_dettature'], campo=campo, inviati=inviati,
+        chiusi=chiusi, riattivati=riattivati, suoni=suoni, spazio=spazio)
+
+
+def _percorso_consegna(sistema, tmp_path, seconda_durante_incolla=False, *, casella=True, chat=True):
+    p = _percorso_consegna_completo(sistema, tmp_path, seconda_durante_incolla,
+                                    casella=casella, chat=chat)
+    return p.coda, p.bersaglio, p.consegna, p.campo, p.inviati, p.chiusi
 
 
 @pytest.mark.parametrize('sistema', ['mac', 'windows'])
@@ -2509,6 +2541,64 @@ def test_fuori_dalle_chat_ai_senza_casella_non_si_invia(sistema, tmp_path):
     coda.completa('sola', 'Frase in un documento.', target)
     consegna()
     assert inviati == []
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_davanti_senza_casella_il_testo_torna_nell_ultima_chat_ai(sistema, tmp_path):
+    """Sal 18/09/2026 11:36, due dettature per Claude fatte con Gmail davanti
+    (Chrome, nessuna casella): incollate alla cieca e perse. «Io non devo
+    mettere per forza il cursore all'interno della chat in modo tale che la
+    voce capisca dove devo andare. Perché passo da una pagina all'altra.»
+    Se davanti non c'e' dove scrivere, il testo torna nell'ultima chat AI."""
+    p = _percorso_consegna_completo(
+        sistema, tmp_path,
+        casella=lambda nome: nome != 'Google Chrome',
+        chat=lambda nome: nome == 'Claude')
+    p.coda.apri('chat')
+    p.coda.completa('chat', 'Guarda la prima email.', p.bersaglio_di(43))
+    p.consegna()
+    assert p.inviati == ['Guarda la prima email.']
+    p.coda.apri('gmail')
+    p.coda.completa('gmail', 'Manda, archivia e passa alla prossima.', p.bersaglio_di(44))
+    p.consegna()
+    assert p.riattivati == ['Claude', 'Google Chrome', 'Claude']
+    assert p.inviati == ['Guarda la prima email.', 'Manda, archivia e passa alla prossima.']
+    assert p.suoni == []  # nessun «Basso»: il testo e' arrivato
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_una_chat_ai_senza_casella_leggibile_resta_il_bersaglio(sistema, tmp_path):
+    """Antigravity non espone caselle (13/09): dettando li' il testo resta li',
+    anche se prima si parlava con Claude. La riserva vale solo fuori dalle chat AI."""
+    p = _percorso_consegna_completo(
+        sistema, tmp_path,
+        casella=lambda nome: nome == 'Claude',
+        chat=lambda nome: nome in ('Claude', 'Antigravity'))
+    p.coda.apri('chat')
+    p.coda.completa('chat', 'Prima.', p.bersaglio_di(43))
+    p.consegna()
+    p.coda.apri('anti')
+    p.coda.completa('anti', 'Seconda.', p.bersaglio_di(45))
+    p.consegna()
+    assert p.riattivati == ['Claude', 'Antigravity']
+    assert p.inviati == ['Prima.', 'Seconda.']
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_senza_una_chat_ai_aperta_l_incolla_alla_cieca_resta_come_prima(sistema, tmp_path):
+    p = _percorso_consegna_completo(
+        sistema, tmp_path,
+        casella=lambda nome: nome == 'Claude',
+        chat=lambda nome: nome == 'Claude', vive=['Google Chrome'])  # Claude chiusa
+    p.coda.apri('chat')
+    p.coda.completa('chat', 'Prima.', p.bersaglio_di(43))
+    p.consegna()
+    p.coda.apri('gmail')
+    p.coda.completa('gmail', 'Nel vuoto.', p.bersaglio_di(44))
+    p.consegna()
+    assert p.riattivati == ['Claude', 'Google Chrome']
+    assert p.inviati == ['Prima.']
+    assert p.suoni == ['Basso'] if sistema == 'mac' else p.suoni == []
 
 
 @pytest.mark.parametrize('sistema', ['mac', 'windows'])

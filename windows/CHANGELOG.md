@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.17 - 18/09/2026 — gemella del Mac
+
+- Se la finestra davanti e' leggibile e non ha caselle, il testo torna
+  nell'ultima chat AI dove una dettatura e' arrivata (`_ultima_chat_ai`,
+  `finestra_viva` via `IsWindow`), come sul Mac. Da provare su PC reale.
+
 ## 1.3.0-rc.16 - 17/09/2026 — gemella del Mac
 
 - Invio automatico nelle chat AI dopo 2 secondi invece di 1

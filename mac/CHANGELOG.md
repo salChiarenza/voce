@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0-rc.17 - 18/09/2026 — se davanti non c'e' dove scrivere, il testo torna nella chat
+
+- Sal alle 11:36: due dettature per Claude fatte con Gmail davanti (Chrome,
+  nessuna casella nella finestra dopo 5 giri) incollate alla cieca e perse:
+  «non devo mettere per forza il cursore all'interno della chat... passo da
+  una pagina all'altra». Ora Voce ricorda l'ultima chat AI dove una dettatura
+  e' arrivata (`_ultima_chat_ai`, app + scheda) e, se l'app davanti e'
+  leggibile e non ha nessuna casella, riporta avanti quella chat, mette il
+  cursore nella sua casella e incolla li' (riga di log «torno alla chat»).
+  Fuori da questo caso nulla cambia: casella a fuoco davanti = si scrive li';
+  chat AI senza casella leggibile (Antigravity) = resta il bersaglio; chat
+  chiusa, oppure stessa app e scheda = incolla alla cieca con l'avviso di prima.
+- 3 prove nuove (Mac e Windows), 292 verdi.
+
 ## 1.3.0-rc.16 - 17/09/2026 — due secondi per bloccare l'Invio con uno spazio
 
 - Nelle chat AI l'Invio automatico parte dopo 2 secondi invece di 1
