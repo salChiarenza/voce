@@ -1,5 +1,16 @@
 # Changelog Voce
 
+## 1.3.0-rc.21 - 20/09/2026
+
+- ChatGPT (e ogni pagina) in Chrome: la casella ora si trova. Chrome mostra
+  la pagina ad Accessibility solo se un programma chiede l'interfaccia
+  estesa: senza, la Voce vedeva solo barre e pulsanti e incollava alla cieca
+  (44 volte in un giorno). Ora la chiede al tasto premuto, una volta, per i
+  browser della famiglia Chrome. L'indirizzo della scheda si legge dalla
+  finestra col focus via Accessibility (AppleScript rispondeva «about:blank»
+  mentre Sal era su ChatGPT in un'altra finestra): la chat viene
+  riconosciuta come chat AI. Solo Mac. 211 prove verdi.
+
 ## 1.3.0-rc.20 - 20/09/2026
 
 - Il ritorno alla chat (rc.17) non cambia mai monitor. Con il Samsung sopra il

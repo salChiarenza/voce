@@ -1997,6 +1997,47 @@ def test_app_ha_finestra_sul_monitor():
     assert voce_lib.app_ha_finestra_sul_monitor([], 716, 1, schermi) is False
 
 
+def test_e_browser_chromium():
+    # 20/09/2026, ChatGPT in Chrome: la pagina esiste per Accessibility solo
+    # se si chiede l'interfaccia estesa; Safari e le app native non ne hanno bisogno
+    assert voce_lib.e_browser_chromium("com.google.Chrome") is True
+    assert voce_lib.e_browser_chromium("com.google.Chrome.canary") is True
+    assert voce_lib.e_browser_chromium("com.brave.Browser") is True
+    assert voce_lib.e_browser_chromium("com.apple.Safari") is False
+    assert voce_lib.e_browser_chromium("com.anthropic.claudefordesktop") is False
+    assert voce_lib.e_browser_chromium(None) is False
+
+
+def test_sveglia_chiede_la_pagina_al_browser_chromium():
+    # la richiesta parte al tasto premuto, una volta sola, e non tocca le altre app
+    import ast
+    import logging
+    from types import SimpleNamespace
+    set_attr = []
+    stato = {"AXManualAccessibility": None, "AXEnhancedUserInterface": False}
+    ax = SimpleNamespace(AXUIElementCreateApplication=lambda pid: "ax_app",
+                         AXUIElementSetAttributeValue=lambda el, attr, val: set_attr.append((attr, val)) or 0)
+    spazio = dict(
+        logging=logging, cfg={"cursore_automatico": True}, AX=ax,
+        _ax_valore=lambda el, attr: stato.get(attr),
+        _focus_in_casella=lambda ax_app: True,
+        e_browser_chromium=voce_lib.e_browser_chromium,
+    )
+    path = REPO_ROOT / "mac" / "detta.py"
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, ast.FunctionDef) and n.name in ("_sveglia_accessibilita", "_chiedi_albero_electron", "_chiedi_pagina_browser")]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
+    chrome = SimpleNamespace(processIdentifier=lambda: 716, bundleIdentifier=lambda: "com.google.Chrome")
+    spazio["_sveglia_accessibilita"](chrome)
+    assert set_attr == [("AXEnhancedUserInterface", True)]
+    stato["AXEnhancedUserInterface"] = True  # gia' accesa: non si richiede
+    spazio["_sveglia_accessibilita"](chrome)
+    assert set_attr == [("AXEnhancedUserInterface", True)]
+    claude = SimpleNamespace(processIdentifier=lambda: 1, bundleIdentifier=lambda: "com.anthropic.claudefordesktop")
+    spazio["_sveglia_accessibilita"](claude)
+    assert set_attr == [("AXEnhancedUserInterface", True)]  # app nativa: niente richiesta
+
+
 def test_finestra_su_altro_schermo():
     schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
     assert voce_lib.schermo_del_punto((-900, -50), schermi) == 1
@@ -2055,6 +2096,7 @@ def _cursore_automatico_mac():
         _schermi_ax=lambda: stato.schermi, _posizione_mouse=lambda: stato.mouse,
         finestra_su_altro_schermo=voce_lib.finestra_su_altro_schermo,
         schermo_del_punto=voce_lib.schermo_del_punto, schermo_della_finestra=voce_lib.schermo_della_finestra,
+        e_browser_chromium=voce_lib.e_browser_chromium,
         _salva_caselle_ricordate=lambda: stato.salvataggi.append(dict(spazio["_caselle_ricordate"])),
         _ax_valore=lambda el, attr: "casella", _ax_geometria=lambda el: stato.casella_a_fuoco,
         chiave_casella=voce_lib.chiave_casella, posizione_relativa=voce_lib.posizione_relativa,
@@ -2066,13 +2108,14 @@ def _cursore_automatico_mac():
         if (isinstance(n, ast.FunctionDef)
             and n.name in ("metti_cursore_in_casella", "_casella_nelle_finestre",
                            "_ricorda_casella", "_punto_ricordato", "_chiedi_albero_electron",
-                           "_porta_sul_monitor_del_mouse"))
+                           "_porta_sul_monitor_del_mouse", "_chiedi_pagina_browser"))
         or (isinstance(n, ast.Assign)
             and any(getattr(t, "id", "") in ("AX_ATTESA_RISVEGLIO_SEC", "AX_GIRI_RISVEGLIO", "_caselle_ricordate")
                     for t in n.targets))
     ]
     exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
-    app = SimpleNamespace(processIdentifier=lambda: 41474, localizedName=lambda: "Claude")
+    app = SimpleNamespace(processIdentifier=lambda: 41474, localizedName=lambda: "Claude",
+                          bundleIdentifier=lambda: "com.anthropic.claudefordesktop")
 
     def chiama(passate, focus_dopo_attesa=False, focus=False):
         stato.passate, stato.focus_dopo_attesa, stato.focus = passate, focus_dopo_attesa, focus
@@ -2190,12 +2233,14 @@ def test_sveglia_accessibilita_tocca_l_albero_e_chiede_l_accensione_electron():
         _focus_in_casella=lambda ax_app: toccate.append("focus") or False,
         _finestre_bersaglio=lambda ax_app: ([("finestra", (0, 33, 1512, 949))], 0, 1),
         _cerca_casella=lambda *a, **k: cercate.append(k) or None,
+        e_browser_chromium=voce_lib.e_browser_chromium,
     )
     path = REPO_ROOT / "mac" / "detta.py"
     nodi = [n for n in ast.parse(path.read_text()).body
-            if isinstance(n, ast.FunctionDef) and n.name in ("_sveglia_accessibilita", "_chiedi_albero_electron")]
+            if isinstance(n, ast.FunctionDef) and n.name in ("_sveglia_accessibilita", "_chiedi_albero_electron", "_chiedi_pagina_browser")]
     exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
-    app = SimpleNamespace(processIdentifier=lambda: 1, localizedName=lambda: "Antigravity")
+    app = SimpleNamespace(processIdentifier=lambda: 1, localizedName=lambda: "Antigravity",
+                          bundleIdentifier=lambda: "com.google.antigravity")
     spazio["_sveglia_accessibilita"](app)
     assert set_attr == [("AXManualAccessibility", True)]
     assert toccate == ["focus"] and len(cercate) == 1

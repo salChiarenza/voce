@@ -895,6 +895,22 @@ def serve_pulizia(testo, cfg):
     return len(testo.split()) >= minimo
 
 
+BROWSER_CHROMIUM = (
+    "com.google.chrome", "org.chromium.chromium", "com.brave.browser",
+    "com.microsoft.edgemac", "company.thebrowser.browser", "com.vivaldi.vivaldi", "com.operasoftware.opera",
+)
+
+
+def e_browser_chromium(bundle_id):
+    """True per i browser della famiglia Chrome: espongono la pagina ad
+    Accessibility solo se un programma chiede l'interfaccia estesa
+    (AXEnhancedUserInterface). Misurato 20/09/2026 su ChatGPT in Chrome:
+    senza richiesta 286 elementi e nessuna area web, con richiesta la
+    casella «Chatta con ChatGPT» dopo circa 2 secondi."""
+    bundle = str(bundle_id or "").strip().lower()
+    return any(bundle == b or bundle.startswith(b + ".") for b in BROWSER_CHROMIUM)
+
+
 def destinazione_agente(nome_app="", url=""):
     """True quando il testo e' destinato a una chat con un agente AI.
 

@@ -39,7 +39,7 @@ from voce_lib import (
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
     casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre, chiave_casella, posizione_relativa, punto_da_relativa,
-    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra, app_sul_monitor, app_ha_finestra_sul_monitor,
+    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra, app_sul_monitor, app_ha_finestra_sul_monitor, e_browser_chromium,
     FILE_CASELLE_RICORDATE, caselle_in_json, caselle_da_json,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
@@ -596,12 +596,33 @@ _SCRIPT_SCHEDA = {
 }
 
 
+def _url_finestra_a_fuoco(app):
+    """L'indirizzo della pagina nella finestra col focus, letto da
+    Accessibility (AXDocument). Caso 20/09/2026: AppleScript rispondeva
+    «about:blank» per la finestra davanti mentre Sal stava su ChatGPT in
+    un'altra finestra Chrome; AXDocument diceva il vero. None se non c'e'."""
+    try:
+        ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
+        finestra = _ax_valore(ax_app, AX.kAXFocusedWindowAttribute)
+        if finestra is None:
+            return None
+        url = _ax_valore(finestra, "AXDocument")
+        url = str(url).strip() if url else ""
+        return url if url.startswith(("http://", "https://")) else None
+    except Exception:
+        return None
+
+
 def scheda_browser_frontale(app):
     """URL della scheda attiva ORA, solo per i browser che sappiamo pilotare
-    (None per tutto il resto: allora il bersaglio resta solo l'app)."""
+    (None per tutto il resto: allora il bersaglio resta solo l'app).
+    Prima la finestra col focus via Accessibility, poi AppleScript."""
     script = app is not None and _SCRIPT_SCHEDA.get(app.bundleIdentifier())
     if not script:
         return None
+    url = _url_finestra_a_fuoco(app)
+    if url:
+        return url
     try:
         esito = subprocess.run(
             ["osascript", "-e", script["leggi"]], capture_output=True, text=True, timeout=3
@@ -901,6 +922,19 @@ def _chiedi_albero_electron(ax_app):
         AX.AXUIElementSetAttributeValue(ax_app, "AXManualAccessibility", True)
 
 
+def _chiedi_pagina_browser(app, ax_app):
+    """I browser della famiglia Chrome espongono la pagina ad Accessibility
+    solo se un programma chiede l'interfaccia estesa: senza, la casella di
+    ChatGPT non esiste nell'albero (20/09/2026, 44 incolla alla cieca in un
+    giorno). Si chiede una volta e resta accesa finche' Voce gira; la pagina
+    compare in circa due secondi, dentro i giri di risveglio."""
+    if app is None or not e_browser_chromium(app.bundleIdentifier()):
+        return
+    if _ax_valore(ax_app, "AXEnhancedUserInterface"):
+        return
+    AX.AXUIElementSetAttributeValue(ax_app, "AXEnhancedUserInterface", True)
+
+
 def _sveglia_accessibilita(app):
     """Al tasto premuto: tocca l'albero Accessibility dell'app davanti e, se e'
     un'app Electron, chiede di accenderlo. Le app Electron lo costruiscono solo
@@ -913,6 +947,7 @@ def _sveglia_accessibilita(app):
     try:
         ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
         _chiedi_albero_electron(ax_app)
+        _chiedi_pagina_browser(app, ax_app)
         if _focus_in_casella(ax_app):
             return
         finestre, _, _ = _finestre_bersaglio(ax_app)
@@ -1046,6 +1081,7 @@ def metti_cursore_in_casella(app):
     giri = 1
     if trovata is None:
         _chiedi_albero_electron(ax_app)  # seconda richiesta: la prima era al tasto premuto
+        _chiedi_pagina_browser(app, ax_app)
     while trovata is None and giri < AX_GIRI_RISVEGLIO:
         # guscio vuoto di un'app Electron appena toccata? si aspetta che
         # l'albero si accenda e si riguarda (vedi AX_ATTESA_RISVEGLIO_SEC)

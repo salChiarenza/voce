@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0-rc.21 - 20/09/2026 — Chrome espone la pagina solo se glielo si chiede
+
+- Misurato sulla pagina ChatGPT di Sal: senza richiesta 286 elementi e
+  nessuna AXWebArea; con `AXEnhancedUserInterface = True` sull'app, dopo
+  circa 2 s la pagina compare (1021 elementi) e la casella «Chatta con
+  ChatGPT» (AXTextArea) si trova in 0,07 s; spegnendola sparisce. Nuova
+  `_chiedi_pagina_browser(app, ax_app)` accanto a `_chiedi_albero_electron`
+  (al tasto premuto e al primo giro vuoto), solo per `e_browser_chromium`
+  (Chrome, Chromium, Brave, Edge, Arc, Vivaldi, Opera); resta accesa finche'
+  Voce gira. `scheda_browser_frontale` legge prima `AXDocument` della
+  finestra col focus (`_url_finestra_a_fuoco`), poi AppleScript: con due
+  finestre Chrome AppleScript indicava «about:blank» e ChatGPT non veniva
+  riconosciuta come chat AI (niente grezzo, ritorno alla chat Claude).
+  2 prove nuove, 211 verdi.
+
 ## 1.3.0-rc.20 - 20/09/2026 — il ritorno alla chat non cambia monitor
 
 - 15:41 e 15:42: Chrome sul Samsung, casella trovata alle 15:41:51 e non
