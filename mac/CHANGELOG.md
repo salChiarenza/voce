@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0-rc.19 - 20/09/2026 — due monitor, due programmi: il testo segue la pill
+
+- Subito dopo la rc.18, alle 15:06: Chrome sul Samsung (pagina in
+  scrittura), app Claude sul monitor integrato con il focus della tastiera,
+  mouse sul Samsung. La rc.18 cambiava finestra solo dentro la stessa app,
+  qui i programmi erano due. Ora `app_frontale` chiede a
+  `_app_sul_monitor_del_mouse`: legge le finestre visibili di tutte le app
+  (`CGWindowListCopyWindowInfo`, livello zero, altezza credibile, dalla piu'
+  avanti) e, se l'app davanti non ne ha nessuna sul monitor del mouse mentre
+  un'altra ce l'ha, il bersaglio diventa quella (riga di log «bersaglio: ...
+  sul monitor del mouse»). Vale al tasto premuto (sveglia Accessibility) e
+  al rilascio; `riattiva_bersaglio` la porta davanti come sempre. Con un
+  monitor solo, mouse fuori dai monitor o niente di la', resta l'app
+  davanti. Prova dal vero sulla disposizione di Sal prima del riavvio.
+
 ## 1.3.0-rc.18 - 20/09/2026 — con due monitor il testo segue la pill
 
 - Sal alle 15:01, Samsung appena collegato: «vedo il faccino nel televisore

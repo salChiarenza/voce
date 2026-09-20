@@ -1,5 +1,14 @@
 # Changelog Voce
 
+## 1.3.0-rc.19 - 20/09/2026
+
+- Due monitor, due programmi: il testo va al programma che sta sul monitor
+  della pill. Dopo la rc.18 restava il caso vero di Sal: Chrome sul Samsung,
+  l'app Claude con il focus sul monitor piccolo, e la dettatura compariva
+  nel piccolo. Ora, se il programma davanti non ha finestre sul monitor del
+  mouse e un altro ce l'ha, il bersaglio e' quello. Un monitor solo: nulla
+  cambia. Solo Mac. 207 prove verdi.
+
 ## 1.3.0-rc.18 - 20/09/2026
 
 - Con due monitor il testo va dove sta la pill. La pill segue il mouse; il

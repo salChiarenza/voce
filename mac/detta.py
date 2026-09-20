@@ -39,7 +39,7 @@ from voce_lib import (
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
     casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre, chiave_casella, posizione_relativa, punto_da_relativa,
-    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra,
+    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra, app_sul_monitor,
     FILE_CASELLE_RICORDATE, caselle_in_json, caselle_da_json,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
@@ -497,9 +497,61 @@ def trascrivi(audio):
     return _rifinisci(_whisper_grezzo(audio, GLOSSARIO_PROMPT))
 
 
+def _finestre_sullo_schermo():
+    """Le finestre visibili di tutte le app, dalla piu' avanti alla piu'
+    indietro: [(pid, (x, y, larghezza, altezza))] in coordinate Accessibility.
+    Restano fuori pannelli e strisce (livello diverso da zero, altezza sotto
+    i 200 punti): la pill, la barra menu, le tendine."""
+    elenco = Quartz.CGWindowListCopyWindowInfo(
+        Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
+        Quartz.kCGNullWindowID,
+    ) or []
+    finestre = []
+    for finestra in elenco:
+        if finestra.get("kCGWindowLayer", 1) != 0:
+            continue
+        bordi = finestra.get("kCGWindowBounds") or {}
+        geometria = (bordi.get("X", 0), bordi.get("Y", 0), bordi.get("Width", 0), bordi.get("Height", 0))
+        if not finestra_credibile(geometria, _altezza_schermo_massima()):
+            continue
+        finestre.append((finestra.get("kCGWindowOwnerPID"), geometria))
+    return finestre
+
+
+def _app_sul_monitor_del_mouse(davanti):
+    """Con due monitor il bersaglio e' l'app che sta sul monitor della pill
+    (il mouse), non quella con il focus della tastiera. Caso reale 20/09/2026
+    15:06: Chrome sul Samsung, l'app Claude sul monitor piccolo con il focus;
+    Sal detta guardando il Samsung e il testo compare nel piccolo. Torna
+    l'app da usare al posto di quella davanti, o None se non cambia niente."""
+    schermi = _schermi_ax()
+    if len(schermi) < 2:
+        return None
+    monitor = schermo_del_punto(_posizione_mouse(), schermi)
+    pid_davanti = davanti.processIdentifier() if davanti is not None else None
+    pid = app_sul_monitor(_finestre_sullo_schermo(), pid_davanti, monitor, schermi, os.getpid())
+    if pid is None:
+        return None
+    return AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+
+
 def app_frontale():
-    """L'app davanti in questo momento: e' il bersaglio del testo dettato."""
-    return AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
+    """Il bersaglio del testo dettato: l'app davanti in questo momento, oppure,
+    con due monitor, l'app che sta sul monitor della pill se quella davanti
+    non ha finestre li' (vedi _app_sul_monitor_del_mouse)."""
+    davanti = AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
+    try:
+        altra = _app_sul_monitor_del_mouse(davanti)
+    except Exception:
+        logging.getLogger("voce").debug("app sul monitor del mouse non letta", exc_info=True)
+        altra = None
+    if altra is None:
+        return davanti
+    logging.getLogger("voce").info(
+        "bersaglio: %s sul monitor del mouse (davanti c'era %s)",
+        altra.localizedName(), davanti.localizedName() if davanti is not None else "nessuna app",
+    )
+    return altra
 
 
 # Riattivare l'app non basta se il bersaglio e' una SCHEDA di un browser:

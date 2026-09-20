@@ -1967,6 +1967,25 @@ def test_ordina_finestre_con_due_monitor_vince_quello_del_mouse():
     assert voce_lib.ordina_finestre(finestre, (-900, -50), schermi[:1]) == [0, 1]
 
 
+def test_app_sul_monitor_del_mouse_decide_il_bersaglio_con_due_monitor():
+    # 20/09/2026 15:06: Chrome sul Samsung, Claude (col focus) sul monitor
+    # piccolo; il mouse e la pill sul Samsung: il bersaglio deve essere Chrome.
+    schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
+    chrome, claude, voce = 716, 64330, 27843
+    finestre = [(claude, (0, 33, 1512, 949)), (chrome, (-1015, -958, 1920, 958)),
+                (voce, (-300, -200, 340, 60))]  # la pill stessa, mai bersaglio
+    assert voce_lib.app_sul_monitor(finestre, claude, 1, schermi, voce) == chrome
+    # l'app davanti sta gia' sul monitor del mouse: nulla cambia
+    assert voce_lib.app_sul_monitor(finestre, chrome, 1, schermi, voce) is None
+    assert voce_lib.app_sul_monitor(finestre, claude, 0, schermi, voce) is None
+    # sul monitor del mouse non c'e' niente, o il monitor non si sa: nulla cambia
+    assert voce_lib.app_sul_monitor([(claude, (0, 33, 1512, 949))], claude, 1, schermi) is None
+    assert voce_lib.app_sul_monitor(finestre, claude, None, schermi) is None
+    # due app sul Samsung: vince la piu' avanti
+    finestre2 = [(claude, (0, 33, 1512, 949)), (99, (-900, -900, 800, 600)), (chrome, (-1015, -958, 1920, 958))]
+    assert voce_lib.app_sul_monitor(finestre2, claude, 1, schermi) == 99
+
+
 def test_finestra_su_altro_schermo():
     schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
     assert voce_lib.schermo_del_punto((-900, -50), schermi) == 1

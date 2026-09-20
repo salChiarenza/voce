@@ -505,6 +505,24 @@ def finestra_su_altro_schermo(geometria, punto_mouse, schermi):
     return del_mouse is not None and della_finestra is not None and del_mouse != della_finestra
 
 
+def app_sul_monitor(finestre, pid_davanti, monitor, schermi, pid_proprio=None):
+    """Il pid dell'app da usare come bersaglio quando l'app davanti non ha
+    nessuna finestra sul monitor del mouse (dove sta la pill) e un'altra app
+    ce l'ha: la finestra piu' avanti su quel monitor decide. `finestre` e'
+    [(pid, geometria)] dalla piu' avanti alla piu' indietro. None quando
+    l'app davanti sta gia' su quel monitor, o di la' non c'e' niente: allora
+    il bersaglio resta l'app davanti, come con un monitor solo."""
+    if monitor is None:
+        return None
+    sul_monitor = [
+        pid for pid, geometria in finestre
+        if pid != pid_proprio and schermo_della_finestra(geometria, schermi) == monitor
+    ]
+    if not sul_monitor or pid_davanti in sul_monitor:
+        return None
+    return sul_monitor[0]
+
+
 def ordina_finestre(geometrie, punto_mouse=None, schermi=None):
     """Indici delle finestre nell'ordine in cui provarle.
 
