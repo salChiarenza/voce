@@ -1952,6 +1952,34 @@ def test_ordina_finestre_il_mouse_sposta_solo_la_precedenza():
     assert voce_lib.ordina_finestre([], (0, 0)) == []
 
 
+def test_ordina_finestre_con_due_monitor_vince_quello_del_mouse():
+    # coordinate Accessibility: il Samsung sta sopra il monitor integrato
+    schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
+    piccola = (100, 100, 800, 600)       # finestra col focus, monitor integrato
+    grande = (-800, -900, 1200, 700)     # stessa app, sul Samsung
+    finestre = [piccola, grande]
+    # mouse sul Samsung ma fuori da tutte e due: prima la finestra sul suo monitor
+    assert voce_lib.ordina_finestre(finestre, (-900, -50), schermi) == [1, 0]
+    # mouse dentro la piccola: quella resta prima
+    assert voce_lib.ordina_finestre(finestre, (300, 300), schermi) == [0, 1]
+    # monitor sconosciuti o uno solo: ordine dell'app come prima
+    assert voce_lib.ordina_finestre(finestre, (-900, -50), None) == [0, 1]
+    assert voce_lib.ordina_finestre(finestre, (-900, -50), schermi[:1]) == [0, 1]
+
+
+def test_finestra_su_altro_schermo():
+    schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
+    assert voce_lib.schermo_del_punto((-900, -50), schermi) == 1
+    assert voce_lib.schermo_del_punto((5000, 5000), schermi) is None
+    assert voce_lib.schermo_della_finestra((100, 100, 800, 600), schermi) == 0
+    assert voce_lib.finestra_su_altro_schermo((100, 100, 800, 600), (-900, -50), schermi) is True
+    assert voce_lib.finestra_su_altro_schermo((-800, -900, 1200, 700), (-900, -50), schermi) is False
+    # un monitor solo, mouse fuori da tutto o finestra illeggibile: mai una condizione
+    assert voce_lib.finestra_su_altro_schermo((100, 100, 800, 600), (-900, -50), schermi[:1]) is False
+    assert voce_lib.finestra_su_altro_schermo((100, 100, 800, 600), (5000, 5000), schermi) is False
+    assert voce_lib.finestra_su_altro_schermo(None, (-900, -50), schermi) is False
+
+
 # --- l'albero Accessibility delle app Electron si accende DOPO il primo tocco ---
 # Caso reale 17/09/2026 (app Claude 2.110.x): "quando libero il tasto fa un
 # rumore strano". Il cursore automatico leggeva un guscio di 9 gruppi senza
@@ -1970,7 +1998,8 @@ def _cursore_automatico_mac():
     from types import SimpleNamespace
 
     stato = SimpleNamespace(attese=[], giri=[], click=[], salvataggi=[], focus=False, focus_dopo_attesa=False,
-                            passate=[None], finestra=(0, 33, 1512, 949), casella_a_fuoco=(100, 900, 1300, 60))
+                            passate=[None], finestra=(0, 33, 1512, 949), casella_a_fuoco=(100, 900, 1300, 60),
+                            schermi=[(0, 0, 1512, 982)], mouse=(700, 500))
 
     def cerca(ax_app, finestra, geo, con_pagina):
         stato.giri.append(con_pagina)
@@ -1993,6 +2022,9 @@ def _cursore_automatico_mac():
         _finestre_bersaglio=lambda ax_app: ([("finestra", stato.finestra)], 0, 1),
         _cerca_casella=cerca, _click_sintetico=lambda geo: stato.click.append(geo),
         _geometria_finestra_a_fuoco=lambda ax_app: stato.finestra,
+        _schermi_ax=lambda: stato.schermi, _posizione_mouse=lambda: stato.mouse,
+        finestra_su_altro_schermo=voce_lib.finestra_su_altro_schermo,
+        schermo_del_punto=voce_lib.schermo_del_punto, schermo_della_finestra=voce_lib.schermo_della_finestra,
         _salva_caselle_ricordate=lambda: stato.salvataggi.append(dict(spazio["_caselle_ricordate"])),
         _ax_valore=lambda el, attr: "casella", _ax_geometria=lambda el: stato.casella_a_fuoco,
         chiave_casella=voce_lib.chiave_casella, posizione_relativa=voce_lib.posizione_relativa,
@@ -2003,7 +2035,8 @@ def _cursore_automatico_mac():
         n for n in ast.parse(path.read_text()).body
         if (isinstance(n, ast.FunctionDef)
             and n.name in ("metti_cursore_in_casella", "_casella_nelle_finestre",
-                           "_ricorda_casella", "_punto_ricordato", "_chiedi_albero_electron"))
+                           "_ricorda_casella", "_punto_ricordato", "_chiedi_albero_electron",
+                           "_porta_sul_monitor_del_mouse"))
         or (isinstance(n, ast.Assign)
             and any(getattr(t, "id", "") in ("AX_ATTESA_RISVEGLIO_SEC", "AX_GIRI_RISVEGLIO", "_caselle_ricordate")
                     for t in n.targets))
@@ -2017,6 +2050,7 @@ def _cursore_automatico_mac():
         return spazio["metti_cursore_in_casella"](app)
 
     stato.chiama = chiama
+    stato.spazio = spazio
     stato.attesa = spazio["AX_ATTESA_RISVEGLIO_SEC"]
     stato.giri_massimi = spazio["AX_GIRI_RISVEGLIO"]
     stato.memoria = spazio["_caselle_ricordate"]
@@ -2071,6 +2105,35 @@ def test_cursore_automatico_ricorda_la_casella_e_ci_clicca_quando_la_finestra_do
     x, y, _, _ = s.click[0]
     # dentro la casella vista prima (100, 900, 1300, 60): vicino al bordo sinistro e al fondo
     assert 100 <= x <= 200 and 900 <= y <= 960
+
+
+def test_cursore_automatico_con_due_monitor_il_testo_segue_la_pill():
+    # Sal 20/09/2026, monitor Samsung: la pill (mouse) sta sul Samsung, il focus
+    # e' gia' in una casella della chat rimasta sul monitor piccolo e la dettatura
+    # finiva la'. Se la stessa app ha una finestra con casella sul monitor del
+    # mouse, il cursore va li'.
+    s = _cursore_automatico_mac()
+    s.schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
+    s.mouse = (-300, -50)
+    piccola, grande = (0, 33, 1512, 949), (-900, -1000, 1600, 900)
+    s.finestra = piccola
+    s.spazio["_finestre_bersaglio"] = lambda ax_app: ([("finestra", piccola), ("finestra", grande)], 0, 2)
+    casella_grande = ("elemento", (-800, -200, 1400, 60))
+    # il focus gentile non cambia finestra (la finestra a fuoco resta la piccola): si clicca
+    assert s.chiama([casella_grande], focus=True) is True
+    assert s.click == [casella_grande[1]]
+    # un monitor solo, oppure mouse sullo stesso monitor del focus: niente click, come prima
+    s.schermi = [(0, 0, 1512, 982)]
+    assert s.chiama([casella_grande], focus=True) is True
+    assert s.click == []
+    s.schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
+    s.mouse = (700, 500)
+    assert s.chiama([casella_grande], focus=True) is True
+    assert s.click == []
+    # mouse sul Samsung ma di la' nessuna casella: il focus resta dov'e', si scrive comunque
+    s.mouse = (-300, -50)
+    assert s.chiama([None], focus=True) is True
+    assert s.click == []
 
 
 def test_cursore_automatico_la_memoria_vale_solo_per_la_stessa_finestra():

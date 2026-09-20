@@ -39,6 +39,7 @@ from voce_lib import (
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
     casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre, chiave_casella, posizione_relativa, punto_da_relativa,
+    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra,
     FILE_CASELLE_RICORDATE, caselle_in_json, caselle_da_json,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
@@ -671,6 +672,26 @@ def _altezza_schermo_massima():
     return max((s.frame().size.height for s in schermi), default=float("inf"))
 
 
+def _schermi_ax():
+    """I monitor come rettangoli (x, y, larghezza, altezza) nelle coordinate
+    Accessibility: origine in alto a sinistra del monitor principale, y verso
+    il basso. Le stesse coordinate delle finestre e del mouse letti da AX."""
+    schermi = AppKit.NSScreen.screens()
+    if not schermi:
+        return []
+    altezza_principale = schermi[0].frame().size.height
+    rettangoli = []
+    for schermo in schermi:
+        cornice = schermo.frame()
+        rettangoli.append((
+            cornice.origin.x,
+            altezza_principale - (cornice.origin.y + cornice.size.height),
+            cornice.size.width,
+            cornice.size.height,
+        ))
+    return rettangoli
+
+
 def _posizione_mouse():
     """Dove sta il puntatore ORA, in coordinate Accessibility (y verso il
     basso). Serve solo come spareggio fra finestre, mai come condizione."""
@@ -717,7 +738,7 @@ def _finestre_bersaglio(ax_app):
         viste.add(geometria)
         candidate.append(finestra)
         geometrie.append(geometria)
-    ordine = ordina_finestre(geometrie, _posizione_mouse())
+    ordine = ordina_finestre(geometrie, _posizione_mouse(), _schermi_ax())
     return ([(candidate[i], geometrie[i]) for i in ordine], primo_err, len(finestre))
 
 
@@ -880,6 +901,40 @@ def _casella_nelle_finestre(ax_app, finestre, log):
     return None
 
 
+def _porta_sul_monitor_del_mouse(ax_app, log):
+    """Il focus sta gia' in una casella, ma in una finestra su un altro
+    monitor rispetto al mouse: la pill (che segue il mouse) e' su uno
+    schermo e il testo andrebbe sull'altro. Caso reale 20/09/2026, monitor
+    Samsung collegato: Sal vede la pill sul Samsung e la dettatura finisce
+    nella chat rimasta sul monitor piccolo. Se la stessa app ha una finestra
+    con una casella sul monitor del mouse, il cursore va li'. Con un solo
+    monitor, o senza una finestra adatta di la', non tocca niente.
+    Torna True se il cursore e' stato spostato."""
+    schermi = _schermi_ax()
+    if len(schermi) < 2:
+        return False
+    mouse = _posizione_mouse()
+    geo_fuoco = _geometria_finestra_a_fuoco(ax_app)
+    if not finestra_su_altro_schermo(geo_fuoco, mouse, schermi):
+        return False
+    monitor_mouse = schermo_del_punto(mouse, schermi)
+    finestre, _, _ = _finestre_bersaglio(ax_app)
+    di_la = [(f, g) for f, g in finestre if schermo_della_finestra(g, schermi) == monitor_mouse]
+    if not di_la:
+        return False
+    trovata = _casella_nelle_finestre(ax_app, di_la, log)
+    if trovata is None:
+        return False
+    elemento, geometria, geo_finestra = trovata
+    AX.AXUIElementSetAttributeValue(elemento, AX.kAXFocusedAttribute, True)
+    time.sleep(0.1)
+    if _geometria_finestra_a_fuoco(ax_app) != geo_finestra or not _focus_in_casella(ax_app):
+        _click_sintetico(geometria)  # il focus gentile non cambia finestra: click
+        time.sleep(0.15)
+    log.info("cursore automatico: casella spostata sul monitor del mouse")
+    return True
+
+
 def metti_cursore_in_casella(app):
     """Se nell'app bersaglio nessuna casella di testo ha il focus, mette il
     cursore nella casella di scrittura (nelle chat sta in fondo). Prima per
@@ -908,6 +963,7 @@ def metti_cursore_in_casella(app):
     log = logging.getLogger("voce")
     ax_app = AX.AXUIElementCreateApplication(app.processIdentifier())
     if _focus_in_casella(ax_app):
+        _porta_sul_monitor_del_mouse(ax_app, log)
         _ricorda_casella(app, ax_app)
         return True  # il cursore e' gia' al posto giusto
     finestre, err_focus, lette = _finestre_bersaglio(ax_app)

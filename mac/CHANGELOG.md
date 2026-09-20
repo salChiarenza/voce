@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0-rc.18 - 20/09/2026 — con due monitor il testo segue la pill
+
+- Sal alle 15:01, Samsung appena collegato: «vedo il faccino nel televisore
+  Samsung, spesso mi va nel piccolino la dettatura». Due fonti diverse: la
+  pill si mette sul monitor del mouse (`schermo_attivo`), il testo va dove
+  sta il focus della tastiera (ultima finestra cliccata), che macOS tiene
+  per sistema e non per schermo. Ora `ordina_finestre` prende anche i
+  monitor (`_schermi_ax`, coordinate Accessibility) e prova prima le
+  finestre sul monitor del mouse; se il focus e' gia' in una casella ma su
+  un altro monitor, `_porta_sul_monitor_del_mouse` cerca una casella nella
+  finestra della stessa app di la' e ci mette il cursore (focus gentile,
+  altrimenti click). Con un monitor solo, mouse fuori da tutti i monitor o
+  nessuna casella di la', non tocca niente: il mouse resta uno spareggio,
+  mai una condizione (regola dell'08/09). 3 prove nuove, 206 verdi.
+
 ## 1.3.0-rc.17 - 18/09/2026 — se davanti non c'e' dove scrivere, il testo torna nella chat
 
 - Sal alle 11:36: due dettature per Claude fatte con Gmail davanti (Chrome,

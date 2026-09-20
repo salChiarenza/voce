@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.18 - 20/09/2026 — nessuna modifica
+
+- La correzione Mac dei due monitor (il testo segue la pill) qui non serve:
+  la pill Windows sta sul monitor principale (`winfo_screenwidth`), quindi
+  pill e cursore non si separano. Da rivedere se la pill seguira' il mouse.
+
 ## 1.3.0-rc.17 - 18/09/2026 — gemella del Mac
 
 - Se la finestra davanti e' leggibile e non ha caselle, il testo torna

@@ -474,14 +474,48 @@ def finestra_credibile(geometria, altezza_schermo_max, altezza_minima=200):
     return altezza <= altezza_schermo_max + 1
 
 
-def ordina_finestre(geometrie, punto_mouse=None):
+def schermo_del_punto(punto, schermi):
+    """Indice del monitor (x, y, larghezza, altezza) che contiene il punto,
+    o None se il punto non sta in nessuno o i monitor non si conoscono."""
+    if punto is None or not schermi:
+        return None
+    px, py = punto
+    for indice, (x, y, larghezza, altezza) in enumerate(schermi):
+        if x <= px <= x + larghezza and y <= py <= y + altezza:
+            return indice
+    return None
+
+
+def schermo_della_finestra(geometria, schermi):
+    """Il monitor dove sta il centro della finestra, o None."""
+    if geometria is None:
+        return None
+    x, y, larghezza, altezza = geometria
+    return schermo_del_punto((x + larghezza / 2, y + altezza / 2), schermi)
+
+
+def finestra_su_altro_schermo(geometria, punto_mouse, schermi):
+    """True quando la finestra sta su un monitor diverso da quello del mouse,
+    e tutti e due i monitor si conoscono. Con un monitor solo, o con dati
+    illeggibili, e' sempre False: il mouse non diventa mai una condizione."""
+    if not schermi or len(schermi) < 2:
+        return False
+    del_mouse = schermo_del_punto(punto_mouse, schermi)
+    della_finestra = schermo_della_finestra(geometria, schermi)
+    return del_mouse is not None and della_finestra is not None and del_mouse != della_finestra
+
+
+def ordina_finestre(geometrie, punto_mouse=None, schermi=None):
     """Indici delle finestre nell'ordine in cui provarle.
 
     L'ordine di partenza resta quello dell'app (focalizzata, principale,
     poi le altre). Il mouse serve solo come spareggio: se sta dentro una di
-    queste finestre, quella si prova per prima. Sal deve poter dettare anche
-    con il mouse fermo altrove (08/09/2026), quindi il mouse non e' mai una
-    condizione: sposta soltanto la precedenza."""
+    queste finestre, quella si prova per prima; poi vengono le finestre sul
+    suo stesso monitor, poi le altre. Sal deve poter dettare anche con il
+    mouse fermo altrove (08/09/2026), quindi il mouse non e' mai una
+    condizione: sposta soltanto la precedenza. Con due monitor (Samsung,
+    20/09/2026) la pill sta sul monitor del mouse e il testo deve arrivare
+    li', non nella finestra rimasta sul monitor piccolo."""
     ordine = list(range(len(geometrie)))
     if punto_mouse is None:
         return ordine
@@ -489,7 +523,9 @@ def ordina_finestre(geometrie, punto_mouse=None):
     def sotto_il_mouse(i):
         x, y, larghezza, altezza = geometrie[i]
         return x <= mx <= x + larghezza and y <= my <= y + altezza
-    return sorted(ordine, key=lambda i: (not sotto_il_mouse(i), i))
+    def su_altro_monitor(i):
+        return finestra_su_altro_schermo(geometrie[i], punto_mouse, schermi)
+    return sorted(ordine, key=lambda i: (not sotto_il_mouse(i), su_altro_monitor(i), i))
 
 
 def chiave_casella(nome_app, geo_finestra):

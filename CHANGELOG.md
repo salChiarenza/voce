@@ -1,5 +1,14 @@
 # Changelog Voce
 
+## 1.3.0-rc.18 - 20/09/2026
+
+- Con due monitor il testo va dove sta la pill. La pill segue il mouse; il
+  testo andava dove stava l'ultimo cursore, anche sull'altro schermo (Samsung
+  collegato, dettatura finita nella chat rimasta sul monitor piccolo). Ora,
+  se l'app ha una finestra con casella sul monitor del mouse, il cursore va
+  li'. Con un monitor solo nulla cambia. Solo Mac: su Windows la pill sta
+  sul monitor principale, il caso non si presenta. 206 prove Mac verdi.
+
 ## 1.3.0-rc.17 - 18/09/2026
 
 - Se davanti non c'e' dove scrivere (Gmail, Finder, una pagina qualunque), il
