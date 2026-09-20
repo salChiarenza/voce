@@ -523,6 +523,17 @@ def app_sul_monitor(finestre, pid_davanti, monitor, schermi, pid_proprio=None):
     return sul_monitor[0]
 
 
+def app_ha_finestra_sul_monitor(finestre, pid, monitor, schermi):
+    """True se l'app `pid` ha almeno una finestra visibile sul monitor dato.
+    Con monitor sconosciuto (None) torna True: senza dati non si blocca niente."""
+    if monitor is None:
+        return True
+    return any(
+        p == pid and schermo_della_finestra(geometria, schermi) == monitor
+        for p, geometria in finestre
+    )
+
+
 def ordina_finestre(geometrie, punto_mouse=None, schermi=None):
     """Indici delle finestre nell'ordine in cui provarle.
 

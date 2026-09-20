@@ -39,7 +39,7 @@ from voce_lib import (
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
     casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre, chiave_casella, posizione_relativa, punto_da_relativa,
-    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra, app_sul_monitor,
+    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra, app_sul_monitor, app_ha_finestra_sul_monitor,
     FILE_CASELLE_RICORDATE, caselle_in_json, caselle_da_json,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
@@ -649,6 +649,21 @@ def riattiva_bersaglio(app, scheda_url=None):
 # un agente: se l'app davanti e' leggibile e non ha nessuna casella, si torna
 # li' invece di incollare nel vuoto.
 _ultima_chat_ai = None  # (app, scheda) dell'ultima chat AI dove il testo e' arrivato
+
+
+def _fuori_dal_monitor_del_mouse(app):
+    """True se, con due monitor, l'app non ha nessuna finestra sul monitor
+    del mouse (dove sta la pill). Caso reale 20/09/2026 15:41: Chrome sul
+    Samsung per un attimo senza casella leggibile, e il ritorno alla chat
+    Claude tirava il testo sul monitor piccolo: «continua a mettermi dove
+    vuole». Il testo non cambia mai monitor da solo."""
+    if app is None:
+        return False
+    schermi = _schermi_ax()
+    if len(schermi) < 2:
+        return False
+    monitor = schermo_del_punto(_posizione_mouse(), schermi)
+    return not app_ha_finestra_sul_monitor(_finestre_sullo_schermo(), app.processIdentifier(), monitor, schermi)
 
 
 def _bersaglio_di_riserva(bersaglio, chat_agente):
@@ -1456,6 +1471,10 @@ def _incolla_messaggio(testo, bersaglio, revisione):
         riattiva_bersaglio(app_bersaglio, scheda_bersaglio)
         casella = esegui_sicuro(metti_cursore_in_casella, app_bersaglio)
         riserva = _bersaglio_di_riserva(bersaglio, chat_agente) if casella is False else None
+        if riserva is not None and esegui_sicuro(_fuori_dal_monitor_del_mouse, riserva[0]):
+            log.info("cursore automatico: la chat %s sta su un altro monitor, il testo resta qui",
+                     riserva[0].localizedName())
+            riserva = None
         if riserva is not None:
             # davanti non c'e' dove scrivere (Gmail in Chrome, Finder, Anteprima):
             # il testo torna nell'ultima chat AI, dove Sal stava parlando

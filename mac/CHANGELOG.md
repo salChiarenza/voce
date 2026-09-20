@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0-rc.20 - 20/09/2026 — il ritorno alla chat non cambia monitor
+
+- 15:41 e 15:42: Chrome sul Samsung, casella trovata alle 15:41:51 e non
+  trovata quattro secondi dopo (5 giri); `_bersaglio_di_riserva` riportava
+  avanti l'app Claude sul monitor integrato e il testo partiva li' con
+  l'Invio automatico. Ora `_incolla_messaggio` chiede a
+  `_fuori_dal_monitor_del_mouse`: con due monitor, se la chat di riserva
+  non ha finestre sul monitor del mouse, la riserva si scarta (riga «la chat
+  ... sta su un altro monitor, il testo resta qui») e si incolla alla cieca
+  con testo negli Appunti e suono «Basso», come prima della rc.17. Funzione
+  pura `app_ha_finestra_sul_monitor` in voce_lib. 2 prove nuove, 209 verdi.
+
 ## 1.3.0-rc.19 - 20/09/2026 — due monitor, due programmi: il testo segue la pill
 
 - Subito dopo la rc.18, alle 15:06: Chrome sul Samsung (pagina in

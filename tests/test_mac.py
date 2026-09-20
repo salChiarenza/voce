@@ -1986,6 +1986,17 @@ def test_app_sul_monitor_del_mouse_decide_il_bersaglio_con_due_monitor():
     assert voce_lib.app_sul_monitor(finestre2, claude, 1, schermi) == 99
 
 
+def test_app_ha_finestra_sul_monitor():
+    # 20/09/2026 15:41: il ritorno alla chat Claude non deve cambiare monitor
+    schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
+    finestre = [(64330, (0, 33, 1512, 949)), (716, (-1015, -958, 1920, 958))]
+    assert voce_lib.app_ha_finestra_sul_monitor(finestre, 64330, 0, schermi) is True
+    assert voce_lib.app_ha_finestra_sul_monitor(finestre, 64330, 1, schermi) is False
+    assert voce_lib.app_ha_finestra_sul_monitor(finestre, 716, 1, schermi) is True
+    assert voce_lib.app_ha_finestra_sul_monitor(finestre, 716, None, schermi) is True
+    assert voce_lib.app_ha_finestra_sul_monitor([], 716, 1, schermi) is False
+
+
 def test_finestra_su_altro_schermo():
     schermi = [(0, 0, 1512, 982), (-1015, -1080, 1920, 1080)]
     assert voce_lib.schermo_del_punto((-900, -50), schermi) == 1
@@ -2486,7 +2497,7 @@ def test_click_in_coda_audio_trattiene_il_messaggio(sistema):
 
 
 def _percorso_consegna_completo(sistema, tmp_path, seconda_durante_incolla=False, *,
-                                casella=True, chat=True, vive=None):
+                                casella=True, chat=True, vive=None, chat_su_altro_monitor=False):
     """Il percorso reale dell'incolla (funzioni prese dal sorgente) con
     tastiera, finestre e Accessibility finti. `casella` e `chat` possono
     essere un valore fisso o una funzione del NOME del bersaglio; `vive` e'
@@ -2540,6 +2551,7 @@ def _percorso_consegna_completo(sistema, tmp_path, seconda_durante_incolla=False
         nome_finestra=lambda hwnd: nomi[hwnd], ritardo_invio=lambda *a: 0,
         finestra_viva=lambda hwnd: vive is None or nomi[hwnd] in vive,
         _ultima_chat_ai=None,
+        _fuori_dal_monitor_del_mouse=lambda app: chat_su_altro_monitor,  # solo Mac, due monitor
         chiudi_turno_utente=chiusi.append, _nascondi_o_arma=lambda: None,
         suono=suoni.append, winsound=None,  # avviso "incollato alla cieca"
     )
@@ -2646,6 +2658,27 @@ def test_davanti_senza_casella_il_testo_torna_nell_ultima_chat_ai(sistema, tmp_p
     assert p.riattivati == ['Claude', 'Google Chrome', 'Claude']
     assert p.inviati == ['Guarda la prima email.', 'Manda, archivia e passa alla prossima.']
     assert p.suoni == []  # nessun «Basso»: il testo e' arrivato
+
+
+def test_il_ritorno_alla_chat_non_cambia_monitor(tmp_path):
+    """Sal 20/09/2026 15:41, Samsung sopra il Mac: Chrome sul Samsung per un
+    attimo senza casella leggibile, e il ritorno alla chat Claude tirava il
+    testo nell'app sul monitor piccolo: «continua a mettermi dove vuole».
+    Se la chat di riserva sta su un altro monitor, il testo resta dov'e'
+    (alla cieca, negli Appunti, con l'avviso), senza cambiare monitor."""
+    p = _percorso_consegna_completo(
+        'mac', tmp_path,
+        casella=lambda nome: nome != 'Google Chrome',
+        chat=lambda nome: nome == 'Claude',
+        chat_su_altro_monitor=True)
+    p.coda.apri('chat')
+    p.coda.completa('chat', 'Guarda la prima email.', p.bersaglio_di(43))
+    p.consegna()
+    p.coda.apri('samsung')
+    p.coda.completa('samsung', 'Io ho il Mac da 14.', p.bersaglio_di(44))
+    p.consegna()
+    assert p.riattivati == ['Claude', 'Google Chrome']  # nessun ritorno a Claude
+    assert p.suoni == ['Basso']  # alla cieca: testo negli Appunti, avviso
 
 
 @pytest.mark.parametrize('sistema', ['mac', 'windows'])

@@ -1,5 +1,14 @@
 # Changelog Voce
 
+## 1.3.0-rc.20 - 20/09/2026
+
+- Il ritorno alla chat (rc.17) non cambia mai monitor. Con il Samsung sopra il
+  Mac, una pagina Chrome senza casella leggibile per un attimo faceva tornare
+  il testo nell'app Claude sul monitor sotto: «continua a mettermi dove
+  vuole». Ora, se la chat di riserva sta su un altro monitor, il testo resta
+  dov'e' (negli Appunti, con l'avviso). Un monitor solo: nulla cambia. Solo
+  Mac. 209 prove verdi.
+
 ## 1.3.0-rc.19 - 20/09/2026
 
 - Due monitor, due programmi: il testo va al programma che sta sul monitor
