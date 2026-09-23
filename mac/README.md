@@ -183,3 +183,5 @@ Chiudi il launcher e cancella:
 ## Licenza
 
 MIT. Vedi `LICENSE`.
+Il carattere del logo `Onest.ttf` e' © The Onest Project Authors, con licenza
+SIL Open Font License 1.1 (https://openfontlicense.org).

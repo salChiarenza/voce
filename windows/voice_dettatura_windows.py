@@ -4,9 +4,9 @@ Tieni premuto Ctrl destro, parla, rilascia: il testo viene incollato dove hai il
 cursore. Il tasto Menu accende/spegne la voce agenti (legge le risposte ad alta voce).
 Trascrizione locale con faster-whisper (niente cloud). Tutto in questo unico file.
 
-Mentre parli compare in basso al centro una pill scura con il marchio
-"salchiarenza.ai" e una barra di lineette verdi disposte ad arco "a sorriso"
-che si muovono col volume. L'overlay non ruba mai il focus: continui a scrivere
+Mentre parli compare in basso al centro una pill scura con il logo "LeaderAI."
+(il punto verde cresce con la voce e pulsa mentre trascrive) e una barra di
+lineette verdi disposte ad arco "a sorriso" che si muovono col volume. L'overlay non ruba mai il focus: continui a scrivere
 nel programma dove sei. Per fermare la dettatura chiudi la finestra.
 """
 from __future__ import annotations
@@ -16,6 +16,7 @@ import ctypes
 import json
 import logging
 import logging.handlers
+import math
 import os
 import queue
 import re
@@ -25,6 +26,7 @@ import sys
 import threading
 import time
 import tkinter as tk
+import tkinter.font as tkfont
 from pathlib import Path
 
 import numpy as np
@@ -71,8 +73,10 @@ PROGRESSIVA_BLOCCO_SEC = float(CFG.get("trascrizione_progressiva_blocco_sec", 12
 PROGRESSIVA_SOGLIA_SILENZIO = float(CFG.get("trascrizione_progressiva_soglia_silenzio", 0.010))
 
 # --- aspetto della pill (uguale alla versione Mac) ---
-BRAND = CFG.get("brand", "salchiarenza.ai")
+BRAND = CFG.get("brand", "LeaderAI.")
 COLORE = CFG.get("colore", "#7ED321")        # verde delle lineette
+VERDE_FIRMA = "#56C842"                       # il punto del logo "LeaderAI."
+ALONE_PUNTO = ("#1F3A1B", "#2E5A27")          # verde sfumato sul fondo: la luce del punto
 N_BARRE = int(CFG.get("barre", 18))
 SCALA_VOLUME = float(CFG.get("scala_volume", 200))
 LARGHEZZA, ALTEZZA = 300, 72
@@ -2182,7 +2186,23 @@ def on_release(key) -> None:
         voice_key_down = False  # rilasciato: la prossima pressione ricommuta
 
 
-# --- overlay: la pill "salchiarenza.ai" con la barra a sorriso (thread principale) ---
+def crescita_punto(stato: str, volume: float, istante: float, da_quanto: float,
+                   scala_volume: float = 200.0) -> float:
+    """Quanto si ingrandisce il punto di "LeaderAI." (gemello Mac): alla comparsa
+    della pill si accende con uno scatto, mentre parli segue la voce, mentre
+    trascrive pulsa con un battito da un secondo. 0 = punto a riposo."""
+    if stato == "ascolto":
+        if da_quanto < 0.19:
+            return -0.8 + 2.4 * da_quanto / 0.19          # da 0.2 a 1.6 volte
+        if da_quanto < 0.35:
+            return 0.6 - 0.6 * (da_quanto - 0.19) / 0.16  # e torna a 1
+        return min(0.9, volume * scala_volume * 0.075)
+    if stato in ("trascrivo", "sistemo"):
+        return 0.7 * (1 - math.cos(2 * math.pi * istante)) / 2
+    return 0.0
+
+
+# --- overlay: la pill "LeaderAI." con la barra a sorriso (thread principale) ---
 
 class Pannello:
     """Finestra senza bordi, sempre in primo piano, sfondo trasparente.
@@ -2210,7 +2230,9 @@ class Pannello:
             bg=TRASPARENTE, highlightthickness=0,
         )
         self.canvas.pack()
+        self.font_marchio = tkfont.Font(root=self.root, family="Segoe UI", size=12, weight="bold")
         self.stato = "nascosto"
+        self.comparsa = 0.0
         self.root.withdraw()
         self._non_rubare_focus()
         self._crea_controlli_voce()
@@ -2230,7 +2252,7 @@ class Pannello:
         barra.add_cascade(label="Voce", menu=self.menu_voce)
         self.controlli_voce.config(menu=barra)
         tk.Label(
-            self.controlli_voce, text="salchiarenza.ai", font=("Segoe UI", 12),
+            self.controlli_voce, text=BRAND, font=("Segoe UI", 12, "bold"),
         ).pack(pady=(12, 4))
         self.stato_conversazione = tk.StringVar(value="Ascolta tutte le conversazioni")
         tk.Label(
@@ -2330,13 +2352,35 @@ class Pannello:
         c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=SFONDO_PILL, outline=SFONDO_PILL)
         c.create_rectangle(x1, y1 + r, x2, y2 - r, fill=SFONDO_PILL, outline=SFONDO_PILL)
 
+    def _marchio(self, crescita: float = 0.0) -> None:
+        """Il logo in alto: "LeaderAI." col punto verde vivo. Un marchio senza
+        punto finale resta testo semplice."""
+        c, f = self.canvas, self.font_marchio
+        punto = BRAND.endswith(".")
+        testo = BRAND[:-1] if punto else BRAND
+        cap = f.metrics("ascent") * 0.7
+        lato, spazio = cap * 0.26, cap * 0.12
+        largo_testo = f.measure(testo)
+        x0 = (LARGHEZZA - largo_testo - ((spazio + lato) if punto else 0)) / 2
+        base = 21                                    # linea di base del testo
+        c.create_text(x0, base + f.metrics("descent"), text=testo, anchor="sw",
+                      fill="#F7F7F7", font=f)
+        if not punto:
+            return
+        cx, cy = x0 + largo_testo + spazio + lato / 2, base - lato / 2
+        r = lato / 2 * (1 + crescita)
+        if crescita > 0.05:
+            for colore, alone in zip(ALONE_PUNTO, (2.3, 1.6)):
+                a = r * alone
+                c.create_oval(cx - a, cy - a, cx + a, cy + a, fill=colore, outline="")
+        c.create_oval(cx - r, cy - r, cx + r, cy + r, fill=VERDE_FIRMA, outline=VERDE_FIRMA)
+
     def _disegna_ascolto(self) -> None:
         self.canvas.delete("all")
         self._pill()
-        self.canvas.create_text(
-            LARGHEZZA / 2, 15, text=BRAND, fill="#F4F4F4",
-            font=("Segoe UI", 11, "normal"),
-        )
+        self._marchio(crescita_punto(
+            "ascolto", livelli[-1], time.monotonic(), time.monotonic() - self.comparsa, SCALA_VOLUME,
+        ))
         valori = list(livelli)
         n = len(valori)
         passo = (LARGHEZZA - 40) / n
@@ -2354,10 +2398,7 @@ class Pannello:
     def _disegna_trascrivo(self, testo: str = "Trascrivo...") -> None:
         self.canvas.delete("all")
         self._pill()
-        self.canvas.create_text(
-            LARGHEZZA / 2, 15, text=BRAND, fill="#F4F4F4",
-            font=("Segoe UI", 11, "normal"),
-        )
+        self._marchio(crescita_punto(self.stato, 0.0, time.monotonic(), 1.0))
         self.canvas.create_text(
             LARGHEZZA / 2, 44, text=testo, fill="#FFFFFF",
             font=("Consolas", 13, "normal"),
@@ -2371,6 +2412,7 @@ class Pannello:
                     continue
                 self.stato = nuovo
                 if self.stato == "ascolto":
+                    self.comparsa = time.monotonic()
                     self.root.deiconify()
                 elif self.stato == "nascosto":
                     self.root.withdraw()

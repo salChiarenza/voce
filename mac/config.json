@@ -1,5 +1,5 @@
 {
-  "brand": "salchiarenza.ai",
+  "brand": "LeaderAI.",
   "hotkey": "cmd_r",
   "modello": "mlx-community/whisper-large-v3-mlx",
   "lingua": "it",

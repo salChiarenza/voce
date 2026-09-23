@@ -2836,3 +2836,60 @@ def test_pipeline_trascrive_due_pezzi_prima_di_inviare(sistema, tmp_path):
     consegna()
     assert inviati == ['Prima. Seconda.']
     assert chiusi == ['prima', 'seconda']
+
+
+# --- Pill: logo "LeaderAI." con il punto verde vivo (23/09/2026) ---
+
+_PROVA_PILL = """
+import collections, json, sys
+from pathlib import Path
+import AppKit, Quartz
+root, brand = Path(sys.argv[1]), sys.argv[2]
+sorgente = (root / "mac" / "detta.py").read_text(encoding="utf-8")
+sezione = sorgente[sorgente.index("# --- pannello di stato nativo"):
+                   sorgente.index("# --- microfonino mani-libere")]
+spazio = {"AppKit": AppKit, "Quartz": Quartz, "collections": collections,
+          "cfg": {"brand": brand}, "SOURCE_BASE": root / "mac",
+          "voce_attiva": lambda: False,
+          "livelli": collections.deque([0.0] * 18, maxlen=18)}
+exec(compile(sezione, "detta.py", "exec"), spazio)
+p = spazio["punto"]
+chiavi = lambda: list(p.animationKeys() or []) if p is not None else []
+esito = {"testo": spazio["TESTO_MARCHIO"], "punto": p is not None,
+         "famiglia": str(spazio["FONT_MARCHIO"].familyName())}
+spazio["punto_entra"]()
+esito["entra"] = "entra" in chiavi()
+spazio["punto_pulsa"](True)
+esito["pulsa"] = "pulsa" in chiavi()
+spazio["punto_pulsa"](False)
+esito["pulsa_dopo"] = "pulsa" in chiavi()
+spazio["punto_segue_voce"](0.05)
+esito["scala_voce_forte"] = p.transform().m11 if p is not None else None
+print(json.dumps(esito))
+"""
+
+
+def _osserva_pill(brand):
+    """Costruisce la pill con il codice vero di detta.py, senza mostrarla, in un
+    processo a parte: AppKit non accetta due volte le stesse classi."""
+    import subprocess
+    uscita = subprocess.run([sys.executable, "-c", _PROVA_PILL, str(REPO_ROOT), brand],
+                            capture_output=True, text=True, timeout=60, check=True)
+    return json.loads(uscita.stdout.strip().splitlines()[-1])
+
+
+def test_pill_logo_leaderai_con_punto_vivo():
+    config = json.loads((REPO_ROOT / "mac" / "config.json").read_text(encoding="utf-8"))
+    assert config["brand"] == "LeaderAI."
+    # il carattere del logo arriva anche al cliente: l'installazione lo copia
+    assert "Onest.ttf" in (REPO_ROOT / "mac" / "install.sh").read_text(encoding="utf-8")
+    esito = _osserva_pill(config["brand"])
+    assert esito["testo"] == "LeaderAI" and esito["famiglia"] == "Onest" and esito["punto"]
+    assert esito["entra"]                                # la pill compare: il punto si accende
+    assert esito["pulsa"] and not esito["pulsa_dopo"]    # trascrive: pulsa, poi si ferma
+    assert esito["scala_voce_forte"] > 1.5               # voce forte: il punto cresce
+
+
+def test_pill_marchio_senza_punto_finale_resta_testo():
+    esito = _osserva_pill("Studio Rossi")
+    assert esito["testo"] == "Studio Rossi" and not esito["punto"]

@@ -2,7 +2,7 @@
 
 App di dettatura locale di **salchiarenza.ai**: tieni premuto un tasto, parli, il testo si scrive dove hai il cursore. Audio e trascrizione Whisper restano sul computer. Nelle chat AI arriva subito il testo grezzo; sul Mac, negli altri programmi, una pulizia Apple opzionale ha un tetto di 2 secondi e non usa l'agente come riserva. In più, modalità **Voce AI**: legge ad alta voce le risposte del tuo assistente con l'audio sintetico del sistema e lo dichiara quando viene accesa.
 
-Mentre parli compare in basso al centro una pill con il marchio **salchiarenza.ai** e una barra di lineette verdi ad arco "a sorriso" che si muove col volume.
+Mentre parli compare in basso al centro una pill con il logo **LeaderAI.** (il punto verde cresce con la voce e pulsa mentre trascrive) e una barra di lineette verdi ad arco "a sorriso" che si muove col volume.
 
 Nella copia di lavoro del 05/09/2026 la voce legge meglio elenchi e tabelle,
 permette di rileggere l’ultima risposta e di scegliere una conversazione dal

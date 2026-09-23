@@ -14,7 +14,7 @@ GitHub riceve soltanto il backup successivo alla prova Drive.
 
 ## Cosa è
 
-"Voce" è l'app di dettatura locale di Sal (brand **salchiarenza.ai**). Tieni premuto un tasto, parli, e il testo si incolla dove hai il cursore. Audio e trascrizione Whisper restano sul computer. Nelle chat AI arriva sempre il grezzo immediato; sul Mac, fuori da quelle chat, la pulizia opzionale usa soltanto Apple Intelligence con un tetto breve. C'è anche la modalità **voce agenti**: legge ad alta voce le risposte dell'agente (Claude/Codex), così ci parli e ti risponde a voce.
+"Voce" è l'app di dettatura locale di Sal (brand **LeaderAI**). Tieni premuto un tasto, parli, e il testo si incolla dove hai il cursore. Audio e trascrizione Whisper restano sul computer. Nelle chat AI arriva sempre il grezzo immediato; sul Mac, fuori da quelle chat, la pulizia opzionale usa soltanto Apple Intelligence con un tetto breve. C'è anche la modalità **voce agenti**: legge ad alta voce le risposte dell'agente (Claude/Codex), così ci parli e ti risponde a voce.
 
 Due versioni, **stessa anima**:
 - `mac/` → app per Mac. **È il MASTER** (la usa Sal ogni giorno).
@@ -30,7 +30,7 @@ Due versioni, **stessa anima**:
 
 ## LISTA PARITÀ — devono essere identiche in `mac/` e `windows/`
 
-1. Marchio `salchiarenza.ai` sulla pill nera in basso al centro.
+1. Logo `LeaderAI.` sulla pill nera in basso al centro: il punto verde `#56C842` cresce con la voce e pulsa mentre trascrive.
 2. Barra di lineette verdi `#7ED321` ad arco "a sorriso" che si muove col volume.
 3. Funziona ovunque: tieni premuto il tasto-detta, parli, il testo si incolla dove sei.
 4. Due tasti: **detta** = tasto destro dedicato; **voce on/off** = secondo tasto.
@@ -113,7 +113,7 @@ Percorso tecnico richiesto per l'agente del cliente:
 6. **Hardware non recuperabile:** se manca davvero un pezzo fisico o una capacita' del computer, dichiaralo chiaramente e fermati solo su quel modulo.
 7. **Collaudo finale:** apri un campo di testo reale, fai dettare una frase,
    verifica che il testo compaia dove sta il cursore e che il pannello
-   `salchiarenza.ai` si veda. Su Mac ottieni `FOTOCOPIA_SAL_OK` e prova
+   `LeaderAI.` si veda. Su Mac ottieni `FOTOCOPIA_SAL_OK` e prova
    l'audio; su Windows elenca, fa ascoltare e salva la voce italiana scelta.
 8. **Conferma finale breve:** soltanto dopo il collaudo completo apre con
    `Perfetto, l'ho fatto. Tutto completato e funzionante.` e riporta versione,

@@ -93,7 +93,7 @@ riparazione e prova reale. Quando trovi un errore del software, applica una
 correzione locale sicura, ripeti la prova e prosegui.
 
 La prova finale comprende tutto: l'icona apre Voce; Ctrl destro scrive il
-parlato; il pannello salchiarenza.ai si vede; il suono di avvio e fine
+parlato; il pannello LeaderAI. si vede; il suono di avvio e fine
 dettatura si sente; il tasto Menu attiva la voce; una risposta completa
 dell'agente viene letta ad alta voce. Nella finestra Voce AI, dal menu Voce, prova il riascolto
 dopo uno stop e la scelta fra due conversazioni con risposte riconoscibili.
@@ -135,7 +135,7 @@ riparazione e prova reale. Quando trovi un errore del software, applica una
 correzione locale sicura, ripeti la prova e prosegui.
 
 La prova finale comprende tutto: i pulsanti sulla Scrivania aprono Voce; Cmd
-destro scrive il parlato; il pannello salchiarenza.ai si vede; il suono di
+destro scrive il parlato; il pannello LeaderAI. si vede; il suono di
 avvio e fine dettatura si sente; Option + freccia sinistra attiva la voce; Cmd
 destro + Option attiva le mani libere; una risposta completa dell'agente viene
 letta ad alta voce. Nel menu Voce in alto prova il riascolto dopo uno stop

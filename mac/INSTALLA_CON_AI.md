@@ -65,7 +65,7 @@ log del proprietario.
    nel clic `Aggiungi comando rapido` quando richiesto. Esegui poi
    `voce_hook.py --check-profile` con l'interprete della cartella `.venv`.
    Il risultato deve essere `FOTOCOPIA_SAL_OK`.
-8. Guida la prova reale in un campo di testo con Cmd destro e verifica il pannello `salchiarenza.ai`.
+8. Guida la prova reale in un campo di testo con Cmd destro e verifica il pannello `LeaderAI.`.
 9. Prova Option + freccia sinistra per la voce: l'accensione deve dire
    `Voce AI` e `audio sintetico`, mentre la pill e il menu devono mostrare
    `AI`. Prova anche Cmd destro + Option per la modalita' mani libere.
@@ -101,7 +101,7 @@ Mostra al proprietario:
 - versione e cartella installata;
 - launcher creati;
 - dettatura con Cmd destro;
-- pannello `salchiarenza.ai`;
+- pannello `LeaderAI.`;
 - voce agenti e mani libere;
 - avviso `Voce AI` e `audio sintetico` verificato all'accensione;
 - collegamento configurato a Claude Code o Codex e prova audio reale;

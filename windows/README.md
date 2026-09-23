@@ -2,7 +2,7 @@
 
 Dettatura locale per Windows: tieni premuto `Ctrl destro`, parli, rilasci, e il testo viene scritto dove hai il cursore.
 
-Mentre parli, in basso al centro compare la pill **salchiarenza.ai** con la barra di lineette verdi ad arco "a sorriso" che si muovono col volume. L'overlay non ruba il focus: continui a scrivere dove sei.
+Mentre parli, in basso al centro compare la pill **LeaderAI.** (il punto verde cresce con la voce e pulsa mentre trascrive) con la barra di lineette verdi ad arco "a sorriso" che si muovono col volume. L'overlay non ruba il focus: continui a scrivere dove sei.
 
 Risorsa gratuita per la community **AI con Sal**.
 
@@ -76,7 +76,7 @@ e un'icona cliccabile **Voce Dettatura** sulla Scrivania e nel Menu Start.
 4. Rilascia `Ctrl destro`.
 5. Usa il tasto `Menu` per accendere o spegnere Voce AI, se configurata; all'accensione dichiara che le risposte sono audio sintetico.
 
-In basso compare la pill **salchiarenza.ai** con la barra verde a sorriso e il testo viene scritto dove hai il cursore. Per spegnerla, chiudi quella finestra.
+In basso compare la pill **LeaderAI.** (il punto verde cresce con la voce e pulsa mentre trascrive) con la barra verde a sorriso e il testo viene scritto dove hai il cursore. Per spegnerla, chiudi quella finestra.
 
 In piu': glossario personale (`glossario` in `config.json`) e sostituzioni locali per scrivere correttamente nomi e brand. Il testo grezzo viene incollato subito: Claude Code e Codex non vengono chiamati durante la dettatura.
 

@@ -28,7 +28,7 @@ from pynput.keyboard import Controller, Key
 
 from voce_lib import (
     carica_config, config_scrivibile, voce_attiva, FLAG_VOICE_ON, FLAG_PARLANDO,
-    mani_libere_attive, FLAG_MANI_LIBERE_ON, FLAG_TURNO_UTENTE, BASE,
+    mani_libere_attive, FLAG_MANI_LIBERE_ON, FLAG_TURNO_UTENTE, BASE, SOURCE_BASE,
     apri_turno_utente, chiudi_turno_utente, CodaDettature,
     c_e_voce, aggiorna_scarti_fuori_scala, e_allucinazione, SOGLIA_VOCE, esegui_sicuro,
     diagnosi_audio_muto, GUADAGNO_INGRESSO_MINIMO, GUADAGNO_INGRESSO_TARGET,
@@ -109,7 +109,7 @@ MAX_REGISTRAZIONE_TASTO_SEC = float(cfg.get("max_registrazione_tasto_sec", 300))
 # --- pannello di stato nativo (NonactivatingPanel: mai il focus) ---
 
 LARGHEZZA, ALTEZZA = 300, 72
-BRAND = cfg.get("brand", "salchiarenza.ai")
+BRAND = cfg.get("brand", "LeaderAI.")
 
 app = AppKit.NSApplication.sharedApplication()
 app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)  # niente icona Dock
@@ -136,22 +136,6 @@ vista.layer().setBackgroundColor_(
 )
 vista.layer().setCornerRadius_(16.0)
 
-brand = AppKit.NSTextField.labelWithString_(BRAND)
-brand.setFrame_(AppKit.NSMakeRect(0, 48, LARGHEZZA, 18))
-brand.setAlignment_(AppKit.NSTextAlignmentCenter)
-brand.setTextColor_(AppKit.NSColor.colorWithCalibratedWhite_alpha_(0.96, 0.94))
-brand.setFont_(AppKit.NSFont.systemFontOfSize_weight_(13, AppKit.NSFontWeightMedium))
-vista.addSubview_(brand)
-
-etichetta = AppKit.NSTextField.labelWithString_("")
-etichetta.setFrame_(AppKit.NSMakeRect(0, 17, LARGHEZZA, 28))
-etichetta.setAlignment_(AppKit.NSTextAlignmentCenter)
-etichetta.setTextColor_(AppKit.NSColor.whiteColor())
-etichetta.setFont_(AppKit.NSFont.monospacedSystemFontOfSize_weight_(15, AppKit.NSFontWeightRegular))
-etichetta.setHidden_(True)
-vista.addSubview_(etichetta)
-
-
 def colore_da_hex(hex_str):
     """Da '#RRGGBB' a NSColor."""
     hex_str = hex_str.lstrip("#")
@@ -160,6 +144,135 @@ def colore_da_hex(hex_str):
 
 
 COLORE_BARRE = colore_da_hex(cfg.get("colore", "#32D74B"))
+VERDE_FIRMA = colore_da_hex("#56C842")  # il punto del logo "LeaderAI."
+
+
+def font_marchio(dimensione):
+    """Onest Bold, il carattere del logo LeaderAI, dal file accanto all'app e
+    solo per questo processo; se manca, il grassetto di sistema."""
+    try:
+        import CoreText
+        url = AppKit.NSURL.fileURLWithPath_(str(SOURCE_BASE / "Onest.ttf"))
+        CoreText.CTFontManagerRegisterFontsForURL(url, CoreText.kCTFontManagerScopeProcess, None)
+        font = AppKit.NSFontManager.sharedFontManager().fontWithFamily_traits_weight_size_(
+            "Onest", 0, 9, dimensione)
+        if font is not None:
+            return font
+    except Exception:
+        pass
+    return AppKit.NSFont.systemFontOfSize_weight_(dimensione, AppKit.NSFontWeightBold)
+
+
+# "LeaderAI." come nel logo: il punto finale diventa un punto verde vivo, che
+# cresce e si accende con la voce mentre parli e pulsa mentre trascrive.
+# Un marchio senza punto finale resta testo semplice.
+PUNTO_VIVO = BRAND.endswith(".")
+TESTO_MARCHIO = BRAND[:-1] if PUNTO_VIVO else BRAND
+FONT_MARCHIO = font_marchio(16)
+TESTO_BRAND = AppKit.NSAttributedString.alloc().initWithString_attributes_(TESTO_MARCHIO, {
+    AppKit.NSFontAttributeName: FONT_MARCHIO,
+    AppKit.NSForegroundColorAttributeName: AppKit.NSColor.colorWithCalibratedWhite_alpha_(0.97, 1.0),
+})
+LATO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.26, 1)  # proporzioni del logo
+SPAZIO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.12, 1)
+_larghezza_marchio = TESTO_BRAND.size().width + ((SPAZIO_PUNTO + LATO_PUNTO) if PUNTO_VIVO else 0)
+X_MARCHIO = round((LARGHEZZA - _larghezza_marchio) / 2)
+Y_BASE_MARCHIO = 9  # linea di base del testo dentro la vista del marchio
+
+
+class VistaMarchio(AppKit.NSView):
+    """Il logo in alto nella pill."""
+
+    def drawRect_(self, rect):
+        TESTO_BRAND.drawAtPoint_(AppKit.NSMakePoint(X_MARCHIO, Y_BASE_MARCHIO + FONT_MARCHIO.descender()))
+
+
+brand = VistaMarchio.alloc().initWithFrame_(AppKit.NSMakeRect(0, 44, LARGHEZZA, 28))
+vista.addSubview_(brand)
+
+punto = None
+if PUNTO_VIVO:
+    # vista che ospita un solo strato Core Animation: il punto si anima da
+    # solo, fluido, senza ridisegnare la pill a ogni tick
+    _LATO_OSPITE = 24
+    _ospite = AppKit.NSView.alloc().initWithFrame_(AppKit.NSMakeRect(
+        X_MARCHIO + TESTO_BRAND.size().width + SPAZIO_PUNTO + LATO_PUNTO / 2 - _LATO_OSPITE / 2,
+        Y_BASE_MARCHIO + LATO_PUNTO / 2 - _LATO_OSPITE / 2, _LATO_OSPITE, _LATO_OSPITE))
+    _ospite.setLayer_(Quartz.CALayer.layer())
+    _ospite.setWantsLayer_(True)
+    punto = Quartz.CALayer.layer()
+    punto.setBounds_(((0, 0), (LATO_PUNTO, LATO_PUNTO)))
+    punto.setPosition_((_LATO_OSPITE / 2, _LATO_OSPITE / 2))
+    punto.setCornerRadius_(LATO_PUNTO / 2)
+    punto.setBackgroundColor_(VERDE_FIRMA.CGColor())
+    punto.setShadowColor_(VERDE_FIRMA.CGColor())
+    punto.setShadowOffset_((0, 0))
+    punto.setShadowRadius_(5.0)
+    punto.setShadowOpacity_(0.0)
+    _ospite.layer().addSublayer_(punto)
+    brand.addSubview_(_ospite)
+
+
+def punto_entra():
+    """Alla comparsa della pill il punto 'si accende' con un piccolo scatto."""
+    if punto is None:
+        return
+    punto.removeAnimationForKey_("pulsa")
+    scatto = Quartz.CAKeyframeAnimation.animationWithKeyPath_("transform.scale")
+    scatto.setValues_([0.2, 1.6, 1.0])
+    scatto.setKeyTimes_([0.0, 0.55, 1.0])
+    scatto.setDuration_(0.35)
+    punto.addAnimation_forKey_(scatto, "entra")
+
+
+def punto_segue_voce(volume):
+    """Mentre parli il punto cresce e si illumina col volume della voce."""
+    if punto is None:
+        return
+    Quartz.CATransaction.begin()
+    Quartz.CATransaction.setAnimationDuration_(0.12)
+    s = 1.0 + min(0.9, volume * 15)
+    punto.setTransform_(Quartz.CATransform3DMakeScale(s, s, 1.0))
+    punto.setShadowOpacity_(min(0.9, volume * 20))
+    Quartz.CATransaction.commit()
+
+
+def punto_pulsa(acceso):
+    """Mentre trascrive il punto pulsa, come un cuore che lavora."""
+    if punto is None:
+        return
+    if not acceso:
+        punto.removeAnimationForKey_("pulsa")
+        return
+    if punto.animationForKey_("pulsa") is not None:
+        return
+    Quartz.CATransaction.begin()
+    Quartz.CATransaction.setDisableActions_(True)
+    punto.setTransform_(Quartz.CATransform3DIdentity)
+    punto.setShadowOpacity_(0.0)
+    Quartz.CATransaction.commit()
+    scala = Quartz.CABasicAnimation.animationWithKeyPath_("transform.scale")
+    scala.setFromValue_(1.0)
+    scala.setToValue_(1.7)
+    luce = Quartz.CABasicAnimation.animationWithKeyPath_("shadowOpacity")
+    luce.setFromValue_(0.1)
+    luce.setToValue_(0.9)
+    battito = Quartz.CAAnimationGroup.animation()
+    battito.setAnimations_([scala, luce])
+    battito.setDuration_(0.5)
+    battito.setAutoreverses_(True)
+    battito.setRepeatCount_(1e9)
+    battito.setTimingFunction_(Quartz.CAMediaTimingFunction.functionWithName_(Quartz.kCAMediaTimingFunctionEaseInEaseOut))
+    punto.addAnimation_forKey_(battito, "pulsa")
+
+
+etichetta = AppKit.NSTextField.labelWithString_("")
+etichetta.setFrame_(AppKit.NSMakeRect(0, 17, LARGHEZZA, 28))
+etichetta.setAlignment_(AppKit.NSTextAlignmentCenter)
+etichetta.setTextColor_(AppKit.NSColor.whiteColor())
+etichetta.setFont_(AppKit.NSFont.monospacedSystemFontOfSize_weight_(15, AppKit.NSFontWeightRegular))
+etichetta.setHidden_(True)
+vista.addSubview_(etichetta)
 
 indicatore_voce = AppKit.NSTextField.labelWithString_("● AI")
 indicatore_voce.setFrame_(AppKit.NSMakeRect(LARGHEZZA - 54, 49, 42, 16))
@@ -391,15 +504,18 @@ class GestorePannello(AppKit.NSObject):
                     etichetta.setHidden_(True)
                     onda.setHidden_(False)
                     pannello.orderFrontRegardless()  # mostra SENZA attivare l'app
+                    punto_entra()
                 elif nuovo == "trascrivo":
                     aggiorna_indicatore_voce()
                     onda.setHidden_(True)
                     brand.setHidden_(False)
                     etichetta.setStringValue_("⏳ Trascrivo…")
                     etichetta.setHidden_(False)
+                    punto_pulsa(True)
                 elif nuovo == "sistemo":
                     etichetta.setStringValue_("✨ Sistemo…")
                     etichetta.setHidden_(False)
+                    punto_pulsa(True)
                 elif nuovo == "mic_basso":
                     # la pill qui e' gia' stata nascosta: va rimessa davanti,
                     # altrimenti l'utente non vedrebbe mai perche' e' saltata
@@ -409,14 +525,17 @@ class GestorePannello(AppKit.NSObject):
                     brand.setHidden_(False)
                     etichetta.setStringValue_("🎤 Alzo il microfono…")
                     etichetta.setHidden_(False)
+                    punto_pulsa(False)
                     pannello.orderFrontRegardless()
                 elif nuovo == "nascosto":
                     pannello.orderOut_(None)
+                    punto_pulsa(False)
         except queue.Empty:
             pass
         if self.stato == "ascolto":
             stop_se_registrazione_troppo_lunga()
             onda.setNeedsDisplay_(True)  # ridisegna il sorriso col volume nuovo
+            punto_segue_voce(volume_corrente)
         # watchdog dell'hotkey: se il listener della tastiera si fosse fermato,
         # lo riaccendo (controllo ogni ~2s, non a ogni tick).
         self._tick += 1

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0-rc.22 - 23/09/2026 — il logo LeaderAI. nella pill
+
+- `brand` passa a `LeaderAI.`: il punto finale diventa un punto verde firma
+  `#56C842`, uno strato Core Animation che si anima fluido senza ridisegnare
+  la pill. Scatto alla comparsa (`punto_entra`), crescita e luce col volume
+  (`punto_segue_voce`), battito mentre trascrive o sistema (`punto_pulsa`).
+  Testo in Onest Bold, il carattere del logo, caricato da `Onest.ttf` accanto
+  all'app solo per questo processo (SIL OFL 1.1), con ripiego sul grassetto
+  di sistema; `install.sh` copia il file. Un marchio senza punto finale resta
+  testo semplice. 2 prove nuove con AppKit vero.
+
 ## 1.3.0-rc.21 - 20/09/2026 — Chrome espone la pagina solo se glielo si chiede
 
 - Misurato sulla pagina ChatGPT di Sal: senza richiesta 286 elementi e

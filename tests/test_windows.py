@@ -1226,3 +1226,72 @@ def test_catena_arbitri_windows_gemella_del_mac():
     assert catena(["claude", "-p"]) == [["claude", "-p"]]
     assert catena([["claude"], ["codex"]]) == [["claude"], ["codex"]]
     assert catena(None) == [] and catena([]) == []
+
+
+# --- Pill: logo "LeaderAI." con il punto verde vivo, gemello Mac (23/09/2026) ---
+
+def _crescita_punto():
+    import math
+    path = REPO_ROOT / "windows" / "voice_dettatura_windows.py"
+    albero = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    nodo = next(n for n in albero.body if isinstance(n, ast.FunctionDef) and n.name == "crescita_punto")
+    spazio = {"math": math}
+    exec(compile(ast.Module(body=[nodo], type_ignores=[]), str(path), "exec"), spazio)
+    return spazio["crescita_punto"]
+
+
+def test_punto_leaderai_si_accende_segue_la_voce_e_pulsa():
+    crescita = _crescita_punto()
+    assert crescita("ascolto", 0.0, 0.0, 0.0) < -0.5          # compare piccolo...
+    assert crescita("ascolto", 0.0, 0.0, 0.19) > 0.5          # ...scatta...
+    assert crescita("ascolto", 0.0, 0.0, 0.5) == 0.0          # ...e si posa
+    assert abs(crescita("ascolto", 0.05, 0.0, 1.0) - 0.75) < 1e-9   # voce forte: cresce
+    assert crescita("ascolto", 1.0, 0.0, 1.0) == 0.9          # con un tetto
+    battito = [crescita("trascrivo", 0.0, t / 10, 1.0) for t in range(11)]
+    assert battito[0] < 0.01 and abs(battito[5] - 0.7) < 1e-9 and battito[10] < 0.01
+    assert crescita("sistemo", 0.0, 0.5, 1.0) == battito[5]
+    assert crescita("nascosto", 0.05, 0.5, 1.0) == 0.0
+
+
+def _marchio_su_canvas(brand, crescita):
+    """Disegna il logo con il metodo vero della pill Windows su un canvas Tk."""
+    import tkinter as tk
+    import tkinter.font as tkfont
+    path = REPO_ROOT / "windows" / "voice_dettatura_windows.py"
+    albero = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    classe = next(n for n in albero.body if isinstance(n, ast.ClassDef) and n.name == "Pannello")
+    metodo = next(n for n in classe.body if isinstance(n, ast.FunctionDef) and n.name == "_marchio")
+    spazio = {"BRAND": brand, "LARGHEZZA": 300, "VERDE_FIRMA": "#56C842",
+              "ALONE_PUNTO": ("#1F3A1B", "#2E5A27")}
+    exec(compile(ast.Module(body=[metodo], type_ignores=[]), str(path), "exec"), spazio)
+    root = tk.Tk()
+    try:
+        canvas = tk.Canvas(root, width=300, height=72)
+        font = tkfont.Font(root=root, family="Segoe UI", size=12, weight="bold")
+        spazio["_marchio"](SimpleNamespace(canvas=canvas, font_marchio=font), crescita)
+        oggetti = [(canvas.type(i), canvas.coords(i), canvas.itemcget(i, "text") if canvas.type(i) == "text" else None,
+                    canvas.bbox(i)) for i in canvas.find_all()]
+        return oggetti
+    finally:
+        root.destroy()
+
+
+def test_pill_windows_logo_leaderai_col_punto_sulla_riga():
+    config = json.loads((REPO_ROOT / "windows" / "config.json").read_text(encoding="utf-8"))
+    assert config["brand"] == "LeaderAI."
+    oggetti = _marchio_su_canvas(config["brand"], 0.0)
+    testo = [o for o in oggetti if o[0] == "text"]
+    punti = [o for o in oggetti if o[0] == "oval"]
+    assert [t[2] for t in testo] == ["LeaderAI"] and len(punti) == 1   # a riposo: niente alone
+    x1, y1, x2, y2 = punti[0][1]
+    assert abs(y2 - 21) < 0.01                        # il punto poggia sulla linea di base
+    sinistra = testo[0][3][0]
+    assert abs((sinistra + x2) / 2 - 150) < 3         # logo centrato nella pill
+    acceso = _marchio_su_canvas(config["brand"], 0.8)
+    assert len([o for o in acceso if o[0] == "oval"]) == 3   # voce: punto piu' grande con la sua luce
+
+
+def test_pill_windows_marchio_senza_punto_finale_resta_testo():
+    oggetti = _marchio_su_canvas("Studio Rossi", 0.5)
+    assert [o[2] for o in oggetti if o[0] == "text"] == ["Studio Rossi"]
+    assert not [o for o in oggetti if o[0] == "oval"]

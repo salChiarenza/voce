@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0-rc.22 - 23/09/2026 — gemella del Mac
+
+- La pill disegna `LeaderAI.` in Segoe UI grassetto col punto verde vivo:
+  `crescita_punto` da' lo scatto alla comparsa, la crescita col volume e il
+  battito da un secondo mentre trascrive; la luce sono due aloni sfumati sul
+  fondo (Tk non ha ombre). Onest non viene caricato su Windows: senza
+  hardware non si prova. 3 prove nuove, geometria su canvas Tk vero.
+
 ## 1.3.0-rc.18 - 20/09/2026 — nessuna modifica
 
 - La correzione Mac dei due monitor (il testo segue la pill) qui non serve:

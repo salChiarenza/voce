@@ -1,5 +1,12 @@
 # Changelog Voce
 
+## 1.3.0-rc.22 - 23/09/2026
+
+- La pill porta il logo LeaderAI. al posto di salchiarenza.ai, e il punto
+  verde del logo e' vivo: si accende quando la pill compare, cresce e si
+  illumina con la voce mentre parli, pulsa mentre trascrive. Mac e Windows,
+  305 prove verdi.
+
 ## 1.3.0-rc.21 - 20/09/2026
 
 - ChatGPT (e ogni pagina) in Chrome: la casella ora si trova. Chrome mostra

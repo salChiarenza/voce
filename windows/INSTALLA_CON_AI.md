@@ -53,7 +53,7 @@ Obiettivo: portare Voce fino a una prova reale, conservando la configurazione pe
 4. Esegui la verifica sintattica dei file Python con l'interprete della cartella `.venv`.
 5. Esegui `voce_hook.py --check-hooks` con l'interprete della cartella `.venv`; ripara la configurazione locale se il controllo fallisce e ripeti la verifica.
 6. Avvia Voce dall'icona sulla Scrivania.
-7. Guida il proprietario nella prova in Blocco note: Ctrl destro tenuto, frase dettata, rilascio, testo inserito e pannello `salchiarenza.ai` visibile con il sorriso verde.
+7. Guida il proprietario nella prova in Blocco note: Ctrl destro tenuto, frase dettata, rilascio, testo inserito e pannello `LeaderAI.` visibile con il sorriso verde.
 8. Elenca le voci italiane disponibili con `voce_hook.py --list-voices`.
 9. Falle ascoltare una alla volta con `voce_hook.py --test-voice "NOME"` e salva quella scelta con `voce_hook.py --set-voice "NOME"`.
 10. Per Codex fai aprire `/hooks` al proprietario, verifica il comando
@@ -93,7 +93,7 @@ Mostra al proprietario:
 - versione e cartella installata;
 - icona creata;
 - dettatura con Ctrl destro;
-- pannello `salchiarenza.ai`;
+- pannello `LeaderAI.`;
 - tasto Menu e voce agenti;
 - avviso `Voce AI` e `audio sintetico` verificato all'accensione;
 - collegamento configurato a Claude Code o Codex e prova audio reale;
