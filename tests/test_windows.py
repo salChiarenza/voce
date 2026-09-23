@@ -1313,3 +1313,38 @@ def test_firma_windows_si_disegna_con_la_curva_del_sito():
     passi = [disegno(t / 100) for t in range(0, 101, 5)]
     assert passi[0] == 0.0 and disegno(0.375) == 0.5 and disegno(0.75) == 1.0 and disegno(3.0) == 1.0
     assert all(a <= b for a, b in zip(passi, passi[1:]))   # cresce sempre, da sinistra a destra
+
+
+def test_pill_windows_trascrive_con_leaderai_grande_e_scritta_piccola():
+    """Sal, 23/09/2026: «deve restare in risalto sempre LeaderAI, anche quando
+    trascrivi; le altre scritte piu' piccoline»."""
+    import tkinter as tk
+    import tkinter.font as tkfont
+    path = REPO_ROOT / "windows" / "voice_dettatura_windows.py"
+    albero = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    classe = next(n for n in albero.body if isinstance(n, ast.ClassDef) and n.name == "Pannello")
+    metodi = [n for n in classe.body if isinstance(n, ast.FunctionDef) and n.name in ("_marchio", "_disegna_trascrivo")]
+    spazio = {"BRAND": "LeaderAI.", "LARGHEZZA": 300, "VERDE_FIRMA": "#56C842",
+              "ALONE_PUNTO": ("#1F3A1B", "#2E5A27"), "time": time,
+              "crescita_punto": lambda *a: 0.0}
+    exec(compile(ast.Module(body=metodi, type_ignores=[]), str(path), "exec"), spazio)
+    root = tk.Tk()
+    try:
+        canvas = tk.Canvas(root, width=300, height=72)
+        pill = SimpleNamespace(
+            canvas=canvas, stato="trascrivo", _pill=lambda: None,
+            font_marchio=tkfont.Font(root=root, family="Segoe UI", size=12, weight="bold"),
+            font_marchio_grande=tkfont.Font(root=root, family="Segoe UI", size=16, weight="bold"))
+        pill._marchio = lambda *a, **k: spazio["_marchio"](pill, *a, **k)
+        altezza = lambda i: canvas.bbox(i)[3] - canvas.bbox(i)[1]
+        spazio["_marchio"](pill)                                   # mentre parli
+        normale = next(i for i in canvas.find_all() if canvas.type(i) == "text")
+        altezza_normale = altezza(normale)
+        spazio["_disegna_trascrivo"](pill)                          # mentre trascrive
+        testi = {canvas.itemcget(i, "text"): i for i in canvas.find_all() if canvas.type(i) == "text"}
+        assert set(testi) == {"LeaderAI", "Trascrivo..."}
+        assert altezza(testi["LeaderAI"]) > altezza_normale        # il marchio si ingrandisce
+        assert altezza(testi["Trascrivo..."]) < 0.75 * altezza(testi["LeaderAI"])  # la scritta resta piccola
+        assert canvas.bbox(testi["Trascrivo..."])[1] > canvas.bbox(testi["LeaderAI"])[3] - 2  # e sta sotto
+    finally:
+        root.destroy()

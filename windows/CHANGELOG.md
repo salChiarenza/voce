@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.24 - 23/09/2026 — gemella del Mac
+
+- Con una scritta di stato il marchio passa a Segoe UI 16 grassetto al centro
+  (`_marchio(grande=True)`), la scritta a Segoe UI 9 grigia sotto. 1 prova
+  nuova su canvas Tk vero.
+
 ## 1.3.0-rc.23 - 23/09/2026 — gemella del Mac
 
 - La pill si chiude appena il testo e' incollato, non dopo l'Invio, se

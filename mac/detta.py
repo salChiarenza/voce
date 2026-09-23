@@ -177,33 +177,38 @@ LATO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.34, 1)  # un po' piu' del logo: 
 SPAZIO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.12, 1)
 _larghezza_marchio = TESTO_BRAND.size().width + ((SPAZIO_PUNTO + LATO_PUNTO) if PUNTO_VIVO else 0)
 X_MARCHIO = round((LARGHEZZA - _larghezza_marchio) / 2)
-Y_BASE_MARCHIO = 9  # linea di base del testo dentro la vista del marchio
+Y_BASE_MARCHIO = 9  # linea di base del testo dentro la fascia del marchio
+# Mentre trascrive LeaderAI resta protagonista: si ingrandisce al centro della
+# pill e la scritta di stato, piccola, sta sotto (Sal, 23/09/2026).
+SCALA_EVIDENZA = 1.35
+Y_BASE_EVIDENZA = 39  # linea di base del marchio ingrandito, nella pill
 
-
-class VistaMarchio(AppKit.NSView):
-    """Il logo in alto nella pill."""
-
-    def drawRect_(self, rect):
-        TESTO_BRAND.drawAtPoint_(AppKit.NSMakePoint(X_MARCHIO, Y_BASE_MARCHIO + FONT_MARCHIO.descender()))
-
-
-brand = VistaMarchio.alloc().initWithFrame_(AppKit.NSMakeRect(0, 44, LARGHEZZA, 28))
+# Una vista che ospita gli strati Core Animation del logo: testo, firma e punto
+# si animano da soli, fluidi, senza ridisegnare la pill a ogni tick.
+brand = AppKit.NSView.alloc().initWithFrame_(vista.bounds())
+brand.setLayer_(Quartz.CALayer.layer())
+brand.setWantsLayer_(True)
 vista.addSubview_(brand)
+marchio = Quartz.CALayer.layer()  # la fascia in alto: si sposta e si ingrandisce tutta insieme
+marchio.setFrame_(((0, 44), (LARGHEZZA, 28)))
+brand.layer().addSublayer_(marchio)
+testo_marchio = Quartz.CATextLayer.layer()
+testo_marchio.setString_(TESTO_BRAND)
+testo_marchio.setContentsScale_(3.0)  # nitido anche ingrandito sugli schermi Retina
+_dim = TESTO_BRAND.size()
+testo_marchio.setFrame_(((X_MARCHIO, Y_BASE_MARCHIO - (_dim.height - FONT_MARCHIO.ascender())),
+                         (_dim.width, _dim.height)))
+marchio.addSublayer_(testo_marchio)
 
 punto = firma = None
 if PUNTO_VIVO:
-    # vista che ospita gli strati Core Animation del logo: punto e firma si
-    # animano da soli, fluidi, senza ridisegnare la pill a ogni tick
-    _ospite = AppKit.NSView.alloc().initWithFrame_(brand.bounds())
-    _ospite.setLayer_(Quartz.CALayer.layer())
-    _ospite.setWantsLayer_(True)
     # la firma del sito: la sottolineatura verde che si disegna da sinistra
     firma = Quartz.CALayer.layer()
     firma.setAnchorPoint_((0, 0.5))
     firma.setBounds_(((0, 0), (TESTO_BRAND.size().width, round(FONT_MARCHIO.capHeight() * 0.18, 1))))
     firma.setPosition_((X_MARCHIO, Y_BASE_MARCHIO - FONT_MARCHIO.capHeight() * 0.34))
     firma.setBackgroundColor_(VERDE_FIRMA.CGColor())
-    _ospite.layer().addSublayer_(firma)
+    marchio.addSublayer_(firma)
     punto = Quartz.CALayer.layer()
     punto.setBounds_(((0, 0), (LATO_PUNTO, LATO_PUNTO)))
     punto.setPosition_((X_MARCHIO + TESTO_BRAND.size().width + SPAZIO_PUNTO + LATO_PUNTO / 2,
@@ -214,8 +219,25 @@ if PUNTO_VIVO:
     punto.setShadowOffset_((0, 0))
     punto.setShadowRadius_(5.0)
     punto.setShadowOpacity_(0.0)
-    _ospite.layer().addSublayer_(punto)
-    brand.addSubview_(_ospite)
+    marchio.addSublayer_(punto)
+
+
+def marchio_in_evidenza(acceso, subito=False):
+    """Con una scritta di stato (trascrivo, sistemo, microfono) il marchio si
+    ingrandisce al centro; mentre parli torna in alto sopra le lineette."""
+    if acceso:
+        centro, base = 44 + 14, 44 + Y_BASE_MARCHIO
+        spostamento = Y_BASE_EVIDENZA - (centro + SCALA_EVIDENZA * (base - centro))
+        forma = Quartz.CATransform3DConcat(
+            Quartz.CATransform3DMakeScale(SCALA_EVIDENZA, SCALA_EVIDENZA, 1.0),
+            Quartz.CATransform3DMakeTranslation(0, spostamento, 0))
+    else:
+        forma = Quartz.CATransform3DIdentity
+    Quartz.CATransaction.begin()
+    Quartz.CATransaction.setDisableActions_(subito)
+    Quartz.CATransaction.setAnimationDuration_(0.25)
+    marchio.setTransform_(forma)
+    Quartz.CATransaction.commit()
 
 
 def marchio_entra():
@@ -278,11 +300,12 @@ def punto_pulsa(acceso):
     punto.addAnimation_forKey_(battito, "pulsa")
 
 
+# scritta di stato piccola e grigia: in risalto resta LeaderAI
 etichetta = AppKit.NSTextField.labelWithString_("")
-etichetta.setFrame_(AppKit.NSMakeRect(0, 17, LARGHEZZA, 28))
+etichetta.setFrame_(AppKit.NSMakeRect(0, 12, LARGHEZZA, 16))
 etichetta.setAlignment_(AppKit.NSTextAlignmentCenter)
-etichetta.setTextColor_(AppKit.NSColor.whiteColor())
-etichetta.setFont_(AppKit.NSFont.monospacedSystemFontOfSize_weight_(15, AppKit.NSFontWeightRegular))
+etichetta.setTextColor_(AppKit.NSColor.colorWithCalibratedWhite_alpha_(0.72, 1.0))
+etichetta.setFont_(AppKit.NSFont.systemFontOfSize_weight_(11, AppKit.NSFontWeightMedium))
 etichetta.setHidden_(True)
 vista.addSubview_(etichetta)
 
@@ -516,6 +539,7 @@ class GestorePannello(AppKit.NSObject):
                     etichetta.setHidden_(True)
                     onda.setHidden_(False)
                     pannello.orderFrontRegardless()  # mostra SENZA attivare l'app
+                    marchio_in_evidenza(False)
                     marchio_entra()
                 elif nuovo == "trascrivo":
                     aggiorna_indicatore_voce()
@@ -523,10 +547,12 @@ class GestorePannello(AppKit.NSObject):
                     brand.setHidden_(False)
                     etichetta.setStringValue_("⏳ Trascrivo…")
                     etichetta.setHidden_(False)
+                    marchio_in_evidenza(True)
                     punto_pulsa(True)
                 elif nuovo == "sistemo":
                     etichetta.setStringValue_("✨ Sistemo…")
                     etichetta.setHidden_(False)
+                    marchio_in_evidenza(True)
                     punto_pulsa(True)
                 elif nuovo == "mic_basso":
                     # la pill qui e' gia' stata nascosta: va rimessa davanti,
@@ -537,11 +563,13 @@ class GestorePannello(AppKit.NSObject):
                     brand.setHidden_(False)
                     etichetta.setStringValue_("🎤 Alzo il microfono…")
                     etichetta.setHidden_(False)
+                    marchio_in_evidenza(True, subito=True)
                     punto_pulsa(False)
                     pannello.orderFrontRegardless()
                 elif nuovo == "nascosto":
                     pannello.orderOut_(None)
                     punto_pulsa(False)
+                    marchio_in_evidenza(False, subito=True)
         except queue.Empty:
             pass
         if self.stato == "ascolto":

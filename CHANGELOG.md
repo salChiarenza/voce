@@ -1,5 +1,11 @@
 # Changelog Voce
 
+## 1.3.0-rc.24 - 23/09/2026
+
+- LeaderAI resta sempre in risalto: mentre trascrive il logo si ingrandisce al
+  centro della pill e le scritte di stato («Trascrivo…», «Sistemo…») diventano
+  piccole e grigie sotto di lui. Mac e Windows, 313 prove verdi.
+
 ## 1.3.0-rc.23 - 23/09/2026
 
 - «Trascrivo…» sparisce quando il testo arriva, non piu' dopo l'Invio: la

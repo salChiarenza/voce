@@ -2242,6 +2242,8 @@ class Pannello:
         )
         self.canvas.pack()
         self.font_marchio = tkfont.Font(root=self.root, family="Segoe UI", size=12, weight="bold")
+        # con una scritta di stato il marchio si ingrandisce al centro (gemello Mac)
+        self.font_marchio_grande = tkfont.Font(root=self.root, family="Segoe UI", size=16, weight="bold")
         self.stato = "nascosto"
         self.comparsa = 0.0
         self.root.withdraw()
@@ -2363,17 +2365,19 @@ class Pannello:
         c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=SFONDO_PILL, outline=SFONDO_PILL)
         c.create_rectangle(x1, y1 + r, x2, y2 - r, fill=SFONDO_PILL, outline=SFONDO_PILL)
 
-    def _marchio(self, crescita: float = 0.0, firma: float = 1.0) -> None:
-        """Il logo in alto: "LeaderAI." col punto verde vivo e la firma verde
-        sotto. Un marchio senza punto finale resta testo semplice."""
-        c, f = self.canvas, self.font_marchio
+    def _marchio(self, crescita: float = 0.0, firma: float = 1.0, grande: bool = False) -> None:
+        """Il logo: "LeaderAI." col punto verde vivo e la firma verde sotto; in
+        alto mentre parli, grande al centro con una scritta di stato. Un
+        marchio senza punto finale resta testo semplice."""
+        c = self.canvas
+        f = self.font_marchio_grande if grande else self.font_marchio
         punto = BRAND.endswith(".")
         testo = BRAND[:-1] if punto else BRAND
         cap = f.metrics("ascent") * 0.7
         lato, spazio = cap * 0.34, cap * 0.12
         largo_testo = f.measure(testo)
         x0 = (LARGHEZZA - largo_testo - ((spazio + lato) if punto else 0)) / 2
-        base = 21                                    # linea di base del testo
+        base = 32 if grande else 21                  # linea di base del testo
         c.create_text(x0, base + f.metrics("descent"), text=testo, anchor="sw",
                       fill="#F7F7F7", font=f)
         if not punto:
@@ -2414,10 +2418,10 @@ class Pannello:
     def _disegna_trascrivo(self, testo: str = "Trascrivo...") -> None:
         self.canvas.delete("all")
         self._pill()
-        self._marchio(crescita_punto(self.stato, 0.0, time.monotonic(), 1.0))
-        self.canvas.create_text(
-            LARGHEZZA / 2, 44, text=testo, fill="#FFFFFF",
-            font=("Consolas", 13, "normal"),
+        self._marchio(crescita_punto(self.stato, 0.0, time.monotonic(), 1.0), grande=True)
+        self.canvas.create_text(                 # piccola e grigia: in risalto resta LeaderAI
+            LARGHEZZA / 2, 51, text=testo, fill="#B8B8B8",
+            font=("Segoe UI", 9, "normal"),
         )
 
     def tick(self) -> None:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0-rc.24 - 23/09/2026 — LeaderAI protagonista anche mentre trascrive
+
+- Il logo diventa un gruppo di strati Core Animation (`marchio`: testo in
+  `CATextLayer` nitido a 3x, firma e punto): `marchio_in_evidenza` lo porta a
+  1,35 volte al centro della pill (base a 39 punti) con trascrivo, sistemo e
+  microfono basso, e lo riporta in alto quando si parla o la pill si chiude.
+  Scritta di stato in 11 punti grigia invece di 15 punti monospazio bianca.
+  2 prove estese, rosse sulla rc.23.
+
 ## 1.3.0-rc.23 - 23/09/2026 — la pill si chiude quando il testo arriva
 
 - Misurato su 74 dettature del 23/09: trascrizione 1,5 s di mediana, scritta

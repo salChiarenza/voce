@@ -2869,6 +2869,14 @@ spazio["punto_pulsa"](False)
 esito["pulsa_dopo"] = "pulsa" in chiavi()
 spazio["punto_segue_voce"](0.05)
 esito["scala_voce_forte"] = p.transform().m11 if p is not None else None
+# le scritte di stato sono piccole: in risalto resta il marchio
+esito["etichetta_piccola"] = spazio["etichetta"].font().pointSize() <= 0.7 * spazio["FONT_MARCHIO"].pointSize()
+spazio["marchio_in_evidenza"](True, subito=True)
+m = spazio["marchio"]
+base_pill = 58 + m.transform().m11 * (44 + spazio["Y_BASE_MARCHIO"] - 58) + m.transform().m42
+esito["evidenza"] = [m.transform().m11, round(base_pill, 1)]
+spazio["marchio_in_evidenza"](False, subito=True)
+esito["torna_normale"] = m.transform().m11 == 1.0 and m.transform().m42 == 0.0
 print(json.dumps(esito))
 """
 
@@ -2893,11 +2901,17 @@ def test_pill_logo_leaderai_con_punto_vivo():
     assert esito["firma_si_disegna"] and esito["firma_sotto"] and esito["firma_lunga"]
     assert esito["pulsa"] and not esito["pulsa_dopo"]    # trascrive: pulsa, poi si ferma
     assert esito["scala_voce_forte"] > 1.5               # voce forte: il punto cresce
+    # Sal, 23/09/2026: «deve restare in risalto sempre LeaderAI, anche quando trascrivi;
+    # le altre scritte piu' piccoline» — scritta piccola, marchio grande al centro
+    assert esito["etichetta_piccola"]
+    assert esito["evidenza"][0] > 1.2 and esito["evidenza"][1] < 44  # piu' grande e sceso al centro
+    assert esito["torna_normale"]                        # mentre parli torna in alto
 
 
 def test_pill_marchio_senza_punto_finale_resta_testo():
     esito = _osserva_pill("Studio Rossi")
     assert esito["testo"] == "Studio Rossi" and not esito["punto"] and not esito["firma"]
+    assert esito["evidenza"][0] > 1.2 and esito["torna_normale"]  # anche un marchio qualsiasi resta in risalto
 
 
 # --- Pill: «Trascrivo…» sparisce quando il testo arriva, non dopo l'Invio (23/09/2026) ---
