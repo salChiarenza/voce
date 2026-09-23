@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0-rc.23 - 23/09/2026 — la pill si chiude quando il testo arriva
+
+- Misurato su 74 dettature del 23/09: trascrizione 1,5 s di mediana, scritta
+  visibile 4,4 s, perche' `_nascondi_o_arma` partiva solo alla fine di
+  `consegna_pronte`, cioe' dopo cursore, incolla e attesa dell'Invio (2 s
+  nelle chat AI). Ora `_incolla_messaggio` chiude la pill appena incollato,
+  se nessun altro pezzo e' in arrivo (`registrando` o `coda_dettature.occupata()`);
+  la chiusura finale resta come rete. 4 prove nuove, Mac e Windows.
+- Punto del logo piu' grande (0,34 dell'altezza delle maiuscole) e firma
+  verde sotto il marchio: strato `firma` che `marchio_entra` disegna da
+  sinistra in 0,75 s con la curva della home (cubic-bezier .65,0,.35,1).
+
 ## 1.3.0-rc.22 - 23/09/2026 — il logo LeaderAI. nella pill
 
 - `brand` passa a `LeaderAI.`: il punto finale diventa un punto verde firma

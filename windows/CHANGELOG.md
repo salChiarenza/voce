@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.23 - 23/09/2026 — gemella del Mac
+
+- La pill si chiude appena il testo e' incollato, non dopo l'Invio, se
+  nessun altro pezzo e' in arrivo. Punto piu' grande e firma verde sotto il
+  marchio che si disegna da sinistra (`disegno_firma`, stessa curva del sito).
+
 ## 1.3.0-rc.22 - 23/09/2026 — gemella del Mac
 
 - La pill disegna `LeaderAI.` in Segoe UI grassetto col punto verde vivo:

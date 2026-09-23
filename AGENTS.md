@@ -30,7 +30,7 @@ Due versioni, **stessa anima**:
 
 ## LISTA PARITÀ — devono essere identiche in `mac/` e `windows/`
 
-1. Logo `LeaderAI.` sulla pill nera in basso al centro: il punto verde `#56C842` cresce con la voce e pulsa mentre trascrive.
+1. Logo `LeaderAI.` sulla pill nera in basso al centro: il punto verde `#56C842` cresce con la voce e pulsa mentre trascrive, la firma verde sotto il marchio si disegna da sinistra; la pill si chiude quando il testo e' incollato.
 2. Barra di lineette verdi `#7ED321` ad arco "a sorriso" che si muove col volume.
 3. Funziona ovunque: tieni premuto il tasto-detta, parli, il testo si incolla dove sei.
 4. Due tasti: **detta** = tasto destro dedicato; **voce on/off** = secondo tasto.

@@ -1994,6 +1994,10 @@ def _incolla_messaggio(text, finestra_bersaglio, revisione):
             logging.info("incollato alla cieca: testo conservato negli Appunti")
         if chat_agente:
             _ultima_chat_ai = finestra_bersaglio
+        # gemella Mac (23/09/2026): il testo e' arrivato, la pill si chiude
+        # adesso e non dopo l'Invio; se un altro pezzo e' in arrivo resta aperta.
+        if not recording and not coda_dettature.occupata():
+            eventi.put("nascosto")
         # invio automatico: parte sempre. La pausa prima dell'Invio dipende
         # dal contesto: a voce ON e' conversazione vera con l'agente (botta e
         # risposta); in una chat AI a voce OFF il testo si vede e parte quasi
@@ -2202,6 +2206,13 @@ def crescita_punto(stato: str, volume: float, istante: float, da_quanto: float,
     return 0.0
 
 
+def disegno_firma(da_quanto: float, durata: float = 0.75) -> float:
+    """Quanta sottolineatura verde e' disegnata (0-1): la firma della home del
+    sito, che si disegna da sinistra con la stessa curva (gemello Mac)."""
+    x = max(0.0, min(1.0, da_quanto / durata))
+    return 4 * x ** 3 if x < 0.5 else 1 - (-2 * x + 2) ** 3 / 2
+
+
 # --- overlay: la pill "LeaderAI." con la barra a sorriso (thread principale) ---
 
 class Pannello:
@@ -2352,14 +2363,14 @@ class Pannello:
         c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=SFONDO_PILL, outline=SFONDO_PILL)
         c.create_rectangle(x1, y1 + r, x2, y2 - r, fill=SFONDO_PILL, outline=SFONDO_PILL)
 
-    def _marchio(self, crescita: float = 0.0) -> None:
-        """Il logo in alto: "LeaderAI." col punto verde vivo. Un marchio senza
-        punto finale resta testo semplice."""
+    def _marchio(self, crescita: float = 0.0, firma: float = 1.0) -> None:
+        """Il logo in alto: "LeaderAI." col punto verde vivo e la firma verde
+        sotto. Un marchio senza punto finale resta testo semplice."""
         c, f = self.canvas, self.font_marchio
         punto = BRAND.endswith(".")
         testo = BRAND[:-1] if punto else BRAND
         cap = f.metrics("ascent") * 0.7
-        lato, spazio = cap * 0.26, cap * 0.12
+        lato, spazio = cap * 0.34, cap * 0.12
         largo_testo = f.measure(testo)
         x0 = (LARGHEZZA - largo_testo - ((spazio + lato) if punto else 0)) / 2
         base = 21                                    # linea di base del testo
@@ -2367,6 +2378,10 @@ class Pannello:
                       fill="#F7F7F7", font=f)
         if not punto:
             return
+        if firma > 0:
+            spessore, y_firma = cap * 0.18, base + cap * 0.34
+            c.create_rectangle(x0, y_firma - spessore / 2, x0 + largo_testo * firma,
+                               y_firma + spessore / 2, fill=VERDE_FIRMA, outline="")
         cx, cy = x0 + largo_testo + spazio + lato / 2, base - lato / 2
         r = lato / 2 * (1 + crescita)
         if crescita > 0.05:
@@ -2378,9 +2393,10 @@ class Pannello:
     def _disegna_ascolto(self) -> None:
         self.canvas.delete("all")
         self._pill()
+        da_quanto = time.monotonic() - self.comparsa
         self._marchio(crescita_punto(
-            "ascolto", livelli[-1], time.monotonic(), time.monotonic() - self.comparsa, SCALA_VOLUME,
-        ))
+            "ascolto", livelli[-1], time.monotonic(), da_quanto, SCALA_VOLUME,
+        ), disegno_firma(da_quanto))
         valori = list(livelli)
         n = len(valori)
         passo = (LARGHEZZA - 40) / n

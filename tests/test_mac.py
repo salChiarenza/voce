@@ -2853,12 +2853,16 @@ spazio = {"AppKit": AppKit, "Quartz": Quartz, "collections": collections,
           "voce_attiva": lambda: False,
           "livelli": collections.deque([0.0] * 18, maxlen=18)}
 exec(compile(sezione, "detta.py", "exec"), spazio)
-p = spazio["punto"]
+p, f = spazio["punto"], spazio["firma"]
 chiavi = lambda: list(p.animationKeys() or []) if p is not None else []
-esito = {"testo": spazio["TESTO_MARCHIO"], "punto": p is not None,
+esito = {"testo": spazio["TESTO_MARCHIO"], "punto": p is not None, "firma": f is not None,
          "famiglia": str(spazio["FONT_MARCHIO"].familyName())}
-spazio["punto_entra"]()
+spazio["marchio_entra"]()
 esito["entra"] = "entra" in chiavi()
+esito["firma_si_disegna"] = f is not None and "disegna" in list(f.animationKeys() or [])
+if f is not None:  # la firma sta sotto il testo, lunga quanto il marchio
+    esito["firma_sotto"] = f.position().y < spazio["Y_BASE_MARCHIO"]
+    esito["firma_lunga"] = abs(f.bounds().size.width - spazio["TESTO_BRAND"].size().width) < 0.5
 spazio["punto_pulsa"](True)
 esito["pulsa"] = "pulsa" in chiavi()
 spazio["punto_pulsa"](False)
@@ -2886,10 +2890,56 @@ def test_pill_logo_leaderai_con_punto_vivo():
     esito = _osserva_pill(config["brand"])
     assert esito["testo"] == "LeaderAI" and esito["famiglia"] == "Onest" and esito["punto"]
     assert esito["entra"]                                # la pill compare: il punto si accende
+    assert esito["firma_si_disegna"] and esito["firma_sotto"] and esito["firma_lunga"]
     assert esito["pulsa"] and not esito["pulsa_dopo"]    # trascrive: pulsa, poi si ferma
     assert esito["scala_voce_forte"] > 1.5               # voce forte: il punto cresce
 
 
 def test_pill_marchio_senza_punto_finale_resta_testo():
     esito = _osserva_pill("Studio Rossi")
-    assert esito["testo"] == "Studio Rossi" and not esito["punto"]
+    assert esito["testo"] == "Studio Rossi" and not esito["punto"] and not esito["firma"]
+
+
+# --- Pill: «Trascrivo…» sparisce quando il testo arriva, non dopo l'Invio (23/09/2026) ---
+
+def _consegna_che_guarda_la_pill(sistema, tmp_path, seconda_durante_incolla=False):
+    """Percorso di consegna vero che annota lo stato della pill all'Invio."""
+    p = _percorso_consegna_completo(sistema, tmp_path, seconda_durante_incolla)
+    eventi = p.spazio['eventi']
+    if sistema == 'mac':
+        p.spazio['_nascondi_o_arma'] = lambda: eventi.put('nascosto')
+    alla_pressione = []
+    tastiera = p.spazio['tastiera']
+    premi = tastiera.press
+    def premi_e_guarda(tasto):
+        alla_pressione.append(list(eventi.queue))
+        premi(tasto)
+    tastiera.press = premi_e_guarda
+    return p, eventi, alla_pressione
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_pill_si_chiude_quando_il_testo_e_incollato_non_dopo_l_invio(sistema, tmp_path):
+    """Sal, 23/09/2026: la trascrizione dura 1,5 s, ma «Trascrivo…» restava in
+    media 4,4 s perche' la pill si chiudeva solo dopo l'Invio automatico, due
+    secondi dopo che il testo era gia' nella casella (74 dettature del giorno)."""
+    p, eventi, alla_pressione = _consegna_che_guarda_la_pill(sistema, tmp_path)
+    p.coda.apri('sola')
+    p.coda.completa('sola', 'Frase pronta.', p.bersaglio)
+    p.consegna()
+    assert p.inviati == ['Frase pronta.']
+    assert alla_pressione == [['nascosto']]  # all'Invio la pill era gia' chiusa
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_pill_resta_aperta_se_un_altro_pezzo_sta_arrivando(sistema, tmp_path):
+    """Ripresa durante l'incolla: il secondo pezzo e' ancora in coda, la pill
+    non si chiude e l'Invio aspetta; si chiude quando arriva anche lui."""
+    p, eventi, alla_pressione = _consegna_che_guarda_la_pill(sistema, tmp_path, True)
+    p.coda.apri('prima')
+    p.coda.completa('prima', 'Prima.', p.bersaglio)
+    p.consegna()
+    assert p.inviati == [] and list(eventi.queue) == []
+    p.consegna()
+    assert p.inviati == ['Prima. Seconda.']
+    assert alla_pressione == [['nascosto']]

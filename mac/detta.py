@@ -173,7 +173,7 @@ TESTO_BRAND = AppKit.NSAttributedString.alloc().initWithString_attributes_(TESTO
     AppKit.NSFontAttributeName: FONT_MARCHIO,
     AppKit.NSForegroundColorAttributeName: AppKit.NSColor.colorWithCalibratedWhite_alpha_(0.97, 1.0),
 })
-LATO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.26, 1)  # proporzioni del logo
+LATO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.34, 1)  # un po' piu' del logo: si vede meglio
 SPAZIO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.12, 1)
 _larghezza_marchio = TESTO_BRAND.size().width + ((SPAZIO_PUNTO + LATO_PUNTO) if PUNTO_VIVO else 0)
 X_MARCHIO = round((LARGHEZZA - _larghezza_marchio) / 2)
@@ -190,19 +190,24 @@ class VistaMarchio(AppKit.NSView):
 brand = VistaMarchio.alloc().initWithFrame_(AppKit.NSMakeRect(0, 44, LARGHEZZA, 28))
 vista.addSubview_(brand)
 
-punto = None
+punto = firma = None
 if PUNTO_VIVO:
-    # vista che ospita un solo strato Core Animation: il punto si anima da
-    # solo, fluido, senza ridisegnare la pill a ogni tick
-    _LATO_OSPITE = 24
-    _ospite = AppKit.NSView.alloc().initWithFrame_(AppKit.NSMakeRect(
-        X_MARCHIO + TESTO_BRAND.size().width + SPAZIO_PUNTO + LATO_PUNTO / 2 - _LATO_OSPITE / 2,
-        Y_BASE_MARCHIO + LATO_PUNTO / 2 - _LATO_OSPITE / 2, _LATO_OSPITE, _LATO_OSPITE))
+    # vista che ospita gli strati Core Animation del logo: punto e firma si
+    # animano da soli, fluidi, senza ridisegnare la pill a ogni tick
+    _ospite = AppKit.NSView.alloc().initWithFrame_(brand.bounds())
     _ospite.setLayer_(Quartz.CALayer.layer())
     _ospite.setWantsLayer_(True)
+    # la firma del sito: la sottolineatura verde che si disegna da sinistra
+    firma = Quartz.CALayer.layer()
+    firma.setAnchorPoint_((0, 0.5))
+    firma.setBounds_(((0, 0), (TESTO_BRAND.size().width, round(FONT_MARCHIO.capHeight() * 0.18, 1))))
+    firma.setPosition_((X_MARCHIO, Y_BASE_MARCHIO - FONT_MARCHIO.capHeight() * 0.34))
+    firma.setBackgroundColor_(VERDE_FIRMA.CGColor())
+    _ospite.layer().addSublayer_(firma)
     punto = Quartz.CALayer.layer()
     punto.setBounds_(((0, 0), (LATO_PUNTO, LATO_PUNTO)))
-    punto.setPosition_((_LATO_OSPITE / 2, _LATO_OSPITE / 2))
+    punto.setPosition_((X_MARCHIO + TESTO_BRAND.size().width + SPAZIO_PUNTO + LATO_PUNTO / 2,
+                        Y_BASE_MARCHIO + LATO_PUNTO / 2))
     punto.setCornerRadius_(LATO_PUNTO / 2)
     punto.setBackgroundColor_(VERDE_FIRMA.CGColor())
     punto.setShadowColor_(VERDE_FIRMA.CGColor())
@@ -213,8 +218,9 @@ if PUNTO_VIVO:
     brand.addSubview_(_ospite)
 
 
-def punto_entra():
-    """Alla comparsa della pill il punto 'si accende' con un piccolo scatto."""
+def marchio_entra():
+    """Alla comparsa della pill il punto 'si accende' con un piccolo scatto e
+    la firma si disegna da sinistra, con la curva della home del sito."""
     if punto is None:
         return
     punto.removeAnimationForKey_("pulsa")
@@ -223,6 +229,12 @@ def punto_entra():
     scatto.setKeyTimes_([0.0, 0.55, 1.0])
     scatto.setDuration_(0.35)
     punto.addAnimation_forKey_(scatto, "entra")
+    disegna = Quartz.CABasicAnimation.animationWithKeyPath_("transform.scale.x")
+    disegna.setFromValue_(0.0)
+    disegna.setToValue_(1.0)
+    disegna.setDuration_(0.75)
+    disegna.setTimingFunction_(Quartz.CAMediaTimingFunction.functionWithControlPoints____(0.65, 0.0, 0.35, 1.0))
+    firma.addAnimation_forKey_(disegna, "disegna")
 
 
 def punto_segue_voce(volume):
@@ -504,7 +516,7 @@ class GestorePannello(AppKit.NSObject):
                     etichetta.setHidden_(True)
                     onda.setHidden_(False)
                     pannello.orderFrontRegardless()  # mostra SENZA attivare l'app
-                    punto_entra()
+                    marchio_entra()
                 elif nuovo == "trascrivo":
                     aggiorna_indicatore_voce()
                     onda.setHidden_(True)
@@ -1652,6 +1664,11 @@ def _incolla_messaggio(testo, bersaglio, revisione):
         if chat_agente:
             _ultima_chat_ai = (app_bersaglio, scheda_bersaglio)
         log.info("incollato (app bersaglio: %s)", app_bersaglio.localizedName() if app_bersaglio else "nessuna")
+        # il testo e' arrivato: la pill si chiude adesso, non dopo l'Invio
+        # (caso 23/09/2026: «Trascrivo…» restava 2 secondi sul testo gia'
+        # pronto). Se un altro pezzo e' in arrivo resta aperta per lui.
+        if not registrando and not coda_dettature.occupata():
+            _nascondi_o_arma()
         # invio automatico: parte sempre (indipendente dal toggle voce
         # agenti). La PAUSA prima dell'Invio dipende dal contesto: a voce
         # ON e' botta e risposta (breve); in una chat AI a voce OFF il

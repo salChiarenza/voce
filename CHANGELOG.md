@@ -1,5 +1,13 @@
 # Changelog Voce
 
+## 1.3.0-rc.23 - 23/09/2026
+
+- «Trascrivo…» sparisce quando il testo arriva, non piu' dopo l'Invio: la
+  trascrizione dura circa 1,5 secondi, ma la scritta restava in media 4,4
+  secondi, anche sul testo gia' pronto e appena inviato. Il punto verde del
+  logo e' piu' grande e sotto LeaderAI c'e' la firma verde del sito, che si
+  disegna da sinistra quando la pill compare. Mac e Windows, 310 prove verdi.
+
 ## 1.3.0-rc.22 - 23/09/2026
 
 - La pill porta il logo LeaderAI. al posto di salchiarenza.ai, e il punto

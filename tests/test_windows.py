@@ -1253,7 +1253,7 @@ def test_punto_leaderai_si_accende_segue_la_voce_e_pulsa():
     assert crescita("nascosto", 0.05, 0.5, 1.0) == 0.0
 
 
-def _marchio_su_canvas(brand, crescita):
+def _marchio_su_canvas(brand, crescita, firma=1.0):
     """Disegna il logo con il metodo vero della pill Windows su un canvas Tk."""
     import tkinter as tk
     import tkinter.font as tkfont
@@ -1268,7 +1268,7 @@ def _marchio_su_canvas(brand, crescita):
     try:
         canvas = tk.Canvas(root, width=300, height=72)
         font = tkfont.Font(root=root, family="Segoe UI", size=12, weight="bold")
-        spazio["_marchio"](SimpleNamespace(canvas=canvas, font_marchio=font), crescita)
+        spazio["_marchio"](SimpleNamespace(canvas=canvas, font_marchio=font), crescita, firma)
         oggetti = [(canvas.type(i), canvas.coords(i), canvas.itemcget(i, "text") if canvas.type(i) == "text" else None,
                     canvas.bbox(i)) for i in canvas.find_all()]
         return oggetti
@@ -1287,6 +1287,12 @@ def test_pill_windows_logo_leaderai_col_punto_sulla_riga():
     assert abs(y2 - 21) < 0.01                        # il punto poggia sulla linea di base
     sinistra = testo[0][3][0]
     assert abs((sinistra + x2) / 2 - 150) < 3         # logo centrato nella pill
+    firme = [o for o in oggetti if o[0] == "rectangle"]
+    assert len(firme) == 1                            # la firma verde sotto il marchio
+    fx1, fy1, fx2, fy2 = firme[0][1]
+    assert fy1 > 21 and fy2 < 30                      # sotto la linea di base, sopra le lineette
+    assert abs(fx1 - sinistra) < 3 and fx2 < x1       # parte col testo, finisce prima del punto
+    assert not [o for o in _marchio_su_canvas(config["brand"], 0.0, 0.0) if o[0] == "rectangle"]
     acceso = _marchio_su_canvas(config["brand"], 0.8)
     assert len([o for o in acceso if o[0] == "oval"]) == 3   # voce: punto piu' grande con la sua luce
 
@@ -1295,3 +1301,15 @@ def test_pill_windows_marchio_senza_punto_finale_resta_testo():
     oggetti = _marchio_su_canvas("Studio Rossi", 0.5)
     assert [o[2] for o in oggetti if o[0] == "text"] == ["Studio Rossi"]
     assert not [o for o in oggetti if o[0] == "oval"]
+
+
+def test_firma_windows_si_disegna_con_la_curva_del_sito():
+    path = REPO_ROOT / "windows" / "voice_dettatura_windows.py"
+    albero = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    nodo = next(n for n in albero.body if isinstance(n, ast.FunctionDef) and n.name == "disegno_firma")
+    spazio = {}
+    exec(compile(ast.Module(body=[nodo], type_ignores=[]), str(path), "exec"), spazio)
+    disegno = spazio["disegno_firma"]
+    passi = [disegno(t / 100) for t in range(0, 101, 5)]
+    assert passi[0] == 0.0 and disegno(0.375) == 0.5 and disegno(0.75) == 1.0 and disegno(3.0) == 1.0
+    assert all(a <= b for a, b in zip(passi, passi[1:]))   # cresce sempre, da sinistra a destra
