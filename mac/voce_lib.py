@@ -911,6 +911,25 @@ def e_browser_chromium(bundle_id):
     return any(bundle == b or bundle.startswith(b + ".") for b in BROWSER_CHROMIUM)
 
 
+_SU_CHROMIUM = {}
+
+
+def app_su_chromium(percorso_app):
+    """True per le app costruite su Chromium, riconosciute dal gestore dei crash
+    di Chromium dentro il pacchetto: i browser della famiglia Chrome, le app
+    Electron e app come ChatGPT per Mac (23/09/2026: senza richiesta mostrava 8
+    elementi e nessuna casella). Il risultato resta in memoria per app."""
+    if not percorso_app:
+        return False
+    if percorso_app not in _SU_CHROMIUM:
+        cornici = Path(percorso_app) / "Contents" / "Frameworks"
+        try:
+            _SU_CHROMIUM[percorso_app] = any(cornici.glob("*.framework/Versions/*/Helpers/*crashpad_handler*"))
+        except OSError:
+            _SU_CHROMIUM[percorso_app] = False
+    return _SU_CHROMIUM[percorso_app]
+
+
 def destinazione_agente(nome_app="", url=""):
     """True quando il testo e' destinato a una chat con un agente AI.
 

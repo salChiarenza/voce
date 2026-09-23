@@ -1,5 +1,13 @@
 # Changelog Voce
 
+## 1.3.0-rc.25 - 23/09/2026
+
+- App ChatGPT per Mac: la casella di scrittura ora si trova. L'app e' costruita
+  su Chromium e mostra la pagina solo se glielo si chiede: la notte del 23/09
+  12 dettature su 12 erano partite col suono d'avviso. Ora Voce lo chiede a
+  ogni app costruita su Chromium, non solo ai browser che conosce. Il registro
+  dice anche quale tasto ferma l'Invio automatico. Solo Mac, 316 prove verdi.
+
 ## 1.3.0-rc.24 - 23/09/2026
 
 - LeaderAI resta sempre in risalto: mentre trascrive il logo si ingrandisce al

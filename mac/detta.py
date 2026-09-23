@@ -39,7 +39,7 @@ from voce_lib import (
     shortcut_pulizia_disponibile, pulisci_con_shortcut,
     impara_sostituzioni, ruolo_editabile, scegli_casella, in_zona_scrittura,
     casella_ammissibile, cornice_reale, finestra_credibile, ordina_finestre, chiave_casella, posizione_relativa, punto_da_relativa,
-    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra, app_sul_monitor, app_ha_finestra_sul_monitor, e_browser_chromium,
+    finestra_su_altro_schermo, schermo_del_punto, schermo_della_finestra, app_sul_monitor, app_ha_finestra_sul_monitor, e_browser_chromium, app_su_chromium,
     FILE_CASELLE_RICORDATE, caselle_in_json, caselle_da_json,
     salva_audio_recente, rimuovi_eco_glossario,
     trova_taglio, unisci_segmenti, prompt_con_contesto,
@@ -76,6 +76,7 @@ tasto_premuto = False  # stato del tasto-detta, posseduto SOLO dal thread tastie
 combo_voce_scattato = False  # debounce: Option+freccia tenuti = una sola commutazione
 combo_mani_libere_scattato = False  # debounce: Cmd+Option tenuti = una sola commutazione
 ultima_pressione_utente = 0.0  # qualsiasi tasto: annulla l'Invio automatico in attesa
+ultimo_tasto_utente = None  # quale tasto: il registro dice se era Invio premuto a mano
 inizio_registrazione = None
 volume_corrente = 0.0  # RMS aggiornato ad ogni callback audio, anche fuori registrazione
 # anello di pre-registrazione (~1s): i blocchi audio appena precedenti allo
@@ -1082,13 +1083,24 @@ def _chiedi_albero_electron(ax_app):
 
 
 def _chiedi_pagina_browser(app, ax_app):
-    """I browser della famiglia Chrome espongono la pagina ad Accessibility
-    solo se un programma chiede l'interfaccia estesa: senza, la casella di
-    ChatGPT non esiste nell'albero (20/09/2026, 44 incolla alla cieca in un
-    giorno). Si chiede una volta e resta accesa finche' Voce gira; la pagina
-    compare in circa due secondi, dentro i giri di risveglio."""
-    if app is None or not e_browser_chromium(app.bundleIdentifier()):
+    """I browser della famiglia Chrome e le app costruite su Chromium (come
+    ChatGPT per Mac, 23/09/2026) espongono la pagina ad Accessibility solo se
+    un programma chiede l'interfaccia estesa: senza, la casella non esiste
+    nell'albero (20/09/2026, 44 incolla alla cieca in un giorno in Chrome).
+    Si chiede una volta e resta accesa finche' Voce gira; la pagina compare in
+    circa due secondi, dentro i giri di risveglio. Le app Electron hanno la
+    loro strada (vedi _chiedi_albero_electron)."""
+    if app is None:
         return
+    if not e_browser_chromium(app.bundleIdentifier()):
+        if _ax_valore(ax_app, "AXManualAccessibility") is not None:
+            return
+        try:
+            percorso = app.bundleURL().path()
+        except Exception:  # processo senza pacchetto: nessuna richiesta
+            percorso = None
+        if not app_su_chromium(percorso):
+            return
     if _ax_valore(ax_app, "AXEnhancedUserInterface"):
         return
     AX.AXUIElementSetAttributeValue(ax_app, "AXEnhancedUserInterface", True)
@@ -1736,7 +1748,15 @@ def _incolla_messaggio(testo, bersaglio, revisione):
             annullato = (annullato or tasto_premuto or registrando
                          or not coda_dettature.puo_inviare(revisione))
             if annullato:
-                log.info("invio automatico ANNULLATO (tasto premuto o nuova dettatura in corso)")
+                # il motivo nel registro: se e' quasi sempre Invio premuto a
+                # mano, l'attesa e' troppo lunga (misura chiesta il 23/09/2026)
+                if tasto_premuto or registrando:
+                    motivo = "nuova dettatura"
+                elif ultima_pressione_utente > riferimento:
+                    motivo = "Invio premuto a mano" if ultimo_tasto_utente == Key.enter else "altro tasto"
+                else:
+                    motivo = "messaggio ancora aperto"
+                log.info("invio automatico ANNULLATO (%s)", motivo)
                 return revisione >= 0 and not coda_dettature.puo_inviare(revisione)
             else:
                 tastiera.press(Key.enter)
@@ -2058,8 +2078,9 @@ def worker_combo_mani_libere():
 
 
 def su_pressione(tasto):
-    global tasto_premuto, combo_voce_scattato, ultima_pressione_utente
+    global tasto_premuto, combo_voce_scattato, ultima_pressione_utente, ultimo_tasto_utente
     ultima_pressione_utente = time.monotonic()  # annulla un eventuale Invio in attesa
+    ultimo_tasto_utente = tasto
     if tasto == TASTO:
         if _option_giu():               # Option gia' giu': e' il combo mani libere
             return                      # (lo scatta il poller) — niente dettatura

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0-rc.25 - 23/09/2026 — le app su Chromium mostrano la casella
+
+- ChatGPT per Mac (`com.openai.codex`, «Codex Framework» su Chromium): misurato
+  sull'app vera, senza richiesta 8 elementi e nessuna casella; con
+  `AXEnhancedUserInterface`, dopo 2,4 s, 568 elementi e l'`AXTextArea` «Lavora
+  con ChatGPT». Nuova `app_su_chromium(percorso)` riconosce le app su Chromium
+  dal gestore dei crash nel pacchetto (`*crashpad_handler*`); `_chiedi_pagina_browser`
+  chiede la pagina anche a loro, salvo le app Electron che hanno la loro strada.
+- `invio automatico ANNULLATO (motivo)`: nuova dettatura, Invio premuto a mano,
+  altro tasto o messaggio ancora aperto. Serve a decidere con i numeri se
+  l'attesa di 2 secondi e' troppo lunga (4 Invii su 10 fermati da un tasto).
+- 3 prove nuove, 3 banchi di prova aggiornati.
+
 ## 1.3.0-rc.24 - 23/09/2026 — LeaderAI protagonista anche mentre trascrive
 
 - Il logo diventa un gruppo di strati Core Animation (`marchio`: testo in

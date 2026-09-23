@@ -2021,7 +2021,7 @@ def test_sveglia_chiede_la_pagina_al_browser_chromium():
         logging=logging, cfg={"cursore_automatico": True}, AX=ax,
         _ax_valore=lambda el, attr: stato.get(attr),
         _focus_in_casella=lambda ax_app: True,
-        e_browser_chromium=voce_lib.e_browser_chromium,
+        e_browser_chromium=voce_lib.e_browser_chromium, app_su_chromium=voce_lib.app_su_chromium,
     )
     path = REPO_ROOT / "mac" / "detta.py"
     nodi = [n for n in ast.parse(path.read_text()).body
@@ -2096,7 +2096,7 @@ def _cursore_automatico_mac():
         _schermi_ax=lambda: stato.schermi, _posizione_mouse=lambda: stato.mouse,
         finestra_su_altro_schermo=voce_lib.finestra_su_altro_schermo,
         schermo_del_punto=voce_lib.schermo_del_punto, schermo_della_finestra=voce_lib.schermo_della_finestra,
-        e_browser_chromium=voce_lib.e_browser_chromium,
+        e_browser_chromium=voce_lib.e_browser_chromium, app_su_chromium=voce_lib.app_su_chromium,
         _salva_caselle_ricordate=lambda: stato.salvataggi.append(dict(spazio["_caselle_ricordate"])),
         _ax_valore=lambda el, attr: "casella", _ax_geometria=lambda el: stato.casella_a_fuoco,
         chiave_casella=voce_lib.chiave_casella, posizione_relativa=voce_lib.posizione_relativa,
@@ -2233,7 +2233,7 @@ def test_sveglia_accessibilita_tocca_l_albero_e_chiede_l_accensione_electron():
         _focus_in_casella=lambda ax_app: toccate.append("focus") or False,
         _finestre_bersaglio=lambda ax_app: ([("finestra", (0, 33, 1512, 949))], 0, 1),
         _cerca_casella=lambda *a, **k: cercate.append(k) or None,
-        e_browser_chromium=voce_lib.e_browser_chromium,
+        e_browser_chromium=voce_lib.e_browser_chromium, app_su_chromium=voce_lib.app_su_chromium,
     )
     path = REPO_ROOT / "mac" / "detta.py"
     nodi = [n for n in ast.parse(path.read_text()).body
@@ -2983,3 +2983,86 @@ def test_pill_si_chiude_all_incolla_anche_in_un_documento(sistema, tmp_path):
     p.consegna()
     assert p.inviati == ['Riga di un documento.']
     assert alla_pressione == [['nascosto']]
+
+
+# --- ChatGPT per Mac e' costruita su Chromium: la pagina si chiede (23/09/2026) ---
+# Stanotte 12 dettature su 12 nell'app ChatGPT sono partite alla cieca col suono
+# d'avviso. Misurato sull'app vera (com.openai.codex): senza richiesta 8 elementi
+# e nessuna casella; con l'interfaccia estesa, dopo 2,4 s, 568 elementi e la
+# casella «Lavora con ChatGPT». Non e' nell'elenco dei browser e non e' Electron.
+
+def _app_finta(tmp_path, nome, aiutante=None):
+    app = tmp_path / f"{nome}.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    if aiutante:
+        cartella, file = aiutante
+        (app / "Contents" / "Frameworks" / cartella).mkdir(parents=True)
+        (app / "Contents" / "Frameworks" / cartella / file).touch()
+    return app
+
+
+def test_app_su_chromium_si_riconosce_dal_gestore_dei_crash(tmp_path):
+    chatgpt = _app_finta(tmp_path, "ChatGPT", ("Codex Framework.framework/Versions/153.0.8010.48/Helpers", "browser_crashpad_handler"))
+    chrome = _app_finta(tmp_path, "Google Chrome", ("Google Chrome Framework.framework/Versions/140.0/Helpers", "chrome_crashpad_handler"))
+    nativa = _app_finta(tmp_path, "Note")
+    assert voce_lib.app_su_chromium(str(chatgpt)) is True
+    assert voce_lib.app_su_chromium(str(chrome)) is True     # il fratello: ogni app su Chromium
+    assert voce_lib.app_su_chromium(str(nativa)) is False
+    assert voce_lib.app_su_chromium(None) is False
+
+
+def test_sveglia_chiede_la_pagina_anche_a_chatgpt_per_mac(tmp_path):
+    import ast
+    import logging
+    from types import SimpleNamespace
+    set_attr = []
+    stato = {"AXManualAccessibility": None, "AXEnhancedUserInterface": False}
+    ax = SimpleNamespace(AXUIElementCreateApplication=lambda pid: "ax_app",
+                         AXUIElementSetAttributeValue=lambda el, attr, val: set_attr.append((attr, val)) or 0)
+    spazio = dict(
+        logging=logging, cfg={"cursore_automatico": True}, AX=ax,
+        _ax_valore=lambda el, attr: stato.get(attr),
+        _focus_in_casella=lambda ax_app: True,
+        e_browser_chromium=voce_lib.e_browser_chromium, app_su_chromium=voce_lib.app_su_chromium,
+    )
+    path = REPO_ROOT / "mac" / "detta.py"
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, ast.FunctionDef) and n.name in ("_sveglia_accessibilita", "_chiedi_albero_electron", "_chiedi_pagina_browser")]
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), "exec"), spazio)
+    def app(bundle, cartella):
+        url = SimpleNamespace(path=lambda: str(cartella))
+        return SimpleNamespace(processIdentifier=lambda: 7, bundleIdentifier=lambda: bundle, bundleURL=lambda: url)
+    chatgpt = _app_finta(tmp_path, "ChatGPT", ("Codex Framework.framework/Versions/153.0.8010.48/Helpers", "browser_crashpad_handler"))
+    spazio["_sveglia_accessibilita"](app("com.openai.codex", chatgpt))
+    assert set_attr == [("AXEnhancedUserInterface", True)]
+    set_attr.clear()
+    spazio["_sveglia_accessibilita"](app("com.apple.Notes", _app_finta(tmp_path, "Note")))
+    assert set_attr == []                                      # app nativa: niente richiesta
+    stato["AXManualAccessibility"] = False                     # app Electron: la sua strada, non questa
+    electron = _app_finta(tmp_path, "Claude", ("Electron Framework.framework/Versions/A/Helpers", "chrome_crashpad_handler"))
+    spazio["_sveglia_accessibilita"](app("com.anthropic.claudefordesktop", electron))
+    assert set_attr == [("AXManualAccessibility", True)]
+
+
+def test_invio_fermato_dice_quale_tasto_lo_ha_fermato(tmp_path, caplog):
+    """23/09/2026: 4 Invii su 10 si fermano per un tasto premuto nei 2 secondi
+    (149 su 416 il 22/09). Il registro dice se era Invio premuto a mano, cosi'
+    si decide con i numeri se l'attesa e' troppo lunga."""
+    import logging
+    from types import SimpleNamespace
+    p = _percorso_consegna_completo('mac', tmp_path)
+    orologio = [100.0]
+    def dormi(s):
+        orologio[0] += s
+        if orologio[0] > 100.5:  # a meta' attesa la persona preme Invio da sola
+            p.spazio['ultima_pressione_utente'] = orologio[0]
+            p.spazio['ultimo_tasto_utente'] = 'enter'
+    p.spazio['time'] = SimpleNamespace(monotonic=lambda: orologio[0], sleep=dormi)
+    p.spazio['ritardo_invio'] = lambda *a: 2.0
+    p.spazio['ultimo_tasto_utente'] = None
+    p.coda.apri('sola')
+    p.coda.completa('sola', 'Frase.', p.bersaglio)
+    with caplog.at_level(logging.INFO):
+        p.consegna()
+    assert p.inviati == []
+    assert "invio automatico ANNULLATO (Invio premuto a mano)" in caplog.text
