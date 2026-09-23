@@ -1,5 +1,14 @@
 # Changelog Voce
 
+## 1.3.0-rc.27 - 23/09/2026
+
+- La memoria di Voce non cresce piu' a ogni dettatura. Il motore teneva da
+  parte senza limite i blocchi gia' usati: sul Mac di Sal 80 dettature di
+  lunghezze diverse portavano l'app da 4,3 a 12,3 GB. Ora c'e' un tetto di
+  mezzo giga: le stesse 80 dettature restano a 3,7 GB e la dettatura non
+  rallenta. Il peso fisso resta il modello grande (2,9 GB), scelto per
+  scrivere bene i nomi. Solo Mac, 326 prove verdi.
+
 ## 1.3.0-rc.26 - 23/09/2026
 
 - Un clic o un tasto ferma l'Invio automatico anche mentre il testo compare.

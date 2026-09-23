@@ -19,6 +19,7 @@ import time
 import numpy as np
 import sounddevice as sd
 import mlx_whisper
+import mlx.core as mx
 import AppKit
 import ApplicationServices as AX
 import Quartz
@@ -2227,6 +2228,25 @@ def _apprendimento_periodico():
         time.sleep(3600)
 
 
+def limita_memoria_motore(cfg):
+    """Tetto ai blocchi di memoria che il motore tiene da parte tra una
+    dettatura e l'altra. Senza tetto il limite e' quasi tutta la RAM del Mac:
+    misurato il 23/09 sul Mac di Sal, 80 dettature di lunghezze diverse
+    portavano l'app da 4,3 a 12,3 GB (P-095). Con 512 MB resta a 3,7 GB e la
+    dettatura non rallenta (meno di 0,1 s). 0 spegne la riserva; un valore
+    storto o negativo torna al default."""
+    default = 512
+    try:
+        mb = int(cfg.get("memoria_motore_mb", default))
+    except (TypeError, ValueError):
+        mb = default
+    if mb < 0:
+        mb = default
+    mx.set_cache_limit(mb * 1024 * 1024)
+    logging.getLogger("voce").info("memoria di lavoro del motore: tetto %d MB", mb)
+    return mb
+
+
 def _scalda_modello():
     """Scalda Whisper in background: cosi' l'hotkey e' attivo SUBITO e non dopo
     i ~10s di caricamento del modello (prima, in quei secondi, premere il tasto
@@ -2281,6 +2301,7 @@ if __name__ == "__main__":
     threading.Thread(target=worker_mani_libere, daemon=True).start()  # ascolto continuo, solo se attivato
     threading.Thread(target=worker_combo_mani_libere, daemon=True).start()  # Cmd+Option via flag di sistema
     listener = avvia_listener()  # hotkey attivo DA SUBITO
+    limita_memoria_motore(cfg)  # prima del modello: i blocchi da parte hanno un tetto (P-095)
     threading.Thread(target=_scalda_modello, daemon=True).start()  # modello in sottofondo
     threading.Thread(target=_apprendimento_periodico, daemon=True).start()  # una volta al giorno, anche se il processo vive settimane
     print(f"Voce — dettatura attiva (il modello si scalda in sottofondo). "

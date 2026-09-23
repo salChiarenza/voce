@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.0-rc.27 - 23/09/2026 — la memoria non cresce piu' a ogni dettatura
+
+- Il motore di trascrizione teneva da parte, senza limite, i blocchi di
+  memoria gia' usati: il limite predefinito di MLX e' quasi tutta la RAM del
+  Mac e Voce non ne fissava uno. Misurato sul Mac di Sal con 80 dettature vere
+  di lunghezze sempre diverse: da 4,3 GB a 8,2 dopo 20 e 12,3 dopo 80; con
+  dettature identiche restava ferma (era la varieta' delle lunghezze a farla
+  salire). Svuotando la riserva si tornava a 3,2 GB: non una perdita.
+- Nuova `limita_memoria_motore(cfg)` all'avvio, prima del riscaldamento del
+  modello: `mx.set_cache_limit` a `memoria_motore_mb` (default 512, 0 spegne
+  la riserva, valori storti tornano al default). Con 512 MB le stesse 80
+  dettature restano a 3,7 GB, tempi invariati (1,13 s contro 1,08 s di media
+  su 90 dettature corte, 3-4 s su quelle lunghe in entrambi i casi).
+- Il ripasso notturno carica il secondo modello in un processo separato e non
+  c'entra. Il peso fisso resta il modello grande (2,9 GB), scelto il 30/08
+  per i nomi propri. 3 prove nuove, rosse sulla rc.26. Solo Mac (P-095).
+
 ## 1.3.0-rc.26 - 23/09/2026 — un clic o un tasto ferma l'Invio, anche mentre il testo compare
 
 - Il clic del mouse ferma l'Invio automatico come un tasto: `ListenerResiliente`

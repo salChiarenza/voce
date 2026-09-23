@@ -3173,3 +3173,36 @@ def test_il_listener_del_mac_sente_anche_i_clic():
     ascolta._handle_message(ascolta.__new__(ascolta), None, 1, 'clic', None, False)
     ascolta._handle_message(ascolta.__new__(ascolta), None, 10, 'tasto', None, False)
     assert ricevuti == [('clic', False), ('tasto', False)]
+
+
+# --- rc.27: tetto alla memoria di lavoro del motore (P-095) ---
+
+def _tetto_memoria(cfg):
+    import logging
+    from types import SimpleNamespace
+    chiamate = []
+    spazio = dict(mx=SimpleNamespace(set_cache_limit=chiamate.append), logging=logging)
+    _dal_sorgente('mac', ['limita_memoria_motore'], spazio)
+    esito = spazio['limita_memoria_motore'](cfg)
+    return esito, chiamate
+
+
+def test_il_motore_ha_un_tetto_di_memoria_di_512_mb_per_default():
+    esito, chiamate = _tetto_memoria({})
+    assert esito == 512
+    assert chiamate == [512 * 1024 * 1024]
+
+
+def test_il_tetto_di_memoria_si_regola_da_config_e_ignora_valori_storti():
+    assert _tetto_memoria({'memoria_motore_mb': 256}) == (256, [256 * 1024 * 1024])
+    assert _tetto_memoria({'memoria_motore_mb': 0}) == (0, [0])          # cache spenta: ammesso
+    assert _tetto_memoria({'memoria_motore_mb': 'boh'})[0] == 512        # valore storto: default
+    assert _tetto_memoria({'memoria_motore_mb': -5})[0] == 512           # negativo: default
+
+
+def test_il_tetto_si_mette_prima_di_scaldare_il_modello():
+    sorgente = (REPO_ROOT / 'mac' / 'detta.py').read_text(encoding='utf-8')
+    avvio = sorgente[sorgente.index('if __name__ == "__main__":'):]
+    assert avvio.index('limita_memoria_motore(cfg)') < avvio.index('target=_scalda_modello')
+    cfg = json.loads((REPO_ROOT / 'mac' / 'config.json').read_text(encoding='utf-8'))
+    assert cfg['memoria_motore_mb'] == 512
