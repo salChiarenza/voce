@@ -2943,3 +2943,29 @@ def test_pill_resta_aperta_se_un_altro_pezzo_sta_arrivando(sistema, tmp_path):
     p.consegna()
     assert p.inviati == ['Prima. Seconda.']
     assert alla_pressione == [['nascosto']]
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_pill_si_chiude_all_incolla_anche_in_un_documento(sistema, tmp_path):
+    """Il fratello del caso del 23/09: fuori dalle chat AI l'attesa prima
+    dell'Invio e' piu' lunga, e la scritta sbagliata sarebbe durata di piu'.
+    Anche li' la pill si chiude quando il testo arriva."""
+    from types import SimpleNamespace
+    p = _percorso_consegna_completo(sistema, tmp_path, casella=True, chat=False)
+    eventi = p.spazio['eventi']
+    if sistema == 'mac':
+        p.spazio['_nascondi_o_arma'] = lambda: eventi.put('nascosto')
+    p.spazio['ritardo_invio'] = lambda *a: 3.0
+    orologio = [100.0]  # l'attesa dell'Invio scorre davvero, in tempo finto
+    p.spazio["time"] = SimpleNamespace(monotonic=lambda: orologio[0],
+                                       sleep=lambda s: orologio.__setitem__(0, orologio[0] + s))
+    p.spazio['invio_da_annullare'] = lambda ultima, riferimento, nuova: ultima > riferimento or nuova  # solo Windows
+    alla_pressione = []
+    tastiera = p.spazio['tastiera']
+    premi = tastiera.press
+    tastiera.press = lambda tasto: (alla_pressione.append(list(eventi.queue)), premi(tasto))
+    p.coda.apri('sola')
+    p.coda.completa('sola', 'Riga di un documento.', p.bersaglio)
+    p.consegna()
+    assert p.inviati == ['Riga di un documento.']
+    assert alla_pressione == [['nascosto']]
