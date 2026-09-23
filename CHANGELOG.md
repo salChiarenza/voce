@@ -1,5 +1,13 @@
 # Changelog Voce
 
+## 1.3.0-rc.26 - 23/09/2026
+
+- Un clic o un tasto ferma l'Invio automatico anche mentre il testo compare.
+  Prima il clic che mette il cursore nel testo non era ascoltato affatto, e i
+  tasti premuti nel mezzo secondo in cui il testo arrivava non contavano: il
+  23/09 una frase e' partita mentre Sal la stava correggendo. Ora conta ogni
+  gesto della persona, mai quelli del programma. Mac e Windows, 323 prove verdi.
+
 ## 1.3.0-rc.25 - 23/09/2026
 
 - App ChatGPT per Mac: la casella di scrittura ora si trova. L'app e' costruita

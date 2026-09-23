@@ -2603,7 +2603,8 @@ def _percorso_consegna_completo(sistema, tmp_path, seconda_durante_incolla=False
     path = REPO_ROOT / ('mac/detta.py' if sistema == 'mac' else 'windows/voice_dettatura_windows.py')
     nodi = [n for n in ast.parse(path.read_text()).body
             if isinstance(n, ast.FunctionDef)
-            and n.name in ('_incolla_messaggio', '_consegna_dettature', '_bersaglio_di_riserva')]
+            and n.name in ('_incolla_messaggio', '_consegna_dettature', '_bersaglio_di_riserva',
+                           'invio_da_annullare')]  # l'ultima esiste solo su Windows
     exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), 'exec'), spazio)
     return SimpleNamespace(
         coda=coda, bersaglio=bersaglio, bersaglio_di=bersaglio_di, nome_di=nome_di,
@@ -3066,3 +3067,109 @@ def test_invio_fermato_dice_quale_tasto_lo_ha_fermato(tmp_path, caplog):
         p.consegna()
     assert p.inviati == []
     assert "invio automatico ANNULLATO (Invio premuto a mano)" in caplog.text
+
+
+# --- Un tasto o un clic di Sal ferma l'Invio anche mentre il testo compare (23/09/2026) ---
+# Sal: «quando metto il cursore nella scrittura o faccio spazio, scrivo una
+# lettera, l'Invio automatico si deve bloccare». Il clic non era ascoltato
+# affatto e i tasti premuti nel mezzo secondo in cui il testo compariva non
+# contavano: 16:35:53 la frase «volevo cercare di capire come» e' partita
+# mentre Sal la stava correggendo.
+
+def _consegna_a_orologio(sistema, tmp_path):
+    from types import SimpleNamespace
+    p = _percorso_consegna_completo(sistema, tmp_path)
+    orologio = [100.0]
+    p.spazio['time'] = SimpleNamespace(monotonic=lambda: orologio[0],
+                                       sleep=lambda s: orologio.__setitem__(0, orologio[0] + s))
+    p.spazio['ritardo_invio'] = lambda *a: 2.0
+    p.spazio['ultimo_tasto_utente'] = None
+    p.coda.apri('sola')
+    p.coda.completa('sola', 'Volevo cercare di capire come...', p.bersaglio)
+    return p, orologio
+
+
+def _dal_sorgente(sistema, nomi, spazio):
+    import ast
+    path = REPO_ROOT / ('mac/detta.py' if sistema == 'mac' else 'windows/voice_dettatura_windows.py')
+    nodi = [n for n in ast.parse(path.read_text()).body
+            if isinstance(n, (ast.FunctionDef, ast.ClassDef)) and n.name in nomi
+            or isinstance(n, ast.Assign) and any(getattr(t, 'id', '') in nomi for t in n.targets)]
+    assert {getattr(n, 'name', None) or n.targets[0].id for n in nodi} == set(nomi)
+    exec(compile(ast.Module(body=nodi, type_ignores=[]), str(path), 'exec'), spazio)
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_tasto_premuto_mentre_il_testo_compare_ferma_l_invio(sistema, tmp_path):
+    p, orologio = _consegna_a_orologio(sistema, tmp_path)
+    incolla = p.spazio['incolla']
+    def incolla_e_sal_corregge(testo, **kw):
+        incolla(testo, **kw)                                # il testo compare
+        orologio[0] += 0.1
+        p.spazio['ultima_pressione_utente'] = orologio[0]   # Sal cancella i puntini
+        orologio[0] += 0.4                                  # l'incolla finisce il suo giro
+    p.spazio['incolla'] = p.spazio['paste_text'] = incolla_e_sal_corregge
+    p.consegna()
+    assert p.inviati == []
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_clic_nel_testo_ferma_l_invio_quello_del_programma_no(sistema, tmp_path, caplog):
+    import logging
+    nome = 'su_clic' if sistema == 'mac' else 'on_click'
+    for del_programma, atteso in ((False, []), (True, ['Volevo cercare di capire come...'])):
+        p, orologio = _consegna_a_orologio(sistema, tmp_path)
+        _dal_sorgente(sistema, [nome], p.spazio)
+        clic = p.spazio[nome]
+        def dormi(s):
+            orologio[0] += s
+            if 101.0 < orologio[0] <= 101.1:  # a meta' attesa: cursore nel testo
+                clic(del_programma) if sistema == 'mac' else clic(5, 5, 'left', True, del_programma)
+        p.spazio['time'].sleep = dormi
+        with caplog.at_level(logging.INFO):
+            p.consegna()
+        assert p.inviati == atteso
+    if sistema == 'mac':
+        assert "invio automatico ANNULLATO (clic del mouse)" in caplog.text
+
+
+@pytest.mark.parametrize('sistema', ['mac', 'windows'])
+def test_i_tasti_del_programma_non_contano_come_gesti_di_sal(sistema):
+    """Il Cmd+V dell'incolla e' un tasto anche lui: prima lo si scansava con
+    un margine di tempo che rendeva l'app cieca proprio mentre il testo
+    compariva. Ora conta solo chi preme: i tasti del programma no."""
+    from types import SimpleNamespace
+    orologio = [100.0]
+    spazio = dict(time=SimpleNamespace(monotonic=lambda: orologio[0]),
+                  ultima_pressione_utente=0.0, ultimo_tasto_utente=None,
+                  TASTO='cmd_r', TASTO_COMBO_VOCE='left', HOTKEY='ctrl_r', TASTO_VOCE=None,
+                  tasto_premuto=False, key_down=False, voice_key_down=False,
+                  combo_voce_scattato=False)
+    nome = 'su_pressione' if sistema == 'mac' else 'on_press'
+    _dal_sorgente(sistema, [nome], spazio)
+    spazio[nome]('v', True)                 # Cmd+V del programma
+    assert spazio['ultima_pressione_utente'] == 0.0
+    orologio[0] = 101.0
+    spazio[nome]('v', False)                # Sal preme un tasto vero
+    assert spazio['ultima_pressione_utente'] == 101.0
+
+
+def test_il_listener_del_mac_sente_anche_i_clic():
+    import logging
+    from types import SimpleNamespace
+    ricevuti = []
+    class Tastiera:
+        _EVENTS = 1 << 10
+        def _handle_message(self, proxy, tipo, evento, refcon, injected):
+            ricevuti.append(('tasto', injected))
+    quartz = SimpleNamespace(kCGEventTapDisabledByTimeout=-1, kCGEventTapDisabledByUserInput=-2,
+                             kCGEventLeftMouseDown=1, kCGEventRightMouseDown=3,
+                             kCGEventOtherMouseDown=25, CGEventMaskBit=lambda t: 1 << t)
+    spazio = dict(Quartz=quartz, keyboard=SimpleNamespace(Listener=Tastiera), logging=logging,
+                  su_clic=lambda injected=False: ricevuti.append(('clic', injected)))
+    _dal_sorgente('mac', ['_TAP_DISABILITATO', '_CLIC', 'ListenerResiliente'], spazio)
+    ascolta = spazio['ListenerResiliente']
+    assert ascolta._EVENTS == (1 << 10) | (1 << 1) | (1 << 3) | (1 << 25)
+    ascolta._handle_message(ascolta.__new__(ascolta), None, 1, 'clic', None, False)
+    ascolta._handle_message(ascolta.__new__(ascolta), None, 10, 'tasto', None, False)
+    assert ricevuti == [('clic', False), ('tasto', False)]

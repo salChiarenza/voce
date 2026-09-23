@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0-rc.26 - 23/09/2026 — un clic o un tasto ferma l'Invio, anche mentre il testo compare
+
+- Il clic del mouse ferma l'Invio automatico come un tasto: `ListenerResiliente`
+  riceve anche le pressioni dei pulsanti del mouse (solo quelle, niente
+  movimenti) e le passa a `su_clic`; nel registro il motivo e' «clic del mouse».
+- I tasti del programma (Cmd+V dell'incolla, Invio) si riconoscono dal flag
+  `injected` di pynput e non contano; cade il margine di 0,15 s che, sommato
+  all'attesa dell'incolla, rendeva l'app cieca per circa mezzo secondo proprio
+  mentre il testo compariva. Il conteggio parte da inizio consegna.
+- Caso reale 23/09 16:35: «volevo cercare di capire come...» corretta a mano in
+  «come.» e partita lo stesso, registro «invio automatico premuto».
+- 4 prove nuove (7 casi), rosse sulla rc.25.
+
 ## 1.3.0-rc.25 - 23/09/2026 — le app su Chromium mostrano la casella
 
 - ChatGPT per Mac (`com.openai.codex`, «Codex Framework» su Chromium): misurato

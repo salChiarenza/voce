@@ -1669,6 +1669,9 @@ def _consegna_dettature():
 
 def _incolla_messaggio(testo, bersaglio, revisione):
     global _ultima_chat_ai
+    # da qui un tasto o un clic di Sal ferma l'Invio, anche mentre il testo
+    # compare; quelli del programma no (vedi su_pressione e su_clic)
+    riferimento = time.monotonic()
     app_bersaglio, scheda_bersaglio = bersaglio
     chat_agente = destinazione_agente(
         app_bersaglio.localizedName() if app_bersaglio else "", scheda_bersaglio,
@@ -1716,12 +1719,13 @@ def _incolla_messaggio(testo, bersaglio, revisione):
         # pausa dei documenti il 40% degli Invii veniva annullato da Sal
         # che premeva Invio a mano; con un secondo solo, 17/09, non faceva
         # in tempo a bloccarlo con uno spazio: ora due); nei documenti
-        # serve tempo per correggere. Durante l'attesa, QUALSIASI tasto premuto da Sal o
-        # una nuova registrazione gia' in corso ANNULLANO l'Invio
-        # (richiesta 06/07: "se clicco un tasto l'invio si deve
-        # bloccare" — stava aggiungendo una seconda frase e la prima e'
-        # partita da sola). La frase resta incollata: partira' con
-        # l'Invio del turno successivo, tutto insieme.
+        # serve tempo per correggere. Da quando la consegna comincia,
+        # QUALSIASI tasto o clic di Sal o una nuova registrazione gia' in
+        # corso ANNULLANO l'Invio (richiesta 06/07: "se clicco un tasto
+        # l'invio si deve bloccare"; 23/09: anche il clic che mette il
+        # cursore nel testo e il tasto premuto mentre il testo compare).
+        # La frase resta incollata: partira' con l'Invio del turno
+        # successivo, tutto insieme.
         if cfg.get("invio_automatico", True) and (not senza_casella or chat_agente):
             # senza una casella vera l'Invio andrebbe su un focus ignoto:
             # in una pagina puo' essere un bottone qualunque. In una chat AI
@@ -1733,27 +1737,23 @@ def _incolla_messaggio(testo, bersaglio, revisione):
             # dettatura; una frase incollata e mai inviata si e' persa,
             # sostituita dalla dettatura successiva.
             attesa = ritardo_invio(cfg, voce_attiva(), chat_agente)
-            time.sleep(0.15)  # margine: il Cmd+V dell'incolla non deve contare come "tasto di Sal"
-            riferimento = time.monotonic()
+            inizio_attesa = time.monotonic()
             trascorso = 0.0
-            annullato = (tasto_premuto or registrando
-                         or not coda_dettature.puo_inviare(revisione))
-            while not annullato and trascorso < attesa:
-                time.sleep(min(0.1, attesa - trascorso))
-                trascorso = time.monotonic() - riferimento
-                if (ultima_pressione_utente > riferimento or registrando
-                        or tasto_premuto or not coda_dettature.puo_inviare(revisione)):
-                    annullato = True
+            while True:
+                annullato = (ultima_pressione_utente > riferimento or tasto_premuto
+                             or registrando or not coda_dettature.puo_inviare(revisione))
+                if annullato or trascorso >= attesa:
                     break
-            annullato = (annullato or tasto_premuto or registrando
-                         or not coda_dettature.puo_inviare(revisione))
+                time.sleep(min(0.1, attesa - trascorso))
+                trascorso = time.monotonic() - inizio_attesa
             if annullato:
                 # il motivo nel registro: se e' quasi sempre Invio premuto a
                 # mano, l'attesa e' troppo lunga (misura chiesta il 23/09/2026)
                 if tasto_premuto or registrando:
                     motivo = "nuova dettatura"
                 elif ultima_pressione_utente > riferimento:
-                    motivo = "Invio premuto a mano" if ultimo_tasto_utente == Key.enter else "altro tasto"
+                    motivo = {Key.enter: "Invio premuto a mano",
+                              "clic": "clic del mouse"}.get(ultimo_tasto_utente, "altro tasto")
                 else:
                     motivo = "messaggio ancora aperto"
                 log.info("invio automatico ANNULLATO (%s)", motivo)
@@ -2077,10 +2077,11 @@ def worker_combo_mani_libere():
             combo_mani_libere_scattato = False
 
 
-def su_pressione(tasto):
+def su_pressione(tasto, injected=False):
     global tasto_premuto, combo_voce_scattato, ultima_pressione_utente, ultimo_tasto_utente
-    ultima_pressione_utente = time.monotonic()  # annulla un eventuale Invio in attesa
-    ultimo_tasto_utente = tasto
+    if not injected:  # il Cmd+V e l'Invio del programma non sono gesti di Sal
+        ultima_pressione_utente = time.monotonic()  # annulla un eventuale Invio in attesa
+        ultimo_tasto_utente = tasto
     if tasto == TASTO:
         if _option_giu():               # Option gia' giu': e' il combo mani libere
             return                      # (lo scatta il poller) — niente dettatura
@@ -2091,6 +2092,16 @@ def su_pressione(tasto):
     elif tasto == TASTO_COMBO_VOCE and not combo_voce_scattato and _option_giu():
         combo_voce_scattato = True      # debounce: un hold = una sola commutazione
         threading.Thread(target=esegui_sicuro, args=(commuta_voce,), daemon=True).start()
+
+
+def su_clic(injected=False):
+    """Un clic di Sal ferma l'Invio in attesa come un tasto (23/09/2026:
+    metteva il cursore nel testo per correggerlo e la frase partiva lo
+    stesso). Il clic del cursore automatico no."""
+    global ultima_pressione_utente, ultimo_tasto_utente
+    if not injected:
+        ultima_pressione_utente = time.monotonic()
+        ultimo_tasto_utente = "clic"
 
 
 def su_rilascio(tasto):
@@ -2112,10 +2123,22 @@ _TAP_DISABILITATO = (
     Quartz.kCGEventTapDisabledByTimeout,
     Quartz.kCGEventTapDisabledByUserInput,
 )
+_CLIC = (
+    Quartz.kCGEventLeftMouseDown,
+    Quartz.kCGEventRightMouseDown,
+    Quartz.kCGEventOtherMouseDown,
+)
 
 
 class ListenerResiliente(keyboard.Listener):
-    """Listener tastiera che si auto-riaccende se macOS spegne l'event-tap."""
+    """Listener tastiera che si auto-riaccende se macOS spegne l'event-tap.
+    Sente anche i clic (solo la pressione, niente movimenti): mettere il
+    cursore nel testo ferma l'Invio automatico come un tasto."""
+
+    _EVENTS = keyboard.Listener._EVENTS
+    for _tipo in _CLIC:
+        _EVENTS |= Quartz.CGEventMaskBit(_tipo)
+    del _tipo
 
     def _create_event_tap(self):
         self._tap = super()._create_event_tap()
@@ -2125,6 +2148,9 @@ class ListenerResiliente(keyboard.Listener):
         if event_type in _TAP_DISABILITATO:
             Quartz.CGEventTapEnable(self._tap, True)  # riaccendi: nessun buco
             logging.getLogger("voce").warning("event-tap disabilitato da macOS: riacceso")
+            return
+        if event_type in _CLIC:
+            su_clic(injected)
             return
         return super()._handle_message(proxy, event_type, event, refcon, injected)
 

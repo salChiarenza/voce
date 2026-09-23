@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0-rc.26 - 23/09/2026 — gemella del Mac
+
+- Un clic fisico ferma l'Invio automatico come un tasto (`mouse.Listener` con
+  il solo `on_click`); il Ctrl+V e il clic del programma non contano (flag
+  `injected`), quindi cade il margine di 0,15 s e il conteggio parte da inizio
+  consegna. 3 prove gemelle, rosse sulla rc.25.
+
 ## 1.3.0-rc.24 - 23/09/2026 — gemella del Mac
 
 - Con una scritta di stato il marchio passa a Segoe UI 16 grassetto al centro

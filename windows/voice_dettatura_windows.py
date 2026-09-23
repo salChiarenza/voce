@@ -33,7 +33,7 @@ import numpy as np
 import pyperclip
 import sounddevice as sd
 from faster_whisper import WhisperModel
-from pynput import keyboard
+from pynput import keyboard, mouse
 from pynput.keyboard import Controller, Key
 
 try:  # nelle vecchie installazioni il modulo voce agenti era opzionale
@@ -1391,7 +1391,7 @@ def e_allucinazione(testo: str) -> bool:
 def invio_da_annullare(
     ultima_pressione: float, riferimento: float, nuova_registrazione: bool
 ) -> bool:
-    """Qualsiasi tasto fisico o nuova dettatura blocca l'Enter automatico."""
+    """Qualsiasi tasto o clic fisico o nuova dettatura blocca l'Enter automatico."""
     return ultima_pressione > riferimento or nuova_registrazione
 
 
@@ -1969,6 +1969,9 @@ def _consegna_dettature():
 
 def _incolla_messaggio(text, finestra_bersaglio, revisione):
     global _ultima_chat_ai
+    # gemella Mac (23/09/2026): da qui un tasto o un clic fisico ferma
+    # l'Invio, anche mentre il testo compare; quelli del programma no
+    riferimento = time.monotonic()
     chat_agente = destinazione_agente(nome_finestra(finestra_bersaglio))
     try:
         riattiva_bersaglio(finestra_bersaglio)
@@ -2010,25 +2013,19 @@ def _incolla_messaggio(text, finestra_bersaglio, revisione):
         # c'e' niente da mandare. Fuori dalle chat AI resta la prudenza.
         if INVIO_AUTOMATICO and (not senza_casella or chat_agente):
             attesa = ritardo_invio(CFG, voce_attiva(), chat_agente)
-            time.sleep(0.15)  # il Ctrl+V sintetico non conta come gesto dell'utente
-            riferimento = time.monotonic()
+            inizio_attesa = time.monotonic()
             trascorso = 0.0
-            annullato = (key_down or recording
-                         or not coda_dettature.puo_inviare(revisione))
-            while not annullato and trascorso < attesa:
-                time.sleep(min(0.1, attesa - trascorso))
-                trascorso = time.monotonic() - riferimento
-                if invio_da_annullare(
-                    ultima_pressione_utente, riferimento, recording
-                ) or key_down or not coda_dettature.puo_inviare(revisione):
-                    annullato = True
+            while True:
+                annullato = (invio_da_annullare(ultima_pressione_utente, riferimento, recording)
+                             or key_down or not coda_dettature.puo_inviare(revisione))
+                if annullato or trascorso >= attesa:
                     break
-            annullato = (annullato or key_down or recording
-                         or not coda_dettature.puo_inviare(revisione))
+                time.sleep(min(0.1, attesa - trascorso))
+                trascorso = time.monotonic() - inizio_attesa
             if annullato:
                 logging.info(
                     "invio automatico ANNULLATO "
-                    "(tasto premuto o nuova dettatura in corso)"
+                    "(tasto, clic o nuova dettatura in corso)"
                 )
                 return revisione >= 0 and not coda_dettature.puo_inviare(revisione)
             else:
@@ -2169,9 +2166,10 @@ def commuta_voce() -> None:
         logging.exception("errore commutazione voce")
 
 
-def on_press(key) -> None:
+def on_press(key, injected=False) -> None:
     global key_down, voice_key_down, ultima_pressione_utente
-    ultima_pressione_utente = time.monotonic()
+    if not injected:  # il Ctrl+V e l'Invio del programma non sono gesti dell'utente
+        ultima_pressione_utente = time.monotonic()
     if key == HOTKEY and not key_down:
         coda_dettature.interrompi_invio()
         key_down = True
@@ -2179,6 +2177,15 @@ def on_press(key) -> None:
     elif TASTO_VOCE is not None and key == TASTO_VOCE and not voice_key_down:
         voice_key_down = True  # debounce: un hold = una sola commutazione
         threading.Thread(target=commuta_voce, daemon=True).start()
+
+
+def on_click(x, y, button, pressed, injected=False) -> None:
+    """Gemella Mac (23/09/2026): un clic fisico ferma l'Invio in attesa come
+    un tasto (il cursore messo nel testo per correggerlo); quello del
+    cursore automatico no."""
+    global ultima_pressione_utente
+    if pressed and not injected:
+        ultima_pressione_utente = time.monotonic()
 
 
 def on_release(key) -> None:
@@ -2475,6 +2482,7 @@ def main() -> None:
     threading.Thread(target=load_model, daemon=True).start()
     threading.Thread(target=impara_dagli_errori_giornaliero, daemon=True).start()
     keyboard.Listener(on_press=on_press, on_release=on_release).start()
+    mouse.Listener(on_click=on_click).start()
     Pannello().run()
 
 
