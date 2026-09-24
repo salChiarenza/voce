@@ -1,5 +1,11 @@
 # Changelog Voce
 
+## 1.3.0-rc.28 - 24/09/2026
+
+- Il punto verde di «LeaderAI.» torna della misura del logo ufficiale: era un
+  terzo dell'altezza delle lettere, ora un quarto, come nel marchio. Sal: «il
+  puntino è troppo grande». Mac e Windows, 328 prove verdi.
+
 ## 1.3.0-rc.27 - 23/09/2026
 
 - La memoria di Voce non cresce piu' a ogni dettatura. Il motore teneva da

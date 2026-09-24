@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0-rc.28 - 24/09/2026 — gemella del Mac
+
+- Punto del marchio da 0,34 a 0,24 dell'altezza delle maiuscole, come il Mac
+  e il logo ufficiale. Prova gemella in `tests/test_marchio_punto.py`.
+
 ## 1.3.0-rc.26 - 23/09/2026 — gemella del Mac
 
 - Un clic fisico ferma l'Invio automatico come un tasto (`mouse.Listener` con

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0-rc.28 - 24/09/2026 — il punto del marchio come nel logo
+
+- `LATO_PUNTO` da 0,34 a 0,24 dell'altezza delle maiuscole: nel logo ufficiale
+  (`leaderai-logo-trasparente.png`) il punto e' 35 px su una L di 145. Prova in
+  `tests/test_marchio_punto.py`, rossa sulla rc.27.
+
 ## 1.3.0-rc.27 - 23/09/2026 — la memoria non cresce piu' a ogni dettatura
 
 - Il motore di trascrizione teneva da parte, senza limite, i blocchi di

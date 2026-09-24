@@ -175,7 +175,7 @@ TESTO_BRAND = AppKit.NSAttributedString.alloc().initWithString_attributes_(TESTO
     AppKit.NSFontAttributeName: FONT_MARCHIO,
     AppKit.NSForegroundColorAttributeName: AppKit.NSColor.colorWithCalibratedWhite_alpha_(0.97, 1.0),
 })
-LATO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.34, 1)  # un po' piu' del logo: si vede meglio
+LATO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.24, 1)  # come nel logo ufficiale (punto 35 px su L di 145): standard del marchio, Sal 24/09/2026
 SPAZIO_PUNTO = round(FONT_MARCHIO.capHeight() * 0.12, 1)
 _larghezza_marchio = TESTO_BRAND.size().width + ((SPAZIO_PUNTO + LATO_PUNTO) if PUNTO_VIVO else 0)
 X_MARCHIO = round((LARGHEZZA - _larghezza_marchio) / 2)

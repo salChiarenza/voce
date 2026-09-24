@@ -2381,7 +2381,7 @@ class Pannello:
         punto = BRAND.endswith(".")
         testo = BRAND[:-1] if punto else BRAND
         cap = f.metrics("ascent") * 0.7
-        lato, spazio = cap * 0.34, cap * 0.12
+        lato, spazio = cap * 0.24, cap * 0.12     # punto come nel logo ufficiale (Sal 24/09/2026)
         largo_testo = f.measure(testo)
         x0 = (LARGHEZZA - largo_testo - ((spazio + lato) if punto else 0)) / 2
         base = 32 if grande else 21                  # linea di base del testo
