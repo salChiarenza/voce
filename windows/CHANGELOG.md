@@ -1,0 +1,636 @@
+# Changelog
+
+## 1.3.0-rc.35 - 31/10/2026 — gemella del Mac: l'orecchio, Esc che annulla, le ultime dettature nel menu
+
+Tutto in `voice_dettatura_windows.py` (resta un file solo). Provato con prove automatiche,
+nessun PC Windows vero: la versione resta candidata.
+
+- **Orecchio (Silero VAD).** `ModelloOrecchio`, `FlussoOrecchio`, `frame_da_ms`,
+  `c_e_voce_umana`, `maschera_voce`, `Orecchio`, `carica_orecchio`: stesso codice e stessi
+  valori di Handy del Mac (soglia 0,3, 60 ms, 450 ms per lato), stesso `silero_vad.onnx`
+  v6.2.3 (sha256 `1a153a22…88e3`, licenza MIT in `silero_vad_LICENSE.txt`) su
+  `onnxruntime==1.27.0` (faster-whisper lo usava gia' per il suo `vad_filter`; ruote
+  win_amd64 per Python 3.11-3.14). `_whisper_grezzo`: senza voce Whisper non parte e non si
+  incolla niente; i silenzi oltre ~0,9 s si accorciano. Un errore dell'orecchio manda
+  l'audio intero a Whisper; un modello che non si carica lascia la Voce come prima.
+  `vad_filter` di faster-whisper invariato. Niente orecchio per le mani libere: su Windows
+  non ci sono. Registro: `orecchio: ...` all'avvio e a ogni passaggio. `install.ps1` copia
+  modello e licenza; interruttore `"orecchio": true`.
+- **Esc annulla, SPENTO di serie** (`"esc_annulla": false`, anche se la chiave manca).
+  Acceso, dalla pressione del tasto-detta finche' il testo non e' incollato Esc butta la
+  dettatura: niente incolla, niente Invio, la pill dice «Dettatura annullata» per 1,5 s.
+  In quel tratto Esc non arriva al programma davanti: `_filtro_tastiera` e' il
+  `win32_event_filter` del listener pynput gia' presente e chiama `suppress_event()`
+  (l'hook restituisce 1; meccanismo letto nei sorgenti di pynput 1.8.2 e fissato da una
+  prova). Solo Esc fisico (un Esc mandato da un programma passa); Ctrl sinistro, Alt e Win
+  + Esc restano di Windows, Ctrl destro (il tasto-detta) no; ripetizioni e rilascio dello
+  stesso Esc trattenuti; una coda appesa da oltre 120 s non tiene Esc. Il filtro non
+  solleva mai errori (pynput fermerebbe il listener e il tasto-detta) e si aggancia solo
+  se acceso. `EscAnnulla` uguale al Mac; `CodaDettature` ora e' la stessa del Mac
+  (`annulla`, `aperta`, `incollato`, `consegna_annullata`); `annulla_dettatura` chiude
+  microfono e turno senza Whisper; `transcribe_and_paste` non parte se la dettatura e'
+  gia' buttata; `_incolla_messaggio` non incolla dopo Esc e non manda l'Invio
+  (`invio automatico ANNULLATO (Esc)`). Spento perche' un hook che toglie un tasto ai
+  programmi va visto girare su un PC vero prima di accenderlo ai clienti.
+- **Menu Voce, ultime dettature.** In fondo al menu **Voce** della finestra Voce AI:
+  «Copia l’ultima dettatura» e «Ritrascrivi l’ultima» (`_aggiungi_ultime_dettature`,
+  `copia_ultima_dettatura`, `ritrascrivi_ultima`: un passaggio unico per pezzo col
+  glossario, poi sostituzioni e punteggiatura, risultato negli Appunti e nella pill).
+  `UltimeDettature` uguale al Mac: testo e audio solo in memoria, il registro scrive solo
+  il numero di parole. `paste_text` e il menu condividono `_lock_appunti`. La pill accetta
+  avvisi con la loro durata (`("avviso", testo, secondi)`); testi senza emoji, che Tk 8.6
+  su Windows non disegna.
+- **Cambio schermi (P-105, Mac).** Valutato: il guasto nasce da AppKit (finestre native
+  perse dal compositore); la pill di Windows e' una finestra Tk che si rimostra a ogni
+  dettatura. Nessuna modifica; da provare su un PC con un secondo schermo.
+- Prove: 30 nuove in `tests/test_windows.py`; 29 rosse sul codice di prima e verdi dopo,
+  la trentesima e' una guardia (nessuna emoji nel file) gia' verde (orecchio confrontato numero per numero col Mac e col vero Silero, filtro di Esc
+  con eventi dell'hook finti, percorso tasto-Esc-rilascio vero, coda, incolla, menu,
+  pill); 1 impalcatura esistente aggiornata coi nomi nuovi. Suite 591 prima, 621 dopo.
+- **Non provato su hardware:** hook reale che trattiene Esc (e Ctrl destro + Esc che non
+  apre Start), velocita' di onnxruntime su un portatile x64, installazione del modello da
+  `install.ps1`, menu e pill in Tk su Windows.
+
+### Cantiere 30/10/2026 incluso nella rc.35 — gemella del Mac: l'Invio premuto mentre il testo compare manda la frase
+
+- `invio_di_sal_durante_incolla`, `_incolla_messaggio`: un Invio premuto mentre il testo
+  compariva conta come un si' e la frase parte, una volta sola, con il controllo di
+  consegna; `on_press`/`on_click` ricordano l'ultimo gesto (`ultimo_tasto_utente`).
+
+### Cantiere 30/10/2026 incluso nella rc.35 — gemella del Mac: riaprire mentre trascrive
+
+- `stop_recording`, `transcribe_and_paste`: un pezzo senza niente di usabile (silenzio,
+  frase-fantasma) non trattiene piu' il messaggio: il resto arriva e parte, resta l'avviso
+  «ripeti»; i guasti veri sospendono ancora l'Invio.
+- `worker`: ripreso il tasto nella coda del rilascio, la registrazione continua.
+- `start_recording`: microfono, pill e beep prima di zittire la voce (prima solo se l'agente
+  sta leggendo); registro `registrazione avviata (Xs dopo il tasto)`. Senza stream sempre
+  aperto non c'e' l'anello del Mac: quel ritardo e' l'attacco che manca. Nessun PC Windows
+  vero provato; solo copia di lavoro.
+
+## 1.3.0-rc.32 - 17/10/2026 — gemella del Mac: prima la diagnosi (P-190)
+
+- `INSTALLA_CON_AI.md`: Fase 0 con i comandi PowerShell in sola lettura e i requisiti
+  (x64, Windows 10/11, 16 GB, 10 GB liberi, Python 3.11+), prova di chiusura dei due
+  minuti, sezione «Se la Voce scrive da sola» (su Windows non ci sono le mani libere).
+- Registro: `incollato (programma bersaglio: ...)` sempre scritto, solo il programma.
+- README: requisiti. Nessun PC Windows vero provato.
+- Entrano i cantieri dell'11 e 12/10/2026 qui sotto.
+
+### Cantiere 12/10/2026 incluso nella rc.32 — gemella Mac: parole fedeli e registrazioni incomplete visibili (locale)
+
+- Il callback conserva overflow/underflow senza scrivere log; il worker scarta
+  l'audio incompleto e mostra il motivo nella pill per quattro secondi. NaN/Inf,
+  audio fuori scala e guasti di cattura/trascrizione sospendono l'Invio e conservano
+  il testo affidabile. La chiusura della coda non cancella l'avviso.
+- La progressiva riprova l'audio intero solo se un segmento e' vuoto o sospetto;
+  recupero vuoto o in errore lascia i pezzi validi disponibili senza inviare il parziale.
+- Log `whisper originale`, `grezzo` prima delle sostituzioni e `postcorrezioni`
+  dopo, solo con debug attivo, inclusa la progressiva. Apprendimento sempre a proposte.
+- Prove portabili del comportamento; nessun PC Windows reale o nuovo rilascio Drive.
+
+### Cantiere 11/10/2026 incluso nella rc.32 — gemella del Mac: il glossario arriva a Whisper come elenco nudo (P-174, non ancora su Drive)
+
+- `glossario_iniziale` passa a Whisper solo l'elenco dei nomi, senza l'etichetta
+  «Glossario:» (banco Mac su 30 dettature vere: 35 parole sbagliate su 800 con
+  l'etichetta, 18 senza). Stesso testo del Mac, provato da
+  `test_glossario_iniziale_gemella_del_mac`.
+- All'avvio il registro scrive `glossario per Whisper: N nomi: ...`.
+- Provata con le prove portabili (nessun PC Windows reale, motore faster-whisper non
+  misurato sul banco).
+
+## 1.3.0-rc.31 - 02/10/2026 — gemella del Mac: la voce legge mentre l'agente scrive, e il messaggio dettato non si perde
+
+- **Voce insieme alla scrittura.** `SeguiRegistro` e' in `voce_hook.py` (le funzioni
+  del Mac, a parita' di comportamento); l'app lo avvia con `_segui_registri` se
+  `voce_mentre_scrive` non e' `false` e se `voce_hook.py` e' accanto all'app.
+  Registri in `%USERPROFILE%\.claude\projects` (o `CLAUDE_CONFIG_DIR`). I blocchi si
+  accodano (`metti_in_lettura(..., accoda=True)`, tetto 8.000 caratteri) e il gancio
+  di fine risposta non rilegge cio' che e' gia' stato letto (`reclama_lettura`).
+- **Controllo di consegna.** `messaggio_in_registri` e `verifica_consegna` (nel file
+  dell'app, uguali a `mac/voce_lib.py`), `_controlla_consegna` dopo l'Invio
+  automatico. Il programma si riconosce dal nome dell'eseguibile (`Claude`), non
+  dal titolo: `claude.ai` in un browser non ha registro locale e non attiva il recupero.
+- Chiavi in `config.json`: `voce_mentre_scrive`, `verifica_consegna`,
+  `verifica_consegna_app`, `verifica_consegna_storico_min`. `PRIVACY.md` dichiara la
+  lettura in sola lettura dei registri locali di Claude Code.
+- Provata con le prove portabili (nessun PC Windows reale): vale la regola di sempre,
+  la versione resta candidata finche' non gira su un PC vero.
+- Il resto di questa versione e' negli interventi del 01/10/2026 qui sotto
+  (prima «Non rilasciato»).
+
+## 1.3.0-rc.31 - 01/10/2026 — il gancio di Claude Code parte davvero (P-078)
+
+- **Il difetto**: `voce_hook.py --install-hooks` scriveva in
+  `~/.claude/settings.json` `C:\Users\mario\VoiceDettaturaWindows\.venv\Scripts\python.exe
+  C:\Users\mario\VoiceDettaturaWindows\voce_hook.py` (`_comando_hook`:
+  `subprocess.list2cmdline` mette le virgolette solo se ci sono spazi). Claude
+  Code su Windows lancia i comandi con Git Bash (con PowerShell se Git Bash non
+  c'e'); Git Bash toglie le barre rovesciate fuori dalle virgolette: il comando
+  non e' mai partito, 410 volte su 410 dal 28/07 sul PC di una cliente, senza
+  segnale. `--check-hooks` cercava il percorso nel file (`hook_collegato`) e
+  diceva «configurato». Famiglia: un comando scritto per una shell e consegnato
+  a un'altra, e un controllo che guarda se il collegamento e' scritto invece di
+  provare che parte.
+- **La correzione, dove nasce**: Claude Code si collega nella forma diretta
+  (`_hook_diretto`: `command` = l'eseguibile, `args` = lo script; documentazione
+  ufficiale, «exec form», da Claude Code 2.1.139): nessuna shell, nessun
+  percorso da proteggere, ne' con Git Bash ne' con PowerShell. Codex resta con
+  la stringa (`_comando_hook`), per cui la documentazione non dice quale shell
+  usi su Windows. L'aggiornamento riconosce e sostituisce ogni vecchia voce di
+  Voce (stringa o diretta, anche in una cartella con un altro nome) e conserva
+  gli altri hook.
+- **Il segnale**: `prova_esecuzione_hook` AVVIA il comando scritto (`--ping`,
+  nuovo: risponde `VOCE_HOOK_OK`); `--check-hooks` stampa «configurato e
+  funzionante» o «configurato ma NON FUNZIONA (motivo)» ed esce 1, cosi'
+  `install.ps1` si ferma. Per Claude Code su Windows un comando a stringa e'
+  bocciato a prescindere. All'accensione, `commuta_voce` chiama
+  `avviso_collegamento`: se un collegamento non parte lo dice nella stessa frase
+  dell'annuncio; se non c'e' nessun collegamento, anche. Il gancio scrive una
+  riga a ogni chiamata in `voice_hook.log` (tetto 256 KB), come `traccia` del Mac.
+  Se Claude Code e' piu' vecchia della 2.1.139 (non conosce `args`: lancerebbe
+  `command` da solo, con la shell) `--check-hooks` lo dice e chiede di
+  aggiornarla (`versione_claude_code`, da `claude --version`; senza versione
+  leggibile non boccia nessuno).
+- **Non provato**: l'avvio vero da Claude Code su un PC Windows (non c'era).
+  Provato: la causa (Git Bash toglie le barre: si vede con `bash` qui), la
+  forma diretta con percorsi con spazi, apostrofi, parentesi, `$` e di rete,
+  l'avvio reale del comando scritto, il controllo rosso/verde, l'avviso.
+- 14 prove nuove in `tests/test_windows.py`; rosse sulla rc.28.
+
+## 1.3.0-rc.31 - 01/10/2026 — gemella del Mac (P-085)
+
+- Il tasto Menu commuta la voce solo se tenuto `voce_tenuta_sec` (1,0; mai
+  sotto 0,5): alla pressione parte un `threading.Timer` (`_tasto_voce_premuto`),
+  al rilascio si annulla (`_tasto_voce_rilasciato`). Un tocco non fa niente; il
+  tasto tenuto si ripete ma non riavvia il conto. Il Menu sta accanto al Ctrl
+  destro, il tasto-detta: sfiorarlo non deve accendere la voce. 4 prove
+  gemelle (tocco, tenuta, chiave di config, aggiornamento), le prime rosse sulla
+  rc.28; provato sulle funzioni, non su un PC Windows.
+
+## 1.3.0-rc.31 - 01/10/2026 — modello piu' piccolo sui PC con poca memoria (P-088)
+
+- Sotto `memoria_minima_modello_gb` (6) `load_model` usa `model_poca_memoria`
+  (`small`) al posto di `medium`; la memoria si legge con `GlobalMemoryStatusEx`
+  (`memoria_totale_gb`, `None` fuori da Windows). Memoria illeggibile o soglia
+  a 0 = `medium`. `voice.log` dice quale modello carica. Sul Mac P-088 e' gia'
+  corretto dalla rc.30 (motore leggero fino a 16 GB): questa e' l'unica difesa
+  di memoria che c'e' su Windows. 4 prove, rosse sulla rc.30; provato sulle
+  funzioni, non su un PC Windows.
+
+## 1.3.0-rc.31 - 01/10/2026 — gemella del Mac (P-117)
+
+- Stessa rete per pezzi (`_solo_formule_di_chiusura`, `_RIFERIMENTI_AL_VIDEO`,
+  `_CORTESIE_DI_CHIUSURA`) e stesso secondo passaggio senza glossario
+  (`_passaggio_unico`, gemella di `trascrivi` del Mac, con le stesse soglie:
+  almeno 3 secondi e 5 volte la soglia di voce) su faster-whisper.
+  3 prove gemelle in `tests/test_windows.py`, rosse sulla rc.28. Provata sulle
+  funzioni, non su un PC Windows.
+
+## 1.3.0-rc.28 - 24/09/2026 — gemella del Mac
+
+- Punto del marchio da 0,34 a 0,24 dell'altezza delle maiuscole, come il Mac
+  e il logo ufficiale. Prova gemella in `tests/test_marchio_punto.py`.
+
+## 1.3.0-rc.26 - 23/09/2026 — gemella del Mac
+
+- Un clic fisico ferma l'Invio automatico come un tasto (`mouse.Listener` con
+  il solo `on_click`); il Ctrl+V e il clic del programma non contano (flag
+  `injected`), quindi cade il margine di 0,15 s e il conteggio parte da inizio
+  consegna. 3 prove gemelle, rosse sulla rc.25.
+
+## 1.3.0-rc.24 - 23/09/2026 — gemella del Mac
+
+- Con una scritta di stato il marchio passa a Segoe UI 16 grassetto al centro
+  (`_marchio(grande=True)`), la scritta a Segoe UI 9 grigia sotto. 1 prova
+  nuova su canvas Tk vero.
+
+## 1.3.0-rc.23 - 23/09/2026 — gemella del Mac
+
+- La pill si chiude appena il testo e' incollato, non dopo l'Invio, se
+  nessun altro pezzo e' in arrivo. Punto piu' grande e firma verde sotto il
+  marchio che si disegna da sinistra (`disegno_firma`, stessa curva del sito).
+
+## 1.3.0-rc.22 - 23/09/2026 — gemella del Mac
+
+- La pill disegna `LeaderAI.` in Segoe UI grassetto col punto verde vivo:
+  `crescita_punto` da' lo scatto alla comparsa, la crescita col volume e il
+  battito da un secondo mentre trascrive; la luce sono due aloni sfumati sul
+  fondo (Tk non ha ombre). Onest non viene caricato su Windows: senza
+  hardware non si prova. 3 prove nuove, geometria su canvas Tk vero.
+
+## 1.3.0-rc.18 - 20/09/2026 — nessuna modifica
+
+- La correzione Mac dei due monitor (il testo segue la pill) qui non serve:
+  la pill Windows sta sul monitor principale (`winfo_screenwidth`), quindi
+  pill e cursore non si separano. Da rivedere se la pill seguira' il mouse.
+
+## 1.3.0-rc.17 - 18/09/2026 — gemella del Mac
+
+- Se la finestra davanti e' leggibile e non ha caselle, il testo torna
+  nell'ultima chat AI dove una dettatura e' arrivata (`_ultima_chat_ai`,
+  `finestra_viva` via `IsWindow`), come sul Mac. Da provare su PC reale.
+
+## 1.3.0-rc.16 - 17/09/2026 — gemella del Mac
+
+- Invio automatico nelle chat AI dopo 2 secondi invece di 1
+  (`invio_automatico_ritardo_chat_ai_sec` e valore di riserva), come sul Mac.
+
+## 1.3.0-rc.15 - 17/09/2026 — gemella del Mac
+
+- Sveglia al tasto premuto: un thread a parte (con COM inizializzato) tocca
+  l'albero UI Automation della finestra davanti mentre si parla; attesa di
+  riserva all'incolla da 3 a 5 giri (`GIRI_RISVEGLIO`). Da provare su PC
+  reale.
+
+## 1.3.0-rc.14 - 17/09/2026 — gemella del Mac
+
+- Memoria delle caselle anche su file (`caselle_ricordate.json` nella
+  cartella dell'app), caricata all'avvio e salvata a ogni novita'; stesse
+  funzioni pure del Mac con prova di parita'. Da provare su PC reale.
+
+## 1.3.0-rc.13 - 17/09/2026 — gemella del Mac
+
+- Memoria delle caselle e click di sistema (`SetCursorPos` + `mouse_event`,
+  puntatore riportato dov'era) quando l'albero UI Automation resta
+  addormentato dopo tutti i giri; giri di risveglio da 2 a 3
+  (`GIRI_RISVEGLIO`). Stesse funzioni pure del Mac (`chiave_casella`,
+  `posizione_relativa`, `punto_da_relativa`) con prova di parita'. 7 prove
+  nuove; da provare su PC reale come il resto della versione Windows.
+
+## 1.3.0-rc.12 - 17/09/2026 — gemella del Mac
+
+- Cursore automatico, secondo giro (17/09/2026, gemella del Mac): se al
+  primo giro UI Automation non mostra caselle, si aspetta
+  `ATTESA_RISVEGLIO_SEC` (0,5s) e si riguarda una volta prima di dire
+  "nessuna casella": le app Chromium/Electron costruiscono l'albero dopo il
+  primo tocco. Casi coperti dalla suite; da provare su PC reale come il resto
+  della versione Windows.
+- Dettature riprese (12/09): se si ricomincia mentre un pezzo trascrive,
+  si aspetta la fine di tutti i pezzi, si uniscono nell'ordine di registrazione
+  e si preme Invio una sola volta. Una nuova pressione sospende anche l'Invio
+  gia' in attesa; la ripresa senza parole lo completa senza reincollare.
+  Clipboard serializzata, finestre diverse separate, errore di trascrizione
+  conserva il testo valido senza inviare un messaggio parziale. Prove gemelle
+  Mac/Windows; attivazione locale distinta dal prossimo pacchetto Drive.
+- Parita' della precedenza vocale: dalla registrazione fino all'Invio il
+  turno dell'utente blocca e scarta la risposta precedente, con ricontrollo
+  anche nel lettore e token protetti quando due trascrizioni si sovrappongono.
+  Prove portabili verdi; resta da collaudare su un PC Windows reale.
+- Apertura delle risposte ridotta al solo nome: `ChatGPT` oppure `Claude`,
+  senza nome del progetto e senza `LeaderAI`.
+- Voce in uscita: pause, elenchi e tabelle leggibili; marcatori della chat
+  omessi, percorsi ridotti al nomefile, numeri e negazioni conservati.
+- Riascolto dall’inizio dopo uno stop e scelta esplicita fra conversazioni,
+  con anteprima nel menu. Ultima risposta per fonte e coda locale protetta
+  dalle scritture simultanee; selezionare una fonte lascia le altre in attesa.
+- Hook con sessione distinta, doppioni circoscritti alla conversazione e
+  conservazione locale dichiarata nella privacy. Voce e profilo preservati.
+
+- Apprendimento e ripasso audio continuano a proporre correzioni nel registro
+  esistente, con la dicitura `proposte da verificare, non applicate` e coppie
+  JSON leggibili. Non scrivono piu' le sostituzioni nel config e l'avvio
+  giornaliero non attiva le proposte nella memoria dell'app.
+- L'elenco `sostituzioni` contiene le coppie verificate dall'agente su
+  richiesta del proprietario: il README spiega verifica e annullamento.
+  Valori JSON numerici, liste e oggetti sono scartati, senza convertirli in
+  parole. Tasti, tempi e percorso di dettatura restano invariati.
+- Prova automatica su Mac delle funzioni Windows: casi `vi → mi`, `al → il`
+  e `programmata → programmato` lasciano invariati config e memoria.
+  Da collaudare su un PC Windows reale; nessuna nuova distribuzione.
+
+## 1.3.0-rc.11 - 04/09/2026 — quattro migliorie dai registri veri (gemella Mac)
+
+Quattro interventi nati dai log reali 27/08→04/09 (1.422 dettature), fatti da quattro agenti in parallelo e fusi lo stesso giorno. Da provare a voce vera su Mac; Windows su PC reale.
+
+### trascrizione mentre parli
+- Dato reale Mac (log 27/08→04/09): 517 dettature su 1.422 oltre i 30s;
+  faster-whisper partiva solo al rilascio, e su CPU l'attesa cresceva ancora
+  piu' in fretta che sul Mac col parlato lungo.
+- Trascrizione progressiva con le STESSE chiavi del Mac in `config.json`
+  (`trascrizione_progressiva: true`, `trascrizione_progressiva_blocco_sec:
+  12`): mentre tieni premuto Ctrl destro, `SessioneProgressiva` trascrive
+  in sottofondo i segmenti chiusi su una pausa (0,5s sotto soglia, solo dopo
+  12s di segmento: `trova_taglio`, replicata nell'unico file); al rilascio
+  resta solo la coda dall'ultimo taglio. Sotto i 12s niente cambia.
+- Ogni segmento riceve glossario + coda del testo precedente come
+  `initial_prompt` (`prompt_con_contesto`); i pezzi si rincollano con
+  `unisci_segmenti` (stesse regole del Mac) e poi eco del glossario,
+  guardia anti-allucinazione, sostituzioni e punteggiatura dettata girano
+  una volta sola sul testo unito, nello stesso ordine di prima.
+- Nuovo `_lock_trascrizione`: una sola chiamata a faster-whisper per volta,
+  segmenti in sottofondo compresi. La pill mostra "Trascrivo..." solo al
+  rilascio. Un errore in sottofondo riporta al passaggio unico.
+- Limiti: Windows da provare su PC reale (su CPU `medium` int8 un segmento
+  di 12s puo' richiedere piu' dei 12s successivi: in quel caso il rilascio
+  aspetta il segmento in corso, comunque meno dell'intero audio). Soglia
+  di pausa 0,010 rms presa dal Mac, da verificare col microfono del PC.
+  Interruttore a `false` = comportamento identico a prima.
+
+### il ripasso notturno taceva il suo errore
+- Sul Mac gli audio non sparivano: erano nella cartella operativa, 30 su 30.
+  Qui `BASE` e cartella sorgente coincidono, quindi il rischio di guardare la
+  cartella sbagliata non c'e'; per parita' la riga `audio conservato:` scrive
+  comunque il percorso intero del file.
+- Ripasso notturno e apprendimento giornaliero: causa provata sul Mac, un
+  agente che esce con errore (es. sessione scaduta) veniva letto come
+  "nessuna correzione sicura". Nuova funzione pura `risposta_arbitro`
+  (gemella Mac): uscita non zero o risposta senza JSON finiscono nel registro
+  come `arbitro fallito (...)` / `agente fallito (...)` con il messaggio vero.
+- Test: `test_risposta_arbitro_windows_gemella_del_mac`.
+- **Nessun agente imposto, catena di arbitri** (gemella Mac): `comandi_agente()`
+  elenca Claude e Codex se presenti, `chiedi_arbitro()` prova in ordine e si
+  ferma al primo che risponde; apprendimento e ripasso notturno passano da
+  li' e il registro dice chi ha fallito e perche'.
+
+### Invio automatico al ritmo delle chat AI
+- **Pausa pre-Invio piu' corta nelle chat AI**: sul Mac i log 30/08→04/09
+  mostravano il 40% degli Invii automatici annullati (Sal vede il testo
+  nella chat e preme Invio a mano prima dei 2,5s pensati per i documenti).
+  Stessa chiave `invio_automatico_ritardo_chat_ai_sec` (default 1.0) in
+  `config.json`, usata SOLO quando la finestra bersaglio e' una chat AI e la
+  voce agenti e' spenta; a voce accesa resta
+  `invio_automatico_ritardo_conversazione_sec`, altrove resta
+  `invio_automatico_ritardo_sec`. Nascono le gemelle `destinazione_agente()`
+  (riconosce ChatGPT, Claude, Codex dal titolo della finestra bersaglio e
+  dal nome del suo eseguibile, letti da `nome_finestra()`) e
+  `ritardo_invio()`, con gli stessi nomi e contratto del Mac. Annullamento
+  su tasto o nuova dettatura identico a prima; il log dell'Invio riporta
+  l'attesa usata. Come il resto della versione Windows, va vista girare su
+  un PC reale.
+
+### tetto 90s legato al tasto
+- Gemella Mac. Caso reale sul Mac (log 04/09 06:41): dettatura di 90 secondi
+  col tasto-detta ancora premuto, fermata dall'anti-incanto a meta' frase.
+  Causa: `watchdog()` guardava solo il tempo (`max_recording_sec` = 90), non
+  il tasto. Cosa cambia: il tetto dei 90s scatta SOLO se il tasto-detta
+  (`hotkey`, es. Ctrl destro) non e' piu' fisicamente premuto secondo Windows
+  (`GetAsyncKeyState`, VK ricavato dal tasto configurato con `vk_del_tasto`);
+  finche' e' giu' si continua a registrare. Resta un tetto DURO separato,
+  `max_registrazione_tasto_sec` (300s, stessa chiave e valore del Mac), che
+  ferma comunque per il tasto incastrato. La decisione e' la funzione pura
+  `stop_anti_incanto`, gemella di quella Mac e confrontata nei test; la
+  lettura di `ctypes.windll` e' protetta, cosi' il file resta importabile
+  anche su Mac.
+
+## 1.3.0-rc.10 - 04/09/2026 — mezzo secondo di coda al rilascio (gemella Mac)
+
+- Al rilascio di Ctrl destro il microfono resta in ascolto ancora `0.5s`
+  (`coda_rilascio_sec`) prima di chiudere lo stream e trascrivere, cosi'
+  l'ultima sillaba non si perde. L'attesa vive nel worker audio
+  (`stop_coda`), mai nella callback tastiera; l'anti-incanto resta
+  immediato. Da provare su PC Windows reale.
+
+## 1.3.0-rc.9 - 30/08/2026 — la voce agenti arriva in fondo (gemella Mac)
+
+- Doppio evento di fine risposta: scarto della ripetizione identica entro 8
+  secondi (`gia_letto_da_poco`, file di stato `ULTIMA_LETTURA`), come sul Mac.
+- Una voce per volta: prima le letture partivano in sovrapposizione (nessun
+  coordinamento tra hook). Ora l'hook deposita il testo in `LETTURA_PENDENTE`
+  e un processo "lettore" unico legge in modo sincrono fino a svuotare
+  l'attesa: la lettura in corso si finisce sempre e tra i testi arrivati nel
+  frattempo vince l'ultimo. Il lettore unico e' garantito da un lock del
+  kernel (`LETTORE_LOCK`, `msvcrt.locking`): si libera da solo alla morte del
+  processo (niente `os.kill`, che su Windows termina invece di interrogare);
+  il lettore parte sganciato con `DETACHED_PROCESS` e ogni lettura ha un
+  tetto proporzionale al testo, cosi' una voce incantata non ammutolisce le
+  risposte successive.
+- Punteggiatura dettata (gemella Mac): "punto esclamativo", "punto
+  interrogativo", "punto e virgola", "puntini di sospensione", "a capo"
+  detti a voce diventano segni veri; con l'articolo davanti non si tocca e
+  "venirne a capo" resta un idioma.
+- Limite noto (preesistente su questo asse): su Windows la dettatura non
+  zittisce la lettura in corso dell'hook, che arriva comunque in fondo. Il
+  barge-in immediato per ora e' solo Mac. Come il resto della versione
+  Windows, va vista girare su un PC reale prima di considerarla stabile.
+
+## 1.3.0-rc.9 (bis) - 30/08/2026 — niente frasi perse nell'incolla alla cieca
+
+- Gemella Mac: quando il cursore automatico legge la finestra e caselle di
+  testo non ce ne sono, il testo dettato resta negli Appunti (Ctrl+V dove
+  serve), un beep di sistema avvisa e l'Invio automatico non parte. Prima
+  la frase veniva incollata nel vuoto e persa col ripristino degli Appunti.
+- Il modello Windows resta `faster-whisper medium` (limite di sistema, vedi
+  lista parita'); il salto di qualita' del Mac (large-v3) non e' replicabile
+  li' a parita' di hardware.
+- Cursore automatico anche nei documenti (gemella Mac,
+  `casella_ammissibile`): un'area alta almeno meta' finestra e' un documento
+  (Blocco Note/Word) e si prende anche se parte dall'alto; le barre restano
+  fuori perche' basse di statura.
+- Ripasso degli audio conservati (gemello Mac, `--ripasso`): secondo
+  riconoscitore (`modello_ripasso`, default `small`) sulle dettature
+  conservate, arbitrato dell'agente locale sui disaccordi, correzioni sicure
+  auto-aggiunte alle sostituzioni. Attivo solo con `conserva_audio_n` > 0.
+
+## 1.3.0-rc.8 - 29/08/2026 — via l'eco del glossario
+
+- `rimuovi_eco_glossario` (gemella Mac): la parola "Glossario" e i nomi del
+  prompt ricopiati da Whisper in testa alla trascrizione vengono rimossi
+  prima del filtro allucinazioni; il corpo della frase non si tocca.
+
+## 1.3.0-rc.7 - 29/08/2026 — il click nella casella lo fa l'app
+
+- Cursore automatico via UI Automation (nuova dipendenza `comtypes`): al
+  momento dell'incolla, se nella finestra bersaglio nessuna casella di testo
+  ha il focus, l'app mette il cursore nella casella di scrittura (la piu' in
+  basso). Le caselle nella parte alta della finestra (barra degli indirizzi,
+  campi di ricerca) non vengono mai prese. Qualsiasi intoppo lascia il
+  comportamento precedente. Interruttore: `cursore_automatico`. Come il resto
+  della versione Windows, va visto girare su un PC reale prima di
+  considerarlo stabile.
+- Audio conservato opzionale (`conserva_audio_n`, default 0 = spento): come
+  sul Mac, WAV locali in `audio_recenti/` con rotazione automatica, per
+  tarare glossario e sostituzioni su casi veri.
+
+## Consegna - 27/08/2026 — l'email dice dove finisce il testo da incollare
+
+- Il messaggio per l'agente sta fra due righe di trattini: il confine di cosa
+  copiare si vede a occhio. Le frasi rivolte alla persona restano fuori.
+- Dopo l'installazione lo stesso agente prosegue nella medesima sessione fino
+  alla prova reale: eliminato il secondo messaggio che il proprietario doveva
+  reinviare all'agente.
+- L'email dichiara in apertura i 20 minuti e il microfono collegato, e avvisa
+  che Windows e l'antivirus chiederanno qualche autorizzazione.
+- La missione locale tratta l'antivirus come prima causa quando lo scaricamento
+  della voce si ferma, con la misura host per host della catena dei certificati.
+  Origine: consegna Windows del 28/07/2026 fermata da Avast su questo punto.
+- Controllo AI Act aggiornato per questa consegna. Ruolo LeaderAI: fornitore.
+  Prodotto: trascrizione vocale locale e lettura ad alta voce delle risposte
+  dell'agente, fuori dagli usi ad alto rischio dell'Allegato III. Obbligo di
+  trasparenza sull'audio sintetico presidiato dalla 1.3.0-rc.6: all'accensione
+  la finestra dichiara `Voce AI` e `audio sintetico`. Audio effimero, elaborato
+  sul computer del proprietario, come dichiara `PRIVACY.md`. Esito
+  `AI_ACT_CHECK_OK`.
+
+## 1.3.0-rc.6 - 03/08/2026 — Voce AI riconoscibile
+
+- All'accensione dichiara che le risposte dell'agente sono audio sintetico.
+- La finestra identifica `Voce AI` quando spiega il tasto Menu.
+- Privacy e collaudo registrano che l'audio e' effimero e non viene salvato.
+- La missione chiude con una sola conferma finale dopo tutte le prove, priva di
+  file o rapporti separati.
+
+## 1.3.0-rc.5 - 01/08/2026 — nessuna attesa interattiva dell'agente
+
+- Tolta la pulizia Claude/Codex dal percorso della dettatura: poteva fermare
+  il testo fino a `20s`. Windows non ha il Comando Rapido Apple, quindi incolla
+  subito il grezzo con glossario e sostituzioni locali.
+- Allineata la guardia di sicurezza Mac/Windows: variazioni oltre il 25% e un
+  solo nome del glossario inventato vengono rifiutati.
+
+## 1.3.0-rc.4 - 01/08/2026 — la pulizia non resta lenta per giorni
+
+Riflesso della rete nata sul Mac. Windows non aveva alcun contatore: ogni
+dettatura pagava fino a `20s` di timeout, per sempre.
+
+- `corsia_utilizzabile()` / `registra_esito_corsia()` gemelli del Mac, con un
+  test di parita' che confronta le due implementazioni caso per caso.
+- `pulisci_con_agente()` torna `None` quando fallisce (prima tornava il grezzo
+  e il guasto era invisibile). Il chiamante fa `pulito or text`: la dettatura
+  non si perde.
+
+## 1.3.0-rc.3 - 01/08/2026 — il microfono abbassato non ferma piu' l'app
+
+Riflesso della stessa rete nata sul Mac il 01/08/2026 (regola di parita':
+Mac master, Windows gemello).
+
+- `diagnosi_audio_muto()` decide come sul Mac, con gli stessi numeri: minimo
+  `60`, target `75`. Un test di parita' confronta le due funzioni caso per
+  caso e fallisce se divergono.
+- `ripara_guadagno_ingresso()` e `allinea_volume_ingresso()` leggono e
+  rialzano il volume del microfono via Core Audio in C# inline dentro
+  PowerShell: sta nel .NET di Windows, quindi **niente pip** sul PC del
+  cliente, stessa scelta gia' fatta per il TTS.
+- Aggiunta la riga di log mancante quando una dettatura viene scartata sotto
+  soglia: prima su Windows spariva senza lasciare traccia da diagnosticare.
+- **Da provare su un PC Windows reale**: l'interop Core Audio non e'
+  collaudabile da macOS. Ogni errore ricade sul comportamento precedente
+  (nessuna riparazione), mai peggio di prima.
+
+## 1.3.0-rc.2 - 29/07/2026 — tempo di invio allineato
+
+- Allineato a `2.5s` il ritardo dell'Invio automatico anche in conversazione,
+  come nel profilo operativo Mac di Sal. Tasto e voce restano specifici di
+  Windows e vengono collaudati sul PC destinatario.
+
+## 1.3.0-rc.1 - 27/07/2026 — repo cliente autosufficiente
+
+- La repo contiene ora versione unica, prove automatiche, installazione
+  conservativa e modello di consegna nello stesso archivio Mac + Windows.
+- L'installer copia `VERSION` nella cartella cliente; la missione locale ne
+  verifica la presenza prima del collaudo.
+- L'aggiornamento conserva tutte le scelte gia' presenti, compresi voce,
+  modello, detta pulito, ritardi e calibrazione.
+- Specchiate dal Mac le protezioni contro frasi-fantasma/collassi di Whisper e
+  contro l'Invio automatico mentre il proprietario preme un tasto o ricomincia
+  a dettare.
+- Il collaudo Codex include revisione da `/hooks` e una risposta realmente
+  letta ad alta voce.
+- La versione resta candidata finche' tasti, microfono, dettatura e voce
+  italiana non vengono provati su un PC Windows reale partendo dall'archivio.
+
+## Non rilasciato - 23/07/2026 — pre-invio completo
+
+- L'email di consegna usa un link cliccabile nell'HTML e conserva l'URL esteso
+  nel fallback testuale.
+- Aggiunti verifica dell'agente che tiene il cliente, controllo Gmail Sent
+  prima e dopo l'invio, conferma di una sola copia, tono, firma e controllo
+  degli em dash.
+
+## Non rilasciato - 23/07/2026 — email di consegna versionata
+
+- Aggiunto `EMAIL_CONSEGNA.md` nella radice della repo come fonte unica dell'email Mac e Windows: link esatto, percorso a clic, conferme del sistema, passaggio all'agente locale, ramo di recupero e collaudo.
+- Ogni miglioramento dell'esperienza di installazione aggiorna app, istruzioni ed email nello stesso commit; la cronologia Git conserva l'evoluzione.
+
+## Superato il 04/08/2026 — passaggio di sicurezza locale
+
+- Questo percorso trasferiva al proprietario un passaggio tecnico ed e' stato ritirato. La consegna corrente parte dalla repo ed e' eseguita interamente dal Claude Code o Codex del cliente.
+- `install.bat` mostra chiaramente esito e codice di uscita, mentre `install.ps1` copia `INSTALLA_CON_AI.md` nella cartella locale per lasciare all'agente la missione completa.
+- Alla persona restano soltanto conferme Windows e prova reale.
+
+## Non rilasciato - 17/07/2026 (9) — voce italiana scelta, non imposta
+
+- La prima installazione propone il **Profilo LeaderAI consigliato** in una sola domanda e distingue i requisiti tecnici dalle preferenze opzionali.
+- Aggiunta `voce_nome` alla configurazione: `voce_hook.py --list-voices` elenca le voci italiane installate, `--test-voice "NOME"` le fa ascoltare e `--set-voice "NOME"` salva soltanto una voce realmente disponibile.
+- App e hook usano la voce scelta; se manca, ripiegano sulla prima voce italiana installata senza inventare un nome non presente sul PC.
+- La voce e i tasti restano da collaudare su un PC Windows reale prima del rilascio.
+
+## Non rilasciato - 17/07/2026 — contratto sorgente unica
+
+- La repo `voce` resta l'unica casa del prodotto. Il Mac usato da Sal punta direttamente alla cartella `mac/`; Windows resta una variante tecnica separata solo perche' il sistema operativo richiede codice diverso. Ogni cambiamento di comportamento Mac deve continuare a essere riflesso e collaudato qui prima della release.
+
+## Non rilasciato - 17/07/2026 (8) — aggiornamento completo, non ripartenza da zero
+
+- Preparata **v1.3**: `install.ps1` copia anche `voce_hook.py`, lo collega agli hook globali di Claude Code/Codex senza cancellare quelli esistenti e ne verifica la presenza.
+- Installazione e aggiornamento fondono i nuovi default con il config gia' presente: restano glossario, sostituzioni, tasti, modello, voce scelta e calibrazione microfono; il prodotto aggiorna marchio e comportamento base.
+- Aggiunta prova audio Windows durante l'installazione e missione agente estesa fino alla lettura reale di una risposta completa.
+- Tutta la logica e' testata senza toccare le configurazioni vive; dettatura, tasti e qualita' della voce restano da collaudare su un PC Windows reale prima del rilascio.
+
+## Non rilasciato - 09/07/2026 (7)
+
+- **Airbag "audio fuori scala"** (gemello Mac): dettatura con rms > 1.0 = sample fuori da [-1, 1], impossibile per uno stream float32 sano → audio corrotto dal driver, si scarta invece di trascriverlo (su Mac Whisper allucinava e l'invio automatico spediva spazzatura agli agenti). Da collaudare su PC Windows reale insieme al resto.
+
+## Non rilasciato - 05/07/2026 (6)
+
+- **Pulizia saltata in conversazione** (gemello Mac): a voce ON la pulizia (1-3s extra) si salta, l'agente capisce il parlato grezzo. Nuova chiave `pulizia_in_conversazione` (default `false`).
+
+## Non rilasciato - 05/07/2026 (5)
+
+- **Pausa pre-Invio consapevole del contesto** (gemello Mac): a voce ON (conversazione con l'agente) la pausa scende a `invio_automatico_ritardo_conversazione_sec` (default 0.3s) invece di 2.5s.
+
+## Non rilasciato - 05/07/2026 (4)
+
+- **Rotazione log a 7 giorni** (gemello Mac): `debug_dettature: true` logga il grezzo in chiaro, ora limitato agli ultimi 7 giorni invece di accumularsi senza limiti.
+
+## Non rilasciato - 05/07/2026 (3)
+
+- **Pausa prima dell'Invio automatico** (gemello Mac): nuova chiave `invio_automatico_ritardo_sec` in `config.json` (default 2.5s), tempo per correggere il testo prima che parta l'Invio.
+
+## Non rilasciato - 05/07/2026 (2)
+
+- **Invio automatico sempre attivo** (gemello Mac): non dipende piu' dal toggle "voce agenti" (VOICE_ON), che resta solo per la lettura ad alta voce delle risposte.
+
+## Non rilasciato - 05/07/2026
+
+- **Fix testo incollato sulla finestra sbagliata** (gemello Mac): se una dettatura lunga (pulizia inclusa) richiedeva qualche secondo e nel frattempo cambiavi finestra, il testo finiva incollato dove si trovava il focus a fine elaborazione, non dove avevi parlato. Ora la finestra-bersaglio (`GetForegroundWindow`) viene memorizzata al momento dello stop e riportata avanti (`SetForegroundWindow`) prima di incollare, sempre.
+- Il fix del blocco ricorrente per deadlock CoreAudio (Mac) NON è stato portato qui: è specifico dell'HAL di CoreAudio, nessuna prova che affligga anche Windows. Se capita un blocco analogo su Windows, verificarlo prima di copiare la stessa soluzione (stream sempre aperto).
+
+## Non rilasciato - 03/07/2026
+
+- **Fix eco glossario nel detta pulito** (gemello Mac): regola 5 del prompt riformulata (la vecchia "Scrivi correttamente questi nomi" faceva appendere il glossario al testo) + guardia `pulizia_sospetta`: scarta la pulizia se aggiunge ≥2 nomi mai dettati o collassa il testo sotto un terzo delle parole.
+
+## Non rilasciato - 02/07/2026
+
+- **Apprendimento automatico** (gemello Mac): log testi opzionale con `debug_dettature`, giro giornaliero che impara le `sostituzioni` dagli errori ricorrenti. Da collaudare su PC reale.
+
+- Prompt di pulizia allineato al Mac (regole numerate su riga singola). La corsia Apple Intelligence resta solo-Mac (su Windows non esiste equivalente di serie): qui la catena è agente -> grezzo.
+
+- **Glossario**: nuova chiave `glossario` in `config.json`, passata a faster-whisper come `initial_prompt` — nomi propri e brand scritti giusti. Più mappa `sostituzioni` ("sbagliato → giusto", parola intera, case-insensitive).
+- **Detta pulito**: le dettature lunghe (≥ `pulizia_min_parole`, default 15) passano dall'agente già sul PC (`claude -p --model haiku`, riserva `codex exec`) che toglie ripetizioni, ripensamenti e intercalari e sistema la punteggiatura. Stato "Sistemo..." sulla pill. Fallback totale: se l'agente manca, sbaglia o supera `pulizia_timeout_sec` (20s), si incolla il testo grezzo.
+- Pulizia più veloce: `claude -p` parte "spoglio" (`--tools "" --strict-mcp-config --setting-sources "" --no-session-persistence`): ~2-3s in meno a chiamata, misurato; timeout portato a 20s (la chiamata reale sta sui 9-15s).
+- Specchio della versione Mac dello stesso giorno (regola gemelle). **Da collaudare su PC Windows reale.**
+
+## Non rilasciato - 27/06/2026
+
+- Istruzioni `INSTALLA_CON_AI.md` riscritte come missione autonoma: l'agente del cliente fa autodiagnosi, auto-riparazione e prova reale, con `/goal` come aiuto opzionale.
+- README e messaggi dell'installer allineati a v1.2: Ctrl destro per dettare, tasto Menu per voce agenti, niente residui F8 nelle istruzioni correnti.
+
+## v1.2 - 26/06/2026
+
+- Tasti come sul Mac: **Ctrl destro** detta (tieni premuto, parla, rilascia), **tasto Menu** accende/spegne la voce agenti. Tolto F8 (sui portatili i tasti F fanno volume/luminosita').
+- Voce in uscita (legge le risposte ad alta voce, voce italiana di Windows) inglobata nell'app.
+- App in **un unico file** `voice_dettatura_windows.py` (dettatura + pannello + voce). Resta solo `voce_hook.py` come hook opzionale che Claude Code richiama.
+
+## v1.1 - 26/06/2026
+
+- Pannello brandizzato come la versione Mac: pill scura in basso al centro con il marchio `salchiarenza.ai` e barra di lineette verdi ad arco "a sorriso" che si muovono col volume (overlay Tkinter, nessuna dipendenza extra).
+- L'overlay non ruba il focus: continui a scrivere nel programma dove sei (finestra click-through e non attivabile).
+- Icona cliccabile vera "Voce Dettatura" su Scrivania e nel Menu Start: il cliente non apre mai il terminale.
+- Modello di trascrizione di default piu' forte (`medium`) per una resa migliore; resta configurabile in `config.json`.
+
+## v1.0.0-beta - 21/06/2026
+
+- Prima versione beta pubblica per Windows.
+- Dettatura locale con tasto `F8`.
+- Installer PowerShell con launcher sulla Scrivania.
+- Istruzioni semplificate per installazione guidata con Claude Code o Codex.

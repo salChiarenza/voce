@@ -1,0 +1,460 @@
+#!/bin/bash
+# Interruttori Voce:
+#   voce on|off          -> voce agenti (lettura risposte ad alta voce)
+#   voce mani on|off     -> mani libere (ascolto continuo senza tasto)
+#   voce grinch on|off   -> mascotte accanto alla pill (solo se "mascotte" e' in config)
+#   voce riavvia         -> riavvia il servizio della Voce (la prima volta lo installa)
+#   voce permessi [stato] -> richieste di macOS per l'app «Voce LeaderAI» (stato = solo lettura)
+#   voce diagnosi        -> requisiti, app per dettare, Voce gia' installata (sola lettura;
+#                           gira anche dal pacchetto estratto, prima di installare)
+#   voce                 -> stato di tutti
+# Comandi usati anche dagli agenti quando chiedi a voce/chat di
+# accendere o spegnere ("spegni il microfono" = voce mani off).
+DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "$DIR/.venv/bin/python" ]; then
+  PY="$DIR/.venv/bin/python"
+elif [ -x "$DIR/../../.venv/bin/python" ]; then
+  # Alias operativo di Sal: tools/voce -> sorgente unica della repo pubblica.
+  PY="$DIR/../../.venv/bin/python"
+else
+  PY="$(command -v python3)"
+fi
+diagnosi() {
+  # Fase 0 (P-190, 17/10/2026): sola lettura, nessun file scritto, nessun download.
+  # Gira anche dal pacchetto appena estratto, prima di installare: solo bash e
+  # comandi di macOS, perche' Python e' uno dei requisiti da controllare.
+  # Uscita: 0 = va bene; 1 = non va per questo computer; 2 = va, ma prima l'AI
+  # sistema il software indicato (poi rilancia la diagnosi).
+  # Requisiti e fonti: CHANGELOG 1.3.0-rc.32, «Requisiti».
+  local casa="$HOME/VoiceDettaturaMac" non_va="" da_sistemare="" installata=0
+  local serve_gb=10 ram_min_gb=16 macos_min=14
+  [ -f "$casa/VERSION" ] && [ -x "$casa/.venv/bin/python" ] && { installata=1; serve_gb=2; }
+  echo "Diagnosi Voce LeaderAI (sola lettura: niente installato, niente cambiato)"
+  echo
+  echo "Computer"
+  if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+    echo "  OK  chip Apple Silicon ($(sysctl -n machdep.cpu.brand_string 2>/dev/null))"
+  else
+    echo "  NO  chip Intel: la trascrizione locale della Voce (MLX) gira solo su Apple Silicon"
+    non_va="$non_va; chip Apple Silicon (M1 o successivo)"
+  fi
+  local macos maggiore
+  macos="$(sw_vers -productVersion 2>/dev/null)"
+  maggiore="${macos%%.*}"
+  if [ -n "$maggiore" ] && [ "$maggiore" -ge "$macos_min" ] 2>/dev/null; then
+    echo "  OK  macOS $macos (serve $macos_min o successivo)"
+  else
+    echo "  NO  macOS ${macos:-sconosciuto}: serve macOS $macos_min o successivo (aggiornamento di sistema)"
+    non_va="$non_va; macOS $macos_min o successivo"
+  fi
+  local ram_b ram_gb
+  ram_b="$(sysctl -n hw.memsize 2>/dev/null)"
+  ram_gb=$(( ${ram_b:-0} / 1073741824 ))
+  if [ "$ram_gb" -ge "$ram_min_gb" ]; then
+    echo "  OK  memoria $ram_gb GB (servono $ram_min_gb GB)"
+  else
+    echo "  NO  memoria $ram_gb GB: servono $ram_min_gb GB, il modello resta in memoria accanto alla tua AI"
+    non_va="$non_va; $ram_min_gb GB di memoria (ne ha $ram_gb)"
+  fi
+  local liberi_gb
+  liberi_gb=$(( $(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {print $4}') / 1048576 ))
+  if [ "$liberi_gb" -ge "$serve_gb" ]; then
+    echo "  OK  spazio libero $liberi_gb GB (servono $serve_gb GB)"
+  else
+    echo "  NO  spazio libero $liberi_gb GB: servono $serve_gb GB (programmi 1,3 GB + modello fino a 2,9 GB + margine)"
+    non_va="$non_va; $serve_gb GB liberi sul disco (ne ha $liberi_gb)"
+  fi
+  echo
+  echo "Software (lo sistema l'AI)"
+  local clt=0
+  if xcode-select -p >/dev/null 2>&1; then
+    clt=1
+    echo "  OK  strumenti da riga di comando di Apple (servono a creare l'app «Voce LeaderAI»)"
+  else
+    echo "  DA SISTEMARE  strumenti da riga di comando di Apple mancanti: xcode-select --install (la persona conferma la finestra)"
+    da_sistemare="$da_sistemare; strumenti da riga di comando di Apple"
+  fi
+  local py py_info
+  py="$(command -v python3 2>/dev/null)"
+  if [ -z "$py" ] || { [ "$py" = "/usr/bin/python3" ] && [ "$clt" = 0 ]; }; then
+    # /usr/bin/python3 senza gli strumenti di Apple e' un segnaposto: lanciarlo apre una finestra
+    echo "  DA SISTEMARE  Python 3.11 o successivo mancante (python.org, versione per macOS)"
+    da_sistemare="$da_sistemare; Python 3.11 o successivo"
+  else
+    py_info="$("$py" -c 'import platform, sys; print("%d %d %s" % (sys.version_info[0], sys.version_info[1], platform.machine()))' 2>/dev/null)"
+    set -- $py_info
+    if [ "${1:-0}" -eq 3 ] && [ "${2:-0}" -ge 11 ] && [ "${3:-}" = "arm64" ]; then
+      echo "  OK  Python $1.$2 nativo ($py)"
+    else
+      echo "  DA SISTEMARE  $py e' Python ${1:-?}.${2:-?} ${3:-?}: serve Python 3.11 o successivo nativo arm64 (python.org)"
+      da_sistemare="$da_sistemare; Python 3.11 o successivo nativo"
+    fi
+  fi
+  local sito irraggiungibili=""
+  for sito in https://pypi.org https://files.pythonhosted.org https://huggingface.co; do
+    curl -sS -o /dev/null -m 8 -I "$sito" 2>/dev/null || irraggiungibili="$irraggiungibili ${sito#https://}"
+  done
+  if [ -z "$irraggiungibili" ]; then
+    echo "  OK  internet: pypi.org e huggingface.co raggiungibili (programmi e modello, solo la prima volta)"
+  else
+    echo "  DA SISTEMARE  internet: non raggiungo$irraggiungibili"
+    da_sistemare="$da_sistemare; collegamento a$irraggiungibili"
+  fi
+  echo
+  echo "App per dettare gia' presenti"
+  local trovate=0 app nome
+  for app in /Applications/*.app "$HOME"/Applications/*.app; do
+    [ -e "$app" ] || continue
+    nome="$(basename "$app" .app)"
+    case "$nome" in
+      *[Ww]hisper*|*[Ww]ispr*|*[Dd]ragon*|*VoiceInk*|*"Aqua Voice"*|*[Dd]ettatura*|*[Dd]ictat*)
+        echo "  - $nome (se usa Cmd destro o detta da sola, scegline una)"; trovate=1 ;;
+    esac
+  done
+  if [ "$(defaults read com.apple.HIToolbox AppleDictationAutoEnable 2>/dev/null)" = "1" ]; then
+    echo "  - Dettatura di macOS attiva (convive: si apre con il suo tasto, non con Cmd destro)"; trovate=1
+  fi
+  [ "$trovate" = 1 ] || echo "  nessuna"
+  echo
+  if [ "$installata" = 1 ]; then
+    echo "Voce gia' installata in $casa"
+    echo "  versione $(tr -d '[:space:]' < "$casa/VERSION")"
+    local istanze servizio
+    istanze="$(pgrep -f '[Pp]ython.*detta\.py' 2>/dev/null | wc -l | tr -d ' ')"
+    if launchctl print "gui/$(id -u)/com.leaderai.voce" >/dev/null 2>&1; then servizio="caricato"; else servizio="non caricato"; fi
+    echo "  servizio com.leaderai.voce: $servizio | programmi detta.py vivi: $istanze (deve essere 1)"
+    if [ -f "$casa/MANI_LIBERE_ON" ]; then
+      echo "  mani libere: ACCESE dal $(stat -f '%Sm' -t '%d/%m/%Y %H:%M' "$casa/MANI_LIBERE_ON") -> scrive e invia da sola cio' che sente; si spengono con: $casa/voce mani off"
+    else
+      echo "  mani libere: SPENTE"
+    fi
+    [ -f "$casa/VOICE_ON" ] && echo "  voce agenti: ACCESA" || echo "  voce agenti: SPENTA"
+    if [ -f "$casa/voce.log" ]; then
+      local dal
+      dal="$(date -v-24H '+%Y-%m-%d %H:%M:%S')"
+      awk -v dal="$dal" '
+        substr($0, 1, 19) >= dal {
+          if (index($0, "incollato (app bersaglio")) inc++
+          if (index($0, "invio automatico premuto")) inv++
+          if (index($0, "registrazione avviata")) reg++
+          if (index($0, "mani libere: ascolto partito")) ml++
+          if (index($0, "combo mani libere: ON") || index($0, "mani libere: ATTIVE")) acc++
+          if (index($0, "auto-spegnimento")) spe++
+          if (index($0, "riavvio automatico") || index($0, "trascrizione lenta")) lent++
+        }
+        END {
+          printf "  registro, ultime 24 ore: %d testi incollati, %d invii automatici, %d registrazioni", inc, inv, reg
+          printf " (%d partite dalle mani libere), %d accensioni mani libere, %d spegnimenti automatici, %d segni di lentezza\n", ml, acc, spe, lent
+        }' "$casa/voce.log"
+    else
+      echo "  registro voce.log assente"
+    fi
+    echo "  memoria: i 5 programmi che ne occupano di piu'"
+    top -l 1 -o mem -n 5 -stats pid,command,mem 2>/dev/null | awk '/^PID/ {p=1; next} p && NF {print "    " $0}'
+    echo
+  fi
+  echo "Permessi che serviranno (li concede la persona, all'app «Voce LeaderAI»): Microfono, Accessibilita', Monitoraggio input"
+  echo
+  if [ -n "$non_va" ]; then
+    echo "ESITO: la Voce non va per questo computer. Servirebbe:${non_va#;}."
+    echo "La Voce trascrive sul computer, senza mandare l'audio in rete, con un modello da 1,5-2,9 GB che resta in memoria accanto alla tua AI: sotto questi requisiti non parte o rallenta tutto il Mac."
+    return 1
+  fi
+  if [ -n "$da_sistemare" ]; then
+    echo "ESITO: la Voce va bene per questo computer; prima l'AI sistema:${da_sistemare#;}. Poi rilancia la diagnosi."
+    return 2
+  fi
+  echo "ESITO: la Voce va bene per questo computer."
+  return 0
+}
+
+case "$1" in
+  diagnosi) diagnosi; exit $? ;;
+  on)  touch "$DIR/VOICE_ON"; echo "Voce: ACCESA" ;;
+  off) rm -f "$DIR/VOICE_ON"
+       "$PY" "$DIR/parla.py" --stop
+       echo "Voce: SPENTA" ;;
+  rileggi) "$PY" "$DIR/parla.py" --rileggi ;;
+  conversazioni) "$PY" "$DIR/parla.py" --conversazioni ;;
+  segui) "$PY" "$DIR/parla.py" --segui "${2:-tutte}" ;;
+  mani)
+    case "$2" in
+      on)  touch "$DIR/MANI_LIBERE_ON"; echo "Mani libere: ATTIVE" ;;
+      off) rm -f "$DIR/MANI_LIBERE_ON"; echo "Mani libere: SPENTE" ;;
+      *)   [ -f "$DIR/MANI_LIBERE_ON" ] && echo "Mani libere: ATTIVE" || echo "Mani libere: SPENTE" ;;
+    esac ;;
+  riavvia|permessi)
+    # La Voce e' un servizio di macOS (LaunchAgent) che avvia l'app «Voce LeaderAI»:
+    # non vive in una finestra del Terminale e non ne apre mai.
+    comando="$1"
+    shift
+    exec "$PY" - "$comando" "$DIR" "$PY" "$@" <<'PYEOF'
+import fcntl, json, os, plistlib, re, subprocess, sys, tempfile, time
+from pathlib import Path
+
+COMANDO, DIR, PY, ARGOMENTI = sys.argv[1], Path(sys.argv[2]), os.path.abspath(sys.argv[3]), sys.argv[4:]
+ETICHETTA, ETICHETTA_PERMESSI = "com.leaderai.voce", "com.leaderai.voce-permessi"
+DOMINIO = f"gui/{os.getuid()}"
+APP = Path.home() / "Applications" / "Voce LeaderAI.app"
+APP_EXE = APP / "Contents" / "MacOS" / "Voce LeaderAI"
+PLIST = Path.home() / "Library" / "LaunchAgents" / f"{ETICHETTA}.plist"
+DETTA, LOG = str(DIR / "detta.py"), DIR / "voce.log"
+LETTURE = (1 << 10) | (1 << 11) | (1 << 12)  # keyDown, keyUp, flagsChanged
+NOMI_PERMESSI = {"accessibilita": "Accessibilita'", "ascolto_tastiera": "Monitoraggio input", "microfono": "Microfono"}
+
+
+def launchctl(*argomenti):
+    return subprocess.run(["launchctl", *argomenti], capture_output=True, text=True)
+
+
+def servizio_caricato(etichetta=ETICHETTA):
+    return launchctl("print", f"{DOMINIO}/{etichetta}").returncode == 0
+
+
+def dettatura_in_corso(vive):
+    """Sal sta dettando adesso: turno aperto, oppure registrazione senza stop."""
+    if not vive:
+        return False
+    adesso = time.time()
+    try:
+        if adesso - (DIR / "TURNO_UTENTE").stat().st_mtime < 300:
+            return True
+    except OSError:
+        pass
+    try:
+        with open(LOG, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 200_000))
+            righe = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return False
+    aperta = None
+    for riga in righe:
+        if "registrazione avviata" in riga:
+            aperta = riga
+        elif "registrazione fermata" in riga:
+            aperta = None
+    if aperta is None:
+        return False
+    try:
+        return adesso - time.mktime(time.strptime(aperta[:19], "%Y-%m-%d %H:%M:%S")) < 300
+    except ValueError:
+        return True
+
+
+def istanze():
+    """PID delle app di dettatura vive: il lanciatore dell'app e questo script non contano."""
+    elenco = subprocess.run(["pgrep", "-f", r"[Pp]ython.*detta\.py"], capture_output=True, text=True).stdout.split()
+    pid_vivi = []
+    for p in elenco:
+        riga = subprocess.run(["ps", "-o", "command=", "-p", p], capture_output=True, text=True).stdout.strip()
+        if int(p) != os.getpid() and "Voce LeaderAI.app/" not in riga and re.search(r"[Pp]ython\S*\s.*detta\.py$", riga):
+            pid_vivi.append(int(p))
+    return pid_vivi
+
+
+def tastiera_attiva(pid):
+    try:
+        import Quartz
+        _, taps, _ = Quartz.CGGetEventTapList(64, None, None)
+        return any(t.tappingProcess == pid and t.enabled and (t.eventsOfInterest & LETTURE) == LETTURE
+                   for t in (taps or []))
+    except Exception:
+        return False
+
+
+def da_registro(offset):
+    try:
+        with open(LOG, "rb") as f:
+            f.seek(offset)
+            return f.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
+def attendi(vecchi, offset, tempo=45):
+    """Aspetta nuovo PID vivo, vecchia istanza chiusa, 'avvio dettatura' e tastiera attiva."""
+    esito = {"pid": None, "avvio": False, "vecchi_chiusi": False, "tastiera": False}
+    fine = time.time() + tempo
+    while time.time() < fine:
+        vive = istanze()
+        nuovi = [p for p in vive if p not in vecchi]
+        esito["pid"] = nuovi[-1] if nuovi else None
+        esito["avvio"] = "avvio dettatura" in da_registro(offset)
+        esito["vecchi_chiusi"] = not [p for p in vive if p in vecchi]
+        esito["tastiera"] = bool(esito["pid"]) and tastiera_attiva(esito["pid"])
+        if esito["pid"] and esito["avvio"] and esito["vecchi_chiusi"] and esito["tastiera"]:
+            break
+        time.sleep(0.5)
+    return esito
+
+
+def assicura_app():
+    """L'app c'e' una volta sola e non si ricompila: la sua firma e' la sua identita' per macOS,
+    quindi i permessi concessi restano finche' il file non cambia. Il codice della Voce sta fuori."""
+    if APP_EXE.exists() and subprocess.run(["codesign", "--verify", str(APP)], capture_output=True).returncode == 0:
+        return
+    sorgente = Path(os.path.realpath(DIR / "voce")).parent / "voce_launcher.c"
+    if not sorgente.exists():
+        sys.exit(f"Manca {sorgente}: serve per creare l'app «Voce LeaderAI».")
+    APP_EXE.parent.mkdir(parents=True, exist_ok=True)
+    (APP / "Contents" / "Info.plist").write_bytes(plistlib.dumps({
+        "CFBundleIdentifier": ETICHETTA, "CFBundleName": "Voce LeaderAI", "CFBundleDisplayName": "Voce LeaderAI",
+        "CFBundleExecutable": "Voce LeaderAI", "CFBundlePackageType": "APPL",
+        "CFBundleVersion": "1", "CFBundleShortVersionString": "1.0",
+        "LSUIElement": True, "LSMinimumSystemVersion": "12.0",
+        "NSMicrophoneUsageDescription": "Voce usa il microfono per trascrivere quello che dici.",
+        "NSAppleEventsUsageDescription": "Voce legge la scheda attiva del browser per rimettere il testo dove stavi scrivendo.",
+    }))
+    for passo in (["clang", "-O2", "-mmacosx-version-min=12.0", "-o", str(APP_EXE), str(sorgente)],
+                  ["codesign", "--force", "--sign", "-", "--identifier", ETICHETTA, str(APP)]):
+        r = subprocess.run(passo, capture_output=True, text=True)
+        if r.returncode:
+            sys.exit(f"{passo[0]} non riuscito: {r.stderr.strip()}"
+                     + ("\nServe Xcode Command Line Tools: xcode-select --install" if passo[0] == "clang" else ""))
+    print(f"App creata: {APP}")
+
+
+def plist_servizio():
+    percorso = ":".join([os.path.dirname(PY), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
+                         "/usr/sbin", "/sbin", str(Path.home() / ".local" / "bin")])
+    return {
+        "Label": ETICHETTA,
+        "ProgramArguments": [str(APP_EXE), PY, DETTA],
+        "WorkingDirectory": str(DIR),
+        "RunAtLoad": True, "KeepAlive": True, "ThrottleInterval": 5,
+        "ProcessType": "Interactive", "LimitLoadToSessionType": "Aqua",
+        "AssociatedBundleIdentifiers": [ETICHETTA],
+        "StandardOutPath": str(LOG), "StandardErrorPath": str(LOG),
+        "EnvironmentVariables": {"VOCE_SERVIZIO": "1", "PYTHONUNBUFFERED": "1", "PATH": percorso},
+    }
+
+
+def permessi_app(richiedi, attesa=240):
+    """`detta.py --permessi` dentro un servizio transitorio dell'app: le richieste e le voci nelle
+    Impostazioni di Sistema nascono a nome dell'app, non del Terminale ne' di chi lancia questo comando.
+    Ritorna l'ultimo stato letto (dict) oppure None."""
+    launchctl("bootout", f"{DOMINIO}/{ETICHETTA_PERMESSI}")
+    cartella = Path(tempfile.mkdtemp(prefix="voce-permessi-"))
+    uscita, plist = cartella / "esito.txt", cartella / "job.plist"
+    plist.write_bytes(plistlib.dumps({
+        "Label": ETICHETTA_PERMESSI,
+        "ProgramArguments": [str(APP_EXE), PY, DETTA, "--permessi"] + ([] if richiedi else ["--solo-stato"]),
+        "WorkingDirectory": str(DIR), "RunAtLoad": True,
+        "ProcessType": "Interactive", "LimitLoadToSessionType": "Aqua",
+        "StandardOutPath": str(uscita), "StandardErrorPath": str(uscita),
+    }))
+    stato, ultimo = None, None
+    try:
+        r = launchctl("bootstrap", DOMINIO, str(plist))
+        if r.returncode:
+            sys.exit(f"launchctl bootstrap non riuscito: {r.stderr.strip()}")
+        fine = time.time() + (attesa if richiedi else 40)
+        while time.time() < fine:
+            try:
+                righe = [json.loads(x) for x in uscita.read_text(encoding="utf-8").splitlines() if x.startswith("{")]
+            except OSError:
+                righe = []
+            if righe:
+                stato = righe[-1]
+                if richiedi and stato != ultimo:
+                    print("  " + " | ".join(f"{n}: {'si' if stato[k] else 'NO'}" for k, n in NOMI_PERMESSI.items()), flush=True)
+                ultimo = stato
+                if all(stato.values()):
+                    break
+            if righe and "state = running" not in launchctl("print", f"{DOMINIO}/{ETICHETTA_PERMESSI}").stdout:
+                break
+            time.sleep(1)
+    finally:
+        launchctl("bootout", f"{DOMINIO}/{ETICHETTA_PERMESSI}")
+        for f in cartella.iterdir():
+            f.unlink()
+        cartella.rmdir()
+    return stato
+
+
+def mancanti(stato):
+    return [n for k, n in NOMI_PERMESSI.items() if not (stato or {}).get(k)]
+
+
+def stato_interruttori():
+    voce = "ACCESA" if (DIR / "VOICE_ON").exists() else "SPENTA"
+    mani = "ATTIVE" if (DIR / "MANI_LIBERE_ON").exists() else "SPENTE"
+    return f"Voce: {voce} | Mani libere: {mani} (invariati)"
+
+
+def comando_permessi():
+    assicura_app()
+    solo_stato = "stato" in ARGOMENTI
+    if not solo_stato:
+        print("Richieste a schermo per «Voce LeaderAI»: Microfono (OK), poi Accessibilita' e Monitoraggio input "
+              "(Apri Impostazioni di Sistema e accendi «Voce LeaderAI»).", flush=True)
+    stato = permessi_app(richiedi=not solo_stato)
+    for k, n in NOMI_PERMESSI.items():
+        print(f"{n}: {'concesso' if (stato or {}).get(k) else 'MANCA'}")
+    return 0 if stato and not mancanti(stato) else 1
+
+
+def comando_riavvia():
+    blocco = open(DIR / "voce", "rb")  # nessun file in piu': il lucchetto e' sullo script stesso
+    try:
+        fcntl.flock(blocco, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("Riavvio gia' in corso: non ne avvio un secondo.")
+        return 2
+    vecchi = istanze()
+    if dettatura_in_corso(vecchi):
+        print("Dettatura in corso: non riavvio. Riprova a dettatura finita.")
+        return 2
+    assicura_app()
+    caricato = servizio_caricato()
+    if vecchi and not caricato:
+        # Passaggio dalla Voce lanciata a mano al servizio: mai sostituirla con una che non puo' funzionare.
+        senza = mancanti(permessi_app(richiedi=False))
+        if senza:
+            print("Non passo al servizio: all'app «Voce LeaderAI» mancano " + ", ".join(senza)
+                  + ". La Voce attuale resta accesa. Lancia `./voce permessi`.")
+            return 3
+    offset = os.path.getsize(LOG) if LOG.exists() else 0
+    atteso = plistlib.dumps(plist_servizio())
+    if not PLIST.exists() or PLIST.read_bytes() != atteso:
+        if caricato:
+            launchctl("bootout", f"{DOMINIO}/{ETICHETTA}")
+        PLIST.parent.mkdir(parents=True, exist_ok=True)
+        PLIST.write_bytes(atteso)
+        caricato = False
+    if caricato:
+        r, come = launchctl("kickstart", "-k", f"{DOMINIO}/{ETICHETTA}"), "kickstart"
+    else:
+        launchctl("enable", f"{DOMINIO}/{ETICHETTA}")
+        r, come = launchctl("bootstrap", DOMINIO, str(PLIST)), "installato e avviato"
+    if r.returncode:
+        print(f"launchctl non riuscito: {r.stderr.strip()}")
+        return 1
+    esito = attendi(vecchi, offset)
+    ok = bool(esito["pid"] and esito["avvio"] and esito["vecchi_chiusi"])
+    print(f"Voce {'riavviata' if ok else 'NON riavviata bene'} (servizio {ETICHETTA}, {come}).")
+    print(f"PID nuovo: {esito['pid']} | vecchio chiuso: {'si' if esito['vecchi_chiusi'] else 'NO'} | "
+          f"registro «avvio dettatura»: {'si' if esito['avvio'] else 'NO'} | "
+          f"tastiera attiva: {'si' if esito['tastiera'] else 'NO'} | istanze di detta.py: {len(istanze())}")
+    print("Finestre del Terminale: non toccate")
+    print(stato_interruttori())
+    return 0 if ok else 1
+
+
+sys.exit(comando_permessi() if COMANDO == "permessi" else comando_riavvia())
+PYEOF
+    ;;
+  grinch)
+    case "$2" in
+      on)  touch "$DIR/MASCOTTE_ON"; echo "Grinch: ACCESO" ;;
+      off) rm -f "$DIR/MASCOTTE_ON"; echo "Grinch: SPENTO" ;;
+      *)   [ -f "$DIR/MASCOTTE_ON" ] && echo "Grinch: ACCESO" || echo "Grinch: SPENTO" ;;
+    esac ;;
+  *)
+    [ -f "$DIR/VOICE_ON" ] && echo "Voce: ACCESA" || echo "Voce: SPENTA"
+    [ -f "$DIR/MANI_LIBERE_ON" ] && echo "Mani libere: ATTIVE" || echo "Mani libere: SPENTE"
+    if grep -qs '"mascotte"' "$DIR/config.local.json" "$DIR/config.json"; then
+      [ -f "$DIR/MASCOTTE_ON" ] && echo "Grinch: ACCESO" || echo "Grinch: SPENTO"
+    fi ;;
+esac
