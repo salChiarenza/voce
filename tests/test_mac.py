@@ -4588,6 +4588,34 @@ def test_mac_l_avviso_all_accensione_dice_cosa_non_va(tmp_path, monkeypatch):
     assert "Claude Code" in avviso and "non funziona" in avviso and "Codex" not in avviso
 
 
+def test_caso_di_sal_13_11_la_voce_riconosce_il_collegamento_via_symlink(tmp_path, monkeypatch):
+    settings = _casa_mac_finta(tmp_path, monkeypatch)
+    runtime = tmp_path / "leaderai" / "tools" / "voce"
+    runtime.mkdir(parents=True)
+    gancio = runtime / "voce_hook.py"
+    gancio.symlink_to(voce_hook.__file__)
+    comando = voce_hook.shlex.join([sys.executable, str(gancio)])
+    settings.write_text(json.dumps({"hooks": {"Stop": [{"hooks": [
+        {"type": "command", "command": comando}]}]}}), encoding="utf-8")
+
+    assert voce_hook.avviso_collegamento() == ""
+
+
+def test_mac_antigravity_riconosce_la_cartella_symlink_con_spazi_e_args(tmp_path, monkeypatch):
+    _casa_mac_finta(tmp_path, monkeypatch, agenti=())
+    monkeypatch.setattr(voce_hook, "_antigravity_presente", lambda: True)
+    cartella = tmp_path / "Collegamento a Voce"
+    cartella.symlink_to(REPO_ROOT / "mac", target_is_directory=True)
+    settings = tmp_path / ".gemini" / "config" / "hooks.json"
+    settings.parent.mkdir(parents=True)
+    gancio = {"type": "command", "command": sys.executable,
+              "args": [str(cartella / "voce_hook.py")]}
+    settings.write_text(json.dumps({"voce-leaderai": {"enabled": True, "Stop": [
+        {"hooks": [gancio]}]}}), encoding="utf-8")
+
+    assert voce_hook.avviso_collegamento() == ""
+
+
 def _commuta_voce_mac(tmp_path, monkeypatch, avviso):
     """`commuta_voce` di mac/detta.py con tutto finto: torna cosa dice a voce."""
     dette = []

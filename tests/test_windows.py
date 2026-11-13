@@ -1725,6 +1725,27 @@ def test_windows_riconosce_il_proprio_gancio_in_tutte_e_due_le_forme(tmp_path):
     assert voce_windows.hook_collegato(tmp_path / "manca.json") is False
 
 
+@pytest.mark.parametrize("forma", ["diretta", "stringa Windows", "stringa POSIX"])
+def test_windows_riconosce_lo_stesso_file_da_un_altro_percorso(tmp_path, monkeypatch, forma):
+    originale = tmp_path / "voce_hook.py"
+    originale.touch()
+    cartella = tmp_path / "Altra cartella Voce"
+    cartella.mkdir()
+    alias = cartella / ".." / "voce_hook.py"
+    monkeypatch.setattr(voce_windows, "__file__", str(originale))
+    monkeypatch.setattr(voce_windows, "_su_windows", lambda: forma == "stringa Windows")
+    parti = [sys.executable, str(alias)]
+    if forma == "diretta":
+        gancio = {"type": "command", "command": parti[0], "args": parti[1:]}
+    else:
+        comando = subprocess.list2cmdline(parti) if forma == "stringa Windows" else voce_windows.shlex.join(parti)
+        gancio = {"type": "command", "command": comando}
+    settings = tmp_path / "hooks.json"
+    settings.write_text(json.dumps({"hooks": {"Stop": [{"hooks": [gancio]}]}}), encoding="utf-8")
+
+    assert voce_windows.trova_hook_voce(settings) == gancio
+
+
 def test_windows_il_gancio_scritto_dall_installer_parte_davvero(tmp_path):
     settings = tmp_path / "settings.json"
     voce_windows.collega_hook(settings, diretto=True)    # interprete e script veri di questa macchina

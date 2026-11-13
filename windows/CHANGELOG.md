@@ -1,5 +1,10 @@
 # Changelog
 
+## 13/11/2026 — Riconoscimento dei collegamenti Voce
+
+Il controllo riconosce lo stesso file da percorsi equivalenti, sia nella forma
+diretta di Claude Code sia nel comando di Codex. Verificato con test automatici.
+
 ## 1.3.0-rc.35 - 31/10/2026 — gemella del Mac: l'orecchio, Esc che annulla, le ultime dettature nel menu
 
 Tutto in `voice_dettatura_windows.py` (resta un file solo). Provato con prove automatiche,

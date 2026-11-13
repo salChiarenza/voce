@@ -1,5 +1,10 @@
 # Changelog
 
+## 13/11/2026 — Corretto il falso avviso «Voce non è collegata»
+
+All'accensione Voce riconosce il collegamento anche se l'agente usa un percorso
+alternativo allo stesso file. Verifica che il collegamento parta e segnala i guasti effettivi.
+
 ## 1.3.0-rc.35 - 31/10/2026 — l'orecchio, Esc che annulla, le ultime dettature nel menu
 
 Gemellate su Windows nella stessa versione (orecchio solo prima di Whisper perche' li' non

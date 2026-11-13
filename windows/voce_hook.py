@@ -123,6 +123,34 @@ def _e_hook_voce(command: str, mio: str = "") -> bool:
     )
 
 
+def _punta_a_questo_hook(hook: dict) -> bool:
+    """Riconosce il file anche quando è richiamato da un altro percorso."""
+    comando = str(hook.get("command", ""))
+    argomenti = hook.get("args")
+    if isinstance(argomenti, list):
+        parti = [comando, *map(str, argomenti)]
+    else:
+        su_windows = _su_windows()
+        try:
+            # In modalità POSIX shlex toglierebbe le barre rovesciate di Windows.
+            parti = shlex.split(comando, posix=not su_windows)
+        except ValueError:
+            return False
+        if su_windows:
+            parti = [parte[1:-1] if parte[:1] in ('"', "'") else parte for parte in parti]
+    mio = Path(__file__).resolve()
+    for parte in parti:
+        percorso = Path(parte)
+        if not percorso.is_absolute():
+            continue
+        try:
+            if percorso.resolve(strict=True) == mio:
+                return True
+        except (OSError, RuntimeError, ValueError):
+            continue
+    return False
+
+
 def _leggi_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -170,12 +198,11 @@ def trova_hook_voce(settings_path: Path) -> dict | None:
         data = _leggi_json(settings_path)
     except Exception:
         return None
-    mio = str(Path(__file__).resolve())
     for gruppo in data.get("hooks", {}).get("Stop", []):
         if not isinstance(gruppo, dict):
             continue
         for hook in gruppo.get("hooks", []):
-            if isinstance(hook, dict) and mio in _comando_completo(hook):
+            if isinstance(hook, dict) and _punta_a_questo_hook(hook):
                 return hook
     return None
 

@@ -156,6 +156,27 @@ def _e_hook_voce(command: str, mio: str = "") -> bool:
     )
 
 
+def _punta_a_questo_hook(hook: dict) -> bool:
+    """Riconosce il file anche se l'agente lo richiama con un symlink."""
+    comando = str(hook.get("command", ""))
+    argomenti = hook.get("args")
+    try:
+        parti = [comando, *map(str, argomenti)] if isinstance(argomenti, list) else shlex.split(comando)
+    except ValueError:
+        return False
+    mio = Path(__file__)
+    for parte in parti:
+        percorso = Path(parte)
+        if not percorso.is_absolute():
+            continue
+        try:
+            if percorso.samefile(mio):
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
 def _leggi_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -222,7 +243,6 @@ def trova_hook_antigravity(hooks_path: Path) -> dict | None:
         data = _leggi_json(hooks_path)
     except Exception:
         return None
-    mio = str(Path(__file__).absolute())
     for gestore in data.values():
         if not isinstance(gestore, dict) or gestore.get("enabled") is False:
             continue
@@ -230,7 +250,7 @@ def trova_hook_antigravity(hooks_path: Path) -> dict | None:
             if not isinstance(gruppo, dict):
                 continue
             for hook in gruppo.get("hooks", []):
-                if isinstance(hook, dict) and mio in _comando_completo(hook):
+                if isinstance(hook, dict) and _punta_a_questo_hook(hook):
                     return hook
     return None
 
@@ -245,12 +265,11 @@ def trova_hook_voce(settings_path: Path) -> dict | None:
         data = _leggi_json(settings_path)
     except Exception:
         return None
-    mio = str(Path(__file__).absolute())
     for gruppo in data.get("hooks", {}).get("Stop", []):
         if not isinstance(gruppo, dict):
             continue
         for hook in gruppo.get("hooks", []):
-            if isinstance(hook, dict) and mio in _comando_completo(hook):
+            if isinstance(hook, dict) and _punta_a_questo_hook(hook):
                 return hook
     return None
 
