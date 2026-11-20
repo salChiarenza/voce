@@ -1376,6 +1376,157 @@ def test_trascrivi_un_errore_nel_secondo_passaggio_non_rompe_la_dettatura():
     assert len(chiamate) == 2
 
 
+# --- Whisper: tentativi, tetto di token, diagnostica e motore freddo (11/11/2026) ---
+
+def test_decodifica_due_tentativi_e_tetto_di_token_col_margine():
+    """Di serie mlx-whisper prova 6 temperature e scrive fino a 224 token a giro: sulle
+    frasi-fantasma 10-14 s. Il parlato vero di Sal arriva a 7 token al secondo."""
+    corto = voce_lib.opzioni_decodifica(1.0)
+    assert corto == {"temperature": (0.0, 0.4), "sample_len": 36}
+    for secondi in (0.5, 2.0, 8.2, 16.0, 30.0):  # sempre ben oltre il parlato piu' fitto
+        assert voce_lib.opzioni_decodifica(secondi)["sample_len"] >= 24 + 1.7 * 7 * min(secondi, 16.0)
+    for secondi in (17.0, 30.0, 90.0, "storto"):  # oltre: il tetto di serie di una finestra
+        assert voce_lib.opzioni_decodifica(secondi)["sample_len"] == 224
+    assert voce_lib.opzioni_decodifica(0)["sample_len"] == 24
+    assert voce_lib.opzioni_riscaldo() == {"temperature": 0.0, "sample_len": 4}
+
+
+def test_diagnostica_dei_segmenti_solo_numeri_mai_il_testo():
+    riga = voce_lib.diagnostica_segmenti([
+        {"temperature": 0.0, "avg_logprob": -0.312, "compression_ratio": 1.4,
+         "no_speech_prob": 0.02, "tokens": [1, 2, 3], "text": "frase privata"},
+        {"temperature": 0.4, "avg_logprob": None, "tokens": None, "text": "altra"},
+    ])
+    assert riga == ("2 segmenti: t=0.0 lp=-0.31 cr=1.40 ns=0.02 tok=3; "
+                    "t=0.4 lp=nan cr=nan ns=nan tok=0")
+    assert "privata" not in riga and "altra" not in riga
+    assert voce_lib.diagnostica_segmenti(None) == "0 segmenti"
+    assert voce_lib.diagnostica_segmenti([]) == "0 segmenti"
+
+
+def test_riscaldo_dopo_cinque_minuti_zero_lo_spegne():
+    cfg = json.loads((REPO_ROOT / "mac" / "config.json").read_text(encoding="utf-8"))
+    assert cfg["riscaldo_dopo_min"] == 5
+    assert voce_lib.minuti_riscaldo(cfg) == 5
+    assert voce_lib.minuti_riscaldo({}) == 5
+    assert voce_lib.minuti_riscaldo({"riscaldo_dopo_min": 0}) == 0
+    for storto in ("x", None, -3, float("nan")):
+        assert voce_lib.minuti_riscaldo({"riscaldo_dopo_min": storto}) == 5
+    assert voce_lib.serve_riscaldo(300, 5) is True
+    assert voce_lib.serve_riscaldo(299, 5) is False
+    assert voce_lib.serve_riscaldo(10 ** 6, 0) is False
+
+
+def _whisper_grezzo_mac(risposta):
+    """`_whisper_grezzo` del Mac con mlx_whisper finto e orecchio spento."""
+    from types import SimpleNamespace
+    chiamate = []
+
+    def transcribe(audio, **kw):
+        chiamate.append(kw)
+        if isinstance(risposta, Exception):
+            raise risposta
+        return risposta
+
+    spazio = dict(
+        mlx_whisper=SimpleNamespace(transcribe=transcribe), cfg={"modello": "m", "lingua": "it"},
+        ORECCHIO=None, FREQ=16000, time=__import__("time"), logging=logging, np=np,
+        opzioni_decodifica=voce_lib.opzioni_decodifica,
+        diagnostica_segmenti=voce_lib.diagnostica_segmenti, _ultimo_uso_motore=0.0,
+    )
+    _dal_sorgente('mac', ['_whisper_grezzo'], spazio)
+    return spazio, chiamate
+
+
+def test_whisper_grezzo_mac_limita_i_tentativi_e_scrive_i_numeri(caplog):
+    segmento = {"temperature": 0.4, "avg_logprob": -1.2, "compression_ratio": 2.6,
+                "no_speech_prob": 0.1, "tokens": [7] * 30, "text": "Testo privato."}
+    spazio, chiamate = _whisper_grezzo_mac({"text": " Testo privato. ", "segments": [segmento]})
+    with caplog.at_level(logging.INFO, logger="voce"):
+        assert spazio["_whisper_grezzo"](np.zeros(16000, dtype="float32"), "Claude Code.") == "Testo privato."
+    kw, = chiamate
+    assert kw["temperature"] == (0.0, 0.4) and kw["sample_len"] == 36
+    assert kw["initial_prompt"] == "Claude Code." and kw["language"] == "it"
+    riga, = [r.getMessage() for r in caplog.records if r.getMessage().startswith("whisper: ")]
+    assert "su 1.0 s di audio, 1 segmenti: t=0.4 lp=-1.20 cr=2.60 ns=0.10 tok=30" in riga
+    assert "privato" not in riga               # il testo resta fuori dal registro
+    assert spazio["_ultimo_uso_motore"] > 0    # l'uso del motore azzera la pausa
+
+
+def test_whisper_grezzo_mac_in_errore_segna_comunque_l_uso_del_motore():
+    spazio, chiamate = _whisper_grezzo_mac(RuntimeError("memoria finita"))
+    with pytest.raises(RuntimeError):
+        spazio["_whisper_grezzo"](np.zeros(8000, dtype="float32"), None)
+    assert len(chiamate) == 1 and spazio["_ultimo_uso_motore"] > 0
+
+
+def _riscaldo_mac(minuti=5, errore=None):
+    """`_riscalda_se_serve` e `_riscalda_motore` del Mac: orologio, thread e Whisper finti,
+    lucchetto vero. Il riscaldo finto dura 0,7 s."""
+    import threading
+    from types import SimpleNamespace
+    orologio, chiamate, log = [1000.0], [], []
+
+    def transcribe(audio, **kw):
+        chiamate.append((len(audio), kw))
+        orologio[0] += 0.7
+        if errore:
+            raise errore
+
+    spazio = dict(
+        time=SimpleNamespace(monotonic=lambda: orologio[0]),
+        threading=SimpleNamespace(Thread=_LavoroSubito), _lock_trascrizione=threading.Lock(),
+        serve_riscaldo=voce_lib.serve_riscaldo, opzioni_riscaldo=voce_lib.opzioni_riscaldo,
+        RISCALDO_DOPO_MIN=minuti, _ultimo_uso_motore=1000.0, np=np, FREQ=16000,
+        GLOSSARIO_PROMPT="Claude Code.", cfg={"modello": "m", "lingua": "it"},
+        mlx_whisper=SimpleNamespace(transcribe=transcribe),
+        logging=SimpleNamespace(getLogger=lambda *a: SimpleNamespace(
+            info=lambda m, *a: log.append(m % a), exception=lambda m, *a: log.append("ERRORE " + m))),
+    )
+    _dal_sorgente('mac', ['_riscalda_se_serve', '_riscalda_motore'], spazio)
+    return SimpleNamespace(spazio=spazio, orologio=orologio, chiamate=chiamate, log=log)
+
+
+def test_riscaldo_solo_dopo_la_pausa_e_una_volta_sola():
+    r = _riscaldo_mac()
+    r.orologio[0] += 4 * 60                    # quattro minuti: il motore e' caldo
+    r.spazio["_riscalda_se_serve"]()
+    assert r.chiamate == []
+    r.orologio[0] += 8 * 60                    # dodici minuti di quiete: si scalda
+    r.spazio["_riscalda_se_serve"]()
+    (campioni, kw), = r.chiamate
+    assert campioni == 16000 and kw["initial_prompt"] == "Claude Code."
+    assert kw["temperature"] == 0.0 and kw["sample_len"] == 4
+    assert r.log == ["riscaldo: 0.7 s dopo pausa di 12 min"]
+    r.spazio["_riscalda_se_serve"]()           # seconda pressione subito dopo: niente
+    assert len(r.chiamate) == 1
+    assert not r.spazio["_lock_trascrizione"].locked()
+
+
+def test_riscaldo_mai_durante_una_trascrizione_e_mai_se_spento():
+    r = _riscaldo_mac()
+    r.orologio[0] += 20 * 60
+    r.spazio["_lock_trascrizione"].acquire()   # una trascrizione e' in corso
+    r.spazio["_riscalda_se_serve"]()
+    assert r.chiamate == [] and r.log == []
+    assert r.spazio["_lock_trascrizione"].locked()  # il lucchetto resta a chi trascrive
+    r.spazio["_lock_trascrizione"].release()
+    r = _riscaldo_mac(minuti=0)
+    r.orologio[0] += 24 * 3600
+    r.spazio["_riscalda_se_serve"]()
+    assert r.chiamate == []
+
+
+def test_riscaldo_in_errore_libera_il_lucchetto_e_riprova_alla_prossima():
+    r = _riscaldo_mac(errore=RuntimeError("metal"))
+    r.orologio[0] += 10 * 60
+    r.spazio["_riscalda_se_serve"]()
+    assert r.log == ["ERRORE riscaldo del motore fallito"]
+    assert not r.spazio["_lock_trascrizione"].locked()
+    r.spazio["_riscalda_se_serve"]()           # la pausa conta ancora: si riprova
+    assert len(r.chiamate) == 2
+
+
 # --- callback blindata: un errore non deve mai spegnere l'hotkey ---
 
 def test_esegui_sicuro_esegue_e_passa_gli_argomenti():
@@ -3203,6 +3354,7 @@ def _avvio_mac(tmp_path, costo_zittire=0.35):
     from types import SimpleNamespace
     orologio = [100.0]
     eventi, suoni, zittita, log = queue.Queue(), [], [], []
+    riscaldi = []  # (registrando, suoni, voce gia' zittita?) a ogni richiesta di riscaldo
     parla = tmp_path / 'PARLANDO'
 
     def zittisci():
@@ -3229,6 +3381,7 @@ def _avvio_mac(tmp_path, costo_zittire=0.35):
         turno_utente_token=None, sessione_progressiva=None,
         ultima_pressione_utente=0.0, ultimo_tasto_utente=None,
         orecchio_vivo=None, apri_rubinetto_esc=lambda: None,  # 31/10/2026: orecchio spento, Esc a parte
+        _riscalda_se_serve=lambda: riscaldi.append((spazio['registrando'], list(suoni), bool(zittita))),
     )
     spazio.update({n: getattr(voce_lib, n) for n in ('AnelloAudio', 'inizio_pre_registrazione', 'volumi_barre')
                    if hasattr(voce_lib, n)})
@@ -3249,7 +3402,8 @@ def _avvio_mac(tmp_path, costo_zittire=0.35):
     def secondi_presi(valore):
         return sum(len(b) for b in spazio['blocchi'] if abs(float(b[0, 0]) - valore) < 1e-6) / 16000
     return SimpleNamespace(spazio=spazio, orologio=orologio, eventi=eventi, suoni=suoni, zittita=zittita,
-                           log=log, parla=parla, suona=suona, lavora=lavora, secondi_presi=secondi_presi)
+                           log=log, parla=parla, suona=suona, lavora=lavora, secondi_presi=secondi_presi,
+                           riscaldi=riscaldi)
 
 
 def test_ripresa_mentre_whisper_lavora_registra_dal_tasto_non_da_quando_parte(tmp_path):
@@ -3299,6 +3453,21 @@ def test_mani_libere_partono_con_mezzo_secondo_di_attacco(tmp_path):
     m.lavora()
     assert m.secondi_presi(0.1) >= 0.39
     assert 0.49 <= m.secondi_presi(0.1) + m.secondi_presi(0.0) <= 0.51
+
+
+def test_tasto_e_mani_libere_chiedono_il_riscaldo_dopo_i_segnali(tmp_path):
+    """11/11/2026, motore freddo: il riscaldo si chiede a ogni avvio di registrazione, col
+    tasto e con le mani libere (stesso avvia_registrazione), dopo pill e suono e prima del
+    lavoro lento (zittire la voce): costa l'avvio di un thread, non un'attesa."""
+    m = _avvio_mac(tmp_path)
+    m.spazio['su_pressione']('cmd_r')
+    m.lavora()
+    assert m.riscaldi == [(True, ['Pop'], False)]
+    assert m.zittita                           # il lavoro lento viene dopo
+    m = _avvio_mac(tmp_path)
+    m.spazio['comandi_audio'].put('start')     # mani libere: senza tasto
+    m.lavora()
+    assert m.riscaldi == [(True, ['Pop'], False)]
 
 
 @pytest.mark.parametrize('ripresa', ['tenuta', 'tocco'])
@@ -4024,7 +4193,9 @@ def test_log_whisper_e_postcorrezioni_distinti_e_solo_debug(debug, caplog):
                   rimuovi_eco_glossario=voce_lib.rimuovi_eco_glossario,
                   applica_sostituzioni=voce_lib.applica_sostituzioni,
                   converti_punteggiatura_dettata=voce_lib.converti_punteggiatura_dettata,
-                  ORECCHIO=None)  # 31/10/2026: l'orecchio ha le sue prove
+                  ORECCHIO=None,  # 31/10/2026: l'orecchio ha le sue prove
+                  FREQ=16000, time=__import__('time'), opzioni_decodifica=voce_lib.opzioni_decodifica,
+                  diagnostica_segmenti=voce_lib.diagnostica_segmenti)  # 11/11/2026: numeri, mai testo
     _dal_sorgente('mac', ['_whisper_grezzo', '_rifinisci'], spazio)
     with caplog.at_level(logging.INFO):
         raw = spazio['_whisper_grezzo'](np.ones(16000, dtype='float32')*0.04)
@@ -5594,7 +5765,9 @@ def test_whisper_non_parte_senza_voce_e_riceve_l_audio_accorciato(caplog):
                   time=__import__('time'),
                   mlx_whisper=SimpleNamespace(transcribe=lambda audio, **kw:
                       ricevuti.append(audio) or {'text': 'Ciao.', 'segments': []}),
-                  ORECCHIO=voce_lib.Orecchio.da_config({}, modello=_modello_finto()))
+                  ORECCHIO=voce_lib.Orecchio.da_config({}, modello=_modello_finto()),
+                  opzioni_decodifica=voce_lib.opzioni_decodifica,
+                  diagnostica_segmenti=voce_lib.diagnostica_segmenti)
     _dal_sorgente('mac', ['_whisper_grezzo'], spazio)
     with caplog.at_level(logging.INFO):
         assert spazio['_whisper_grezzo'](_audio_a_tratti((4.0, 0.0))) == ""
@@ -5616,7 +5789,9 @@ def test_un_guasto_dell_orecchio_non_costa_la_dettatura():
     spazio = dict(cfg={'modello': 'locale', 'lingua': 'it'}, logging=logging, FREQ=16000,
                   time=__import__('time'), ORECCHIO=Rotto(),
                   mlx_whisper=SimpleNamespace(transcribe=lambda audio, **kw:
-                      ricevuti.append(audio) or {'text': 'Ciao.', 'segments': []}))
+                      ricevuti.append(audio) or {'text': 'Ciao.', 'segments': []}),
+                  opzioni_decodifica=voce_lib.opzioni_decodifica,
+                  diagnostica_segmenti=voce_lib.diagnostica_segmenti)
     _dal_sorgente('mac', ['_whisper_grezzo'], spazio)
     audio = np.full(16000, 0.04, dtype='float32')
     assert spazio['_whisper_grezzo'](audio) == "Ciao." and len(ricevuti[0]) == 16000

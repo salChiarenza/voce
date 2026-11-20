@@ -1,5 +1,20 @@
 # Changelog Voce
 
+## 1.3.0-rc.36 - 20/11/2026 — motore freddo e tentativi di Whisper (Mac), collegamento riconosciuto (Mac e Windows)
+
+- **Prima dettatura dopo una pausa (solo Mac).** Se Whisper e' fermo da `riscaldo_dopo_min`
+  minuti (nuova chiave, 5 di serie, 0 = spento), alla pressione del tasto o all'avvio delle
+  mani libere la Voce lo scalda mentre parli, mai insieme a una trascrizione.
+- **Tentativi di Whisper limitati (solo Mac).** Temperature 0 e 0,4 invece di sei, al massimo
+  24 + 12 token per secondo di audio (il parlato vero arriva a 7): niente piu' frasi-fantasma
+  da 10-14 s. Ogni passaggio lascia nel registro una riga di soli numeri, mai il testo.
+  Banco su 30 audio veri: testi identici 30 su 30.
+- **Falso avviso «Voce non è collegata» corretto (Mac e Windows).** Il collegamento con
+  Claude Code e Codex si riconosce anche da un percorso equivalente allo stesso file.
+- Windows: motore freddo e tentativi, nessun cambiamento, il motore Windows e' diverso
+  (faster-whisper). Windows resta provato solo con prove automatiche.
+- Prove: 631 passate, 1 saltata (`python -m pytest tests`).
+
 ## 1.3.0-rc.35 - 31/10/2026 — l'orecchio, Esc che annulla, le ultime dettature nel menu (Mac e Windows)
 
 Tre idee dall'app open source Handy (github.com/cjpais/Handy, MIT), motore Whisper invariato.

@@ -1,9 +1,45 @@
 # Changelog
 
-## 13/11/2026 — Corretto il falso avviso «Voce non è collegata»
+## 1.3.0-rc.36 - 20/11/2026 — motore freddo e tentativi di Whisper; collegamento riconosciuto
 
-All'accensione Voce riconosce il collegamento anche se l'agente usa un percorso
-alternativo allo stesso file. Verifica che il collegamento parta e segnala i guasti effettivi.
+Lavoro dell'11/11 e del 13/11, rilasciato il 20/11/2026. Il motore freddo riguarda solo il
+Mac (mlx-whisper): su Windows nessun cambiamento, il motore Windows e' diverso.
+
+- **Corretto il falso avviso «Voce non è collegata» (13/11).** All'accensione Voce riconosce
+  il collegamento anche se l'agente usa un percorso alternativo allo stesso file. Verifica
+  che il collegamento parta e segnala i guasti effettivi. Gemellato su Windows.
+
+Motore freddo e tentativi di Whisper (11/11). Registri 04-11/11/2026:
+dopo una pausa oltre 10 minuti 10 dettature su 101 restavano oltre 5 s tra «registrazione
+fermata» e «trascritto» (fino a 17,6 s), con pause sotto 2 minuti 5 su 829; alcune frasi-fantasma
+brevi costavano 10-14 s.
+
+- **Tentativi limitati.** `_whisper_grezzo` passa a mlx-whisper `voce_lib.opzioni_decodifica`:
+  temperature (0,0, 0,4) invece delle 6 di serie (ognuna rifaceva l'encoder) e `sample_len`
+  24 + 12 token per secondo di audio, al massimo 224 come di serie. Il parlato vero di Sal
+  arriva a 7 token al secondo (1.564 dettature): il tetto non tocca le frasi vere.
+- **Diagnostica.** A ogni passaggio la riga `whisper: X s su Y s di audio, N segmenti: t= lp= cr=
+  ns= tok=` (`voce_lib.diagnostica_segmenti`): solo numeri, mai il testo, anche senza debug.
+- **Riscaldo dopo la pausa.** `avvia_registrazione` (tasto e mani libere) chiama
+  `_riscalda_se_serve`: se Whisper e' fermo da `riscaldo_dopo_min` minuti (nuova chiave, 5; 0 =
+  spento) un thread fa un passaggio corto (1 s di silenzio, temperatura 0, 4 token) sotto
+  `_lock_trascrizione` preso senza attendere: mai due usi del modello, mai durante una
+  trascrizione; la dettatura vera aspetta al massimo la fine del riscaldo. Registro
+  `riscaldo: X s dopo pausa di Y min`.
+- **Banco** (large-v3, profilo di Sal, 30 audio veri copiati da `audio_recenti`, funzioni vere
+  estratte da `detta.py`): testi identici 30 su 30; mediana 1,58 s prima e 1,71 s dopo, massimo
+  5,73 s e 5,64 s (differenza dovuta al carico del Mac). Sei frammenti-fantasma da 0,6-1,2 s:
+  0,5-0,7 s sia prima sia dopo; con la catena di tentativi forzata (ogni giro «fallisce»)
+  massimo 10,5 s prima (55 segmenti su 0,8 s di audio) e 2,3 s dopo.
+- **Glossario di Sal** (solo `config.local.json`): + Gemini, Antigravity, copywriter e due
+  cognomi di clienti, ognuno scritto male almeno 3 volte negli otto giorni (Gemini solo come
+  compagno: senza, «Antigravity» si mangiava «Gemini, è»). Banco: 24 testi su 30 identici,
+  «anti-gravity» → «Antigravity» due volte, il resto virgole e maiuscole.
+- Prove: 9 nuove in `tests/test_mac.py` (opzioni, diagnostica, chiave, `_whisper_grezzo` con
+  Whisper finto, riscaldo dopo la pausa, mai col lucchetto preso, spento a 0, errore che
+  libera il lucchetto, chiamata da tasto e mani libere). Da provare: la settimana di registro
+  sul Mac di Sal dopo `./voce riavvia`.
+- Prove al rilascio: 631 passate, 1 saltata (`python -m pytest tests`).
 
 ## 1.3.0-rc.35 - 31/10/2026 — l'orecchio, Esc che annulla, le ultime dettature nel menu
 

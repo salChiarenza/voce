@@ -1,9 +1,13 @@
 # Changelog
 
-## 13/11/2026 — Riconoscimento dei collegamenti Voce
+## 1.3.0-rc.36 - 20/11/2026 — collegamenti riconosciuti; motore invariato
 
-Il controllo riconosce lo stesso file da percorsi equivalenti, sia nella forma
-diretta di Claude Code sia nel comando di Codex. Verificato con test automatici.
+- **Riconoscimento dei collegamenti Voce (13/11).** Il controllo riconosce lo stesso file da
+  percorsi equivalenti, sia nella forma diretta di Claude Code sia nel comando di Codex.
+  Verificato con test automatici.
+- **Motore freddo e tentativi di Whisper (Mac, 11/11): nessun cambiamento, il motore Windows
+  e' diverso** (faster-whisper invece di mlx-whisper).
+- Non provato su un PC Windows vero: la versione resta candidata.
 
 ## 1.3.0-rc.35 - 31/10/2026 — gemella del Mac: l'orecchio, Esc che annulla, le ultime dettature nel menu
 

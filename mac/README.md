@@ -277,6 +277,18 @@ Voce si riavvia da sola se resta lenta. Sui Mac con 16 GB di RAM o meno usa già
 da sola il motore leggero; se serve un altro motore, `modello` in
 `config.local.json` comanda sempre. Il motore scelto è scritto in `voce.log`.
 
+La prima dettatura dopo una lunga pausa era la più lenta. Se Whisper è fermo da
+`riscaldo_dopo_min` minuti (5 di serie in `config.json`, `0` = spento), alla
+pressione del tasto o all'avvio delle mani libere la Voce lo scalda mentre parli,
+mai insieme a una trascrizione. Nel registro: `riscaldo: 0.6 s dopo pausa di 12 min`.
+
+Whisper fa al massimo due tentativi (temperature 0 e 0,4) e scrive al massimo
+24 + 12 token per secondo di audio (il parlato vero arriva a 7). Ogni passaggio
+lascia una riga di soli numeri, mai il testo:
+`whisper: 1.4 s su 8.1 s di audio, 1 segmenti: t=0.0 lp=-0.31 cr=1.42 ns=0.02 tok=31`
+(`t` temperatura usata, `lp` fiducia media, `cr` ripetitività, `ns` probabilità di
+silenzio, `tok` token scritti). Un `t=0.4` vuol dire che Whisper ha dovuto riprovare.
+
 ## Privacy
 
 La dettatura gira localmente sul Mac. Il progetto non invia le tue dettature a Sal Chiarenza o LeaderAI. La pulizia opzionale usa Apple Intelligence secondo la configurazione del Comando Rapido; dettagli in `PRIVACY.md`.

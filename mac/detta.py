@@ -112,6 +112,7 @@ from voce_lib import (
     config_locale, ram_fisica_bytes, scegli_modello,
     messaggio_in_registri, verifica_consegna,
     Orecchio, FILE_ORECCHIO, EscAnnulla, VK_ESC, UltimeDettature,
+    opzioni_decodifica, opzioni_riscaldo, diagnostica_segmenti, minuti_riscaldo, serve_riscaldo,
 )
 from parla import (
     ferma as ferma_voce, parla as pronuncia, elenco_conversazioni,
@@ -200,6 +201,10 @@ _rubinetto_acceso = False
 PROGRESSIVA = bool(cfg.get("trascrizione_progressiva", False))
 PROGRESSIVA_BLOCCO_SEC = float(cfg.get("trascrizione_progressiva_blocco_sec", BLOCCO_PROGRESSIVO_SEC))
 PROGRESSIVA_SOGLIA_SILENZIO = float(cfg.get("trascrizione_progressiva_soglia_silenzio", SOGLIA_SILENZIO_PROGRESSIVA))
+# Motore freddo (11/11/2026): dopo `riscaldo_dopo_min` minuti senza Whisper il tasto lo scalda
+# mentre si parla (vedi _riscalda_se_serve). Il riscaldamento all'avvio conta come uso.
+RISCALDO_DOPO_MIN = minuti_riscaldo(cfg)
+_ultimo_uso_motore = time.monotonic()  # monotonic dell'ultimo passaggio di Whisper
 
 BARRE = 18  # quante lineette nel visualizzatore
 livelli = collections.deque([0.0] * BARRE, maxlen=BARRE)
@@ -1024,7 +1029,12 @@ def _whisper_grezzo(audio, prompt=None, orecchio=True):
     non parte (sul silenzio scriverebbe «Grazie.»); se c'e', i silenzi lunghi si accorciano
     lasciando 450 ms prima e dopo ogni voce. Passa di qui ogni audio: frase intera, segmenti
     della progressiva, coda, secondo passaggio, ritrascrizione. `orecchio=False` solo per
-    scaldare il motore all'avvio."""
+    scaldare il motore all'avvio.
+
+    11/11/2026: al massimo due tentativi e un tetto di token in base alla durata
+    (voce_lib.opzioni_decodifica: niente piu' giri da 10-14 s sulle frasi-fantasma) e una
+    riga di registro con i numeri di ogni segmento, mai il testo."""
+    global _ultimo_uso_motore
     if orecchio and ORECCHIO is not None:
         partenza = time.monotonic()
         durata = len(audio) / FREQ
@@ -1043,10 +1053,18 @@ def _whisper_grezzo(audio, prompt=None, orecchio=True):
                 "orecchio: voce, %.1fs -> %.1fs (%.0f ms)",
                 durata, len(preparato) / FREQ, (time.monotonic() - partenza) * 1000)
         audio = preparato
-    esito = mlx_whisper.transcribe(
-        audio, path_or_hf_repo=cfg["modello"], language=cfg["lingua"],
-        initial_prompt=prompt,
-    )
+    durata_whisper = len(audio) / FREQ
+    partenza_whisper = time.monotonic()
+    try:
+        esito = mlx_whisper.transcribe(
+            audio, path_or_hf_repo=cfg["modello"], language=cfg["lingua"],
+            initial_prompt=prompt, **opzioni_decodifica(durata_whisper),
+        )
+    finally:
+        _ultimo_uso_motore = time.monotonic()
+    logging.getLogger("voce").info(
+        "whisper: %.1f s su %.1f s di audio, %s", _ultimo_uso_motore - partenza_whisper,
+        durata_whisper, diagnostica_segmenti(esito.get("segments")))
     if cfg.get("debug_dettature", False):
         logging.getLogger("voce").info("whisper originale: %s", esito["text"].strip())
     # Filtro anti-non-parlato (06/07): Whisper dichiara per ogni segmento
@@ -1960,6 +1978,7 @@ def avvia_registrazione(pressione=None):
                 "registrazione avviata (%.2fs dopo il tasto, %.2fs di audio gia' presi)",
                 ora - pressione, sum(len(b) for b in blocchi) / FREQ,
             )
+        esegui_sicuro(_riscalda_se_serve)  # Whisper fermo da minuti: si scalda mentre Sal parla
         if not parlava:
             esegui_sicuro(ferma_voce)  # svuota l'attesa: nessuna lettura parte sopra la dettatura
         # mentre si parla, l'app davanti accende il suo albero Accessibility:
@@ -3218,6 +3237,42 @@ def _scalda_modello():
         if ORECCHIO is not None:
             esegui_sicuro(ORECCHIO.prepara, np.zeros(FREQ, dtype=np.float32))  # primo giro del modello
     fissa_memoria_motore(cfg)  # modello caricato: lo si tiene residente, niente swap
+
+
+def _riscalda_se_serve():
+    """Alla pressione del tasto (e all'avvio delle mani libere: stesso avvia_registrazione),
+    se Whisper e' fermo da `riscaldo_dopo_min` minuti lo si scalda in sottofondo mentre Sal
+    parla. Registri 04-11/11/2026: dopo una pausa oltre 10 minuti 10 dettature su 101
+    restavano oltre 5 s (fino a 17,6 s), con pause sotto 2 minuti 5 su 829. Qui solo il
+    controllo e l'avvio del thread: niente lavoro sul worker audio."""
+    pausa = time.monotonic() - _ultimo_uso_motore
+    if serve_riscaldo(pausa, RISCALDO_DOPO_MIN):
+        threading.Thread(target=_riscalda_motore, args=(pausa,), daemon=True).start()
+
+
+def _riscalda_motore(pausa):
+    """Un passaggio corto di Whisper su un secondo di silenzio, sotto il lucchetto della
+    trascrizione: mai due usi del modello insieme. Lucchetto gia' preso = il motore sta
+    trascrivendo, quindi e' caldo: niente riscaldo. Una dettatura che arriva nel frattempo
+    aspetta al massimo la fine del riscaldo, il cui tempo si scrive nel registro."""
+    global _ultimo_uso_motore
+    if not _lock_trascrizione.acquire(blocking=False):
+        return
+    log = logging.getLogger("voce")
+    try:
+        if not serve_riscaldo(time.monotonic() - _ultimo_uso_motore, RISCALDO_DOPO_MIN):
+            return  # un altro riscaldo o una trascrizione sono appena passati
+        partenza = time.monotonic()
+        mlx_whisper.transcribe(
+            np.zeros(FREQ, dtype=np.float32), path_or_hf_repo=cfg["modello"],
+            language=cfg["lingua"], initial_prompt=GLOSSARIO_PROMPT, **opzioni_riscaldo(),
+        )
+        _ultimo_uso_motore = time.monotonic()
+        log.info("riscaldo: %.1f s dopo pausa di %.0f min", _ultimo_uso_motore - partenza, pausa / 60)
+    except Exception:
+        log.exception("riscaldo del motore fallito")
+    finally:
+        _lock_trascrizione.release()
 
 
 def _avvisa_se_non_autorizzato():

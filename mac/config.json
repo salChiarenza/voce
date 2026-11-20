@@ -3,6 +3,7 @@
   "hotkey": "cmd_r",
   "modello": "mlx-community/whisper-large-v3-mlx",
   "memoria_motore_mb": 512,
+  "riscaldo_dopo_min": 5,
   "lingua": "it",
   "voce": "Siri (Voce 2)",
   "comando_voce": "Voce LeaderAI firmato",

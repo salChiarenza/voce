@@ -2103,6 +2103,73 @@ def fissa_memoria_motore(cfg, mx=None):
         return None
 
 
+# --- Decodifica di Whisper e motore freddo (cantiere locale 11/11/2026) ---
+# Registri 04-11/11/2026, 1.535 passaggi di Whisper: 25 oltre 5 s, 15 dei quali alla prima
+# dettatura dopo oltre 10 minuti di quiete (motore freddo: vedi minuti_riscaldo). Gli altri
+# sono la catena di tentativi di mlx-whisper: di serie 6 temperature (0,0-1,0), a ogni giro
+# rifa' l'encoder e puo' scrivere fino a 224 token. Banco del 11/11 sui frammenti senza
+# senso, catena forzata: 10,5 s su 0,8 s di audio. Il parlato vero di Sal arriva a 7 token al
+# secondo (1.564 dettature): il tetto lascia quasi il doppio e da 17 s in su e' quello di serie.
+TEMPERATURE_WHISPER = (0.0, 0.4)
+TOKEN_WHISPER_BASE = 24
+TOKEN_WHISPER_AL_SECONDO = 12
+TOKEN_WHISPER_MASSIMI = 224        # n_text_ctx // 2: il tetto di serie di mlx-whisper
+RISCALDO_DOPO_MIN_DEFAULT = 5
+
+
+def opzioni_decodifica(durata_sec):
+    """Parametri di decodifica per un audio di `durata_sec` secondi: al massimo due
+    tentativi (temperature 0,0 e 0,4) e un tetto di token proporzionale all'audio.
+    mlx-whisper decodifica a finestre di 30 s: oltre, vale il tetto di una finestra."""
+    try:
+        secondi = min(max(float(durata_sec), 0.0), 30.0)
+    except (TypeError, ValueError):
+        secondi = 30.0
+    tetto = TOKEN_WHISPER_BASE + int(TOKEN_WHISPER_AL_SECONDO * secondi + 0.999)
+    return {"temperature": TEMPERATURE_WHISPER, "sample_len": min(TOKEN_WHISPER_MASSIMI, tetto)}
+
+
+def opzioni_riscaldo():
+    """Il riscaldo del motore: un passaggio solo e pochi token. Bastano a far girare
+    encoder e decoder per intero (il prompt del glossario passa tutto il decoder)."""
+    return {"temperature": 0.0, "sample_len": 4}
+
+
+def diagnostica_segmenti(segmenti):
+    """Per il registro: temperatura usata, avg_logprob, compression_ratio, no_speech e
+    token di ogni segmento di Whisper. Solo numeri, mai il testo dettato."""
+    def numero(segmento, chiave):
+        try:
+            return float(segmento.get(chiave))
+        except (TypeError, ValueError):
+            return float("nan")
+    parti = [
+        "t=%.1f lp=%.2f cr=%.2f ns=%.2f tok=%d" % (
+            numero(s, "temperature"), numero(s, "avg_logprob"),
+            numero(s, "compression_ratio"), numero(s, "no_speech_prob"),
+            len(s.get("tokens") or []))
+        for s in (segmenti or []) if isinstance(s, dict)
+    ]
+    return "%d segmenti%s" % (len(parti), (": " + "; ".join(parti)) if parti else "")
+
+
+def minuti_riscaldo(cfg):
+    """Minuti di quiete del motore dopo cui la pressione del tasto lo scalda
+    (`riscaldo_dopo_min`, default 5; 0 = spento; un valore storto torna al default)."""
+    try:
+        minuti = float(cfg.get("riscaldo_dopo_min", RISCALDO_DOPO_MIN_DEFAULT))
+    except (TypeError, ValueError):
+        return float(RISCALDO_DOPO_MIN_DEFAULT)
+    if minuti != minuti or minuti < 0:  # NaN o negativo
+        return float(RISCALDO_DOPO_MIN_DEFAULT)
+    return minuti
+
+
+def serve_riscaldo(pausa_sec, minuti):
+    """True se il motore e' fermo da almeno `minuti` minuti (0 = riscaldo spento)."""
+    return minuti > 0 and pausa_sec >= minuti * 60
+
+
 # --- Motore leggero sui Mac piccoli (01/10/2026) ---
 # Il modello pieno (large-v3, 2,9 GB su disco) su un Mac da 8-16 GB e' troppo
 # pesante per restare fisso in memoria (P-088, P-095). Fino a `ram_mac_piccoli_gb`
